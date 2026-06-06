@@ -1,0 +1,3 @@
+Placeholder so the root test gate ("node --test ... tools/test/") resolves
+before any tools tests exist. Later waves drop <name>.test.mjs here and the
+gate auto-discovers them with no change to the test-command.

@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Foreman build artifacts (this repo is built by Foreman)
+.foreman/
+*-checkpoint.json
+
+# Status / run logs
+*.log
+
+# Planning output dirs
+plans/out/
+
+# Local secrets (never commit)
+.env

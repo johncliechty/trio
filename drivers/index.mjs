@@ -14,6 +14,9 @@
 
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { claudeDriver } from './claude.mjs';
+import { geminiDriver } from './gemini.mjs';
+import { openaiDriver } from './openai.mjs';
+import { grokDriver } from './grok.mjs';
 
 const DEFAULT_DRIVER = 'claude';
 
@@ -32,9 +35,34 @@ export function registerDriver(driver) {
   return driver;
 }
 
+// Wave 5: register the additive non-Claude backends. They live behind the same
+// `runAgent` interface and are selected by `TRIO_DRIVER` (the Claude default is
+// unaffected). Registering here (rather than self-registering on import) keeps the
+// registry's contents explicit and order-stable for the capability matrix.
+registerDriver(geminiDriver);
+registerDriver(openaiDriver);
+registerDriver(grokDriver);
+
 /** The backend names currently registered (default `claude` always present). */
 export function listDrivers() {
   return [...REGISTRY.keys()];
+}
+
+/**
+ * The capability matrix: one row per registered backend describing whether it can
+ * spawn real fresh sub-agent contexts (`subAgentCapable` — true only for the
+ * CLI-spawning Claude backend; the raw-API backends approximate isolation with a
+ * fresh stateless request) and HOW it produces structured output (CLI sub-agent
+ * prompt vs JSON-mode / function-calling). Derived from the registered drivers so
+ * a newly registered backend appears automatically.
+ * @returns {{name:string, subAgentCapable:boolean, structuredOutput:string}[]}
+ */
+export function capabilityMatrix() {
+  return [...REGISTRY.values()].map((d) => ({
+    name: d.name,
+    subAgentCapable: !!d.subAgentCapable,
+    structuredOutput: d.structuredOutput ?? 'unknown',
+  }));
 }
 
 /**
@@ -101,4 +129,4 @@ export async function makeForemanDriver({ driver, agent, ...opts } = {}) {
   return makeAgentDriver({ agent: seamAgent });
 }
 
-export { claudeDriver };
+export { claudeDriver, geminiDriver, openaiDriver, grokDriver };

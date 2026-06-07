@@ -155,12 +155,16 @@ export function makeAgentSeam({
  * interface parity — claude -p spawns a fresh sub-agent process, so a fresh context
  * is the native behavior and the flag is a no-op for this backend.
  *
- * @type {{ name: string, subAgentCapable: boolean,
+ * @type {{ name: string, subAgentCapable: boolean, structuredOutput: string,
  *          runAgent: (opts?: object) => Promise<any> }}
  */
 export const claudeDriver = {
   name: 'claude',
   subAgentCapable: true,
+  // Structured output comes from the CLI sub-agent: the schema is appended to the
+  // prompt and the reply is parsed (retry-once-then-ABSTAIN). Contrast the raw-API
+  // backends, which use native JSON-mode / function-calling.
+  structuredOutput: 'cli-subagent (prompt-suffix)',
   async runAgent(opts = {}) {
     const { prompt, schema, label } = opts;
     // makeAgentSeam reads runClaude/env/target/allowedTools/log from the same opts

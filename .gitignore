@@ -13,3 +13,13 @@ plans/out/
 
 # Local secrets (never commit)
 .env
+
+# Personal working logs carried in from the skill copies (not for the public repo).
+# Anchored paths so foreman's *test fixtures* (foreman/test/**, foreman/fixtures/**)
+# named execution-log.md are preserved.
+/EXECUTION-LOG.md
+/DECISION-LOG.md
+/crucible/DECISION-LOG.md
+/crucible/EXECUTION-LOG.md
+/crucible/CLAUDE_hist.md
+/crucible/GRASSCATCHER.md

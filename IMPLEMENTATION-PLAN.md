@@ -70,7 +70,7 @@ the sibling imports resolve **in-repo** (not via the original `C:\dev` trees).
 tested scrubber.
 
 **Deliverables:** `tools/scrub.mjs` — scans the tracked tree for a deny-list
-(personal absolute paths like `C:\Users\john`, the maintainer email, common API-key
+(personal absolute paths like `C:\Users\<name>`, the maintainer email, common API-key
 patterns) and exits non-zero on any match under `--check`; `tools/test/scrub.test.mjs`
 (fixture dir with planted offenders → asserts detection; clean fixture → asserts
 pass). Apply it: relocate/remove offenders, and gitignore personal logs
@@ -81,7 +81,7 @@ pass). Apply it: relocate/remove offenders, and gitignore personal logs
 **done-when:** `npm test` GREEN (incl. the scrub tests) AND `node tools/scrub.mjs
 --check` exits 0 over the whole tree.
 
-- **Given** a fixture containing a planted `C:\Users\john\...` path and a fake key,
+- **Given** a fixture containing a planted `C:\Users\<name>\...` path and a fake key,
   **when** `scrub.mjs --check` runs on it, **then** it exits non-zero and names both;
   **given** the cleaned repo tree, **then** it exits 0.
 

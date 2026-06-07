@@ -127,7 +127,12 @@ async function agent(prompt, opts = {}) {
 }
 
 const { runProject } = await import('file:///C:/dev/foreman/bin/project-engine.mjs');
-const { makeAgentDriver } = await import('file:///C:/dev/foreman/bin/wave-workflow.js');
+// Wave 4: obtain the foreman driver seam through the trio driver registry (claude
+// default) rather than calling makeAgentDriver directly. The instrumented `agent`
+// above is injected unchanged, so the live `claude -p` path stays byte-for-byte
+// equivalent; the registry is the seam through which a future TRIO_DRIVER selection
+// would swap the backend.
+const { makeForemanDriver } = await import('../../drivers/index.mjs');
 
 try { fs.writeFileSync(STATUS_FILE, ''); } catch { /* fresh log */ }
 emit(`=== FOREMAN LIVE RUN ===`);
@@ -144,7 +149,7 @@ let result, threw = null;
 try {
   result = await runProject({
     projectDir: PROJECT,
-    driver: makeAgentDriver({ agent }),
+    driver: await makeForemanDriver({ agent }),
     reviewerCount: REVIEWERS,
     fixIterCap: CAP,
     budgetConfig,

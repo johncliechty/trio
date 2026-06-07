@@ -19,7 +19,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SCRUB = path.join(HERE, '..', 'scrub.mjs');
 
 // --- offenders, built from fragments (never literal in this file) ---
-const PLANTED_PATH = ['C:', '\\Users\\', 'testuser', '\\creds.txt'].join(''); // C:\Users\testuser\creds.txt
+const PLANTED_PATH = ['C:', '\\Users\\', 'testuser', '\\creds.txt'].join(''); // → C:\Users\<name>\creds.txt
 const PLANTED_EMAIL = ['john.liechty', 'gmail.com'].join('@');
 const FAKE_KEY = ['sk', 'ant'].join('-') + '-' + 'A'.repeat(40); // sk-ant-AAAA…
 

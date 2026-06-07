@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "trio — a single clone-and-/onboard monorepo of John's skill trio: researchPrime (research) -> Crucible (planning) -> Foreman (build).",
+  "description": "trio - a single clone-and-/onboard monorepo of the skill trio: researchPrime (research) -> Crucible (planning) -> Foreman (build).",
   "scripts": {
     "test": "node --test \"crucible/test/*.test.mjs\" \"foreman/test/*.test.mjs\" \"tools/test/*.test.mjs\" \"drivers/test/*.test.mjs\" \"researchPrime/test/*.test.mjs\""
   }

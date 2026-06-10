@@ -54,10 +54,33 @@ export const GEMINI_CLI_BASE_ARGS = ['--skip-trust', '--output-format', 'stream-
 export const DEFAULT_GEMINI_CLI_MODEL = 'gemini-3.1-pro-preview';
 
 // `auto_edit` auto-approves file edits (the Claude `acceptEdits` analog) — the right
-// default for execute/fix roles. Read-only roles (reviewers/judges) should pass `plan`;
-// fully unattended build roles that also run shell tools may need `yolo` to avoid an
-// approval hang in headless mode.
+// default for execute/fix roles. Read-only roles (reviewers/judges) get `plan`.
 export const DEFAULT_GEMINI_APPROVAL_MODE = 'auto_edit';
+
+// The trio gate adapter, worker side: the trio's HUMAN gates are host-agnostic HALTs
+// (crucible-lib haltForHuman -> the orchestrator re-prompts in the host conversation,
+// Claude Code OR Gemini CLI), so they need no Gemini frame parsing. What DOES need
+// adapting is each headless worker's approval posture: read-only roles must stay
+// read-only (no edits, no hang), edit roles auto-approve edits. Roles are matched by
+// name or by the label prefix Foreman uses (`execute:`, `review:`, `fix:`).
+export const READONLY_ROLES = new Set([
+  'review', 'reviewer', 'shark', 'judge', 'synthesizer', 'synth', 'research', 'researcher', 'plan', 'planner',
+]);
+const EDIT_ROLES = new Set(['execute', 'exec', 'fix', 'build', 'builder']);
+
+/**
+ * Resolve the approval mode for a worker (the gate-adapter posture). An explicit
+ * `approvalMode` always wins. Otherwise a read-only role => 'plan' (no edits, no
+ * approval hang); an edit role => 'auto_edit'; unknown => the safe-ish default.
+ * Role is taken from `role`, else the label's prefix before ':' / '#' / '.'.
+ */
+export function approvalModeFor({ approvalMode, role, label } = {}) {
+  if (approvalMode) return approvalMode;
+  const key = String(role || label || '').toLowerCase().split(/[:#.\s]/)[0];
+  if (READONLY_ROLES.has(key)) return 'plan';
+  if (EDIT_ROLES.has(key)) return 'auto_edit';
+  return DEFAULT_GEMINI_APPROVAL_MODE;
+}
 
 /**
  * Resolve the designated model for this call. opts.model wins, then a per-role env
@@ -193,7 +216,7 @@ export function defaultRunGeminiCli(fullPrompt, label, {
   target = process.cwd(),
   model,
   role,
-  approvalMode = DEFAULT_GEMINI_APPROVAL_MODE,
+  approvalMode,
   timeoutMs = DEFAULT_GEMINI_TIMEOUT_MS,
   log = () => {},
 } = {}) {
@@ -204,10 +227,11 @@ export function defaultRunGeminiCli(fullPrompt, label, {
     );
   }
   const mdl = resolveGeminiModel({ model, role, env });
+  const mode = approvalModeFor({ approvalMode, role, label });
   // Only fixed flags + model id + the sentinel are on the command line; the prompt goes
   // to stdin. The shell fallback (win32, when the node bundle isn't found) is therefore
   // safe — there is no untrusted prompt text for cmd.exe to mangle.
-  const args = [...buildGeminiCliArgs({ model: mdl, approvalMode }), '-p', PROMPT_STDIN_SENTINEL];
+  const args = [...buildGeminiCliArgs({ model: mdl, approvalMode: mode }), '-p', PROMPT_STDIN_SENTINEL];
   const launch = resolveGeminiEntry(env);
   return new Promise((resolve) => {
     const child = launch.mode === 'node'
@@ -262,11 +286,14 @@ export function makeGeminiCliSeam({
   target = process.cwd(),
   model,
   role,
-  approvalMode = DEFAULT_GEMINI_APPROVAL_MODE,
+  approvalMode,
+  timeoutMs,
   log = () => {},
 } = {}) {
+  // approvalMode is left undefined unless explicitly set, so the transport derives it
+  // per-call from the role/label (read-only roles -> 'plan'); `label` flows in per call.
   const run = runGemini
-    || ((prompt, label) => defaultRunGeminiCli(prompt, label, { env, target, model, role, approvalMode, log }));
+    || ((prompt, label) => defaultRunGeminiCli(prompt, label, { env, target, model, role, approvalMode, timeoutMs, log }));
 
   async function agent(prompt, opts = {}) {
     const label = opts.label || '(unlabeled)';

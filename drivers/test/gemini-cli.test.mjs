@@ -22,7 +22,7 @@ import {
 } from '../index.mjs';
 import {
   parseGeminiCliFrames, resolveGeminiModel, buildGeminiCliArgs, defaultRunGeminiCli,
-  resolveGeminiEntry, DEFAULT_GEMINI_CLI_MODEL,
+  resolveGeminiEntry, approvalModeFor, DEFAULT_GEMINI_CLI_MODEL, DEFAULT_GEMINI_APPROVAL_MODE,
 } from '../gemini-cli.mjs';
 
 // The actual frames `gemini --skip-trust -p --output-format stream-json` emitted on
@@ -121,6 +121,24 @@ test('buildGeminiCliArgs: mandatory --skip-trust + stream-json + approval mode +
   assert.deepEqual(args.slice(args.indexOf('--output-format'), args.indexOf('--output-format') + 2), ['--output-format', 'stream-json']);
   assert.deepEqual(args.slice(args.indexOf('--approval-mode'), args.indexOf('--approval-mode') + 2), ['--approval-mode', 'plan']);
   assert.deepEqual(args.slice(args.indexOf('-m'), args.indexOf('-m') + 2), ['-m', 'gemini-3.1-pro-preview']);
+});
+
+test('approvalModeFor (gate posture): read-only roles -> plan, edit roles -> auto_edit, explicit wins', () => {
+  // Read-only trio roles (sharks/judge/synthesizer/reviewers/research) stay read-only.
+  for (const r of ['review', 'judge', 'shark', 'synthesizer', 'research']) {
+    assert.equal(approvalModeFor({ role: r }), 'plan', `${r} must be read-only`);
+  }
+  // Edit roles auto-approve edits.
+  for (const r of ['execute', 'fix', 'build']) {
+    assert.equal(approvalModeFor({ role: r }), 'auto_edit', `${r} edits`);
+  }
+  // Derived from Foreman's label prefixes when no explicit role is given.
+  assert.equal(approvalModeFor({ label: 'review:w1#0' }), 'plan');
+  assert.equal(approvalModeFor({ label: 'execute:w1' }), 'auto_edit');
+  assert.equal(approvalModeFor({ label: 'fix:w1.2' }), 'auto_edit');
+  // Explicit approvalMode always wins; unknown role falls back to the default.
+  assert.equal(approvalModeFor({ approvalMode: 'yolo', role: 'review' }), 'yolo');
+  assert.equal(approvalModeFor({ role: 'mystery' }), DEFAULT_GEMINI_APPROVAL_MODE);
 });
 
 test('resolveGeminiEntry: GEMINI_CLI_JS override is honored when the file exists', () => {

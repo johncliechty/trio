@@ -175,6 +175,7 @@ export function parseGeminiCliFrames(stdout, { label = '(unlabeled)', cli_status
     // Attestation: served model read from the envelope, never from argv.
     model_served: modelServed,
     model_attested: modelServed !== null,
+    degraded: modelServed === null, // SR-5 symmetry with claude.mjs / run-live.mjs
     multi_model: multiModel,
   };
   // Assistant deltas are the response; fall back to a `result.response` field if a

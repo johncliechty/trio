@@ -21,6 +21,7 @@
 import { spawn } from 'node:child_process';
 
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
+import { attestStamp } from './attest.mjs';
 
 const BASE_ARGS = [
   '-p', '--output-format', 'stream-json', '--verbose',
@@ -38,6 +39,54 @@ export function extractJson(text) {
   const m = t.match(/\{[\s\S]*\}/);
   if (m) { try { return JSON.parse(m[0]); } catch { /* fall through */ } }
   return null;
+}
+
+/**
+ * Parse the full `claude -p --output-format stream-json --verbose` stdout into
+ * `{ text, rec }`. PURE + testable (symmetric to gemini-cli's `parseGeminiCliFrames`),
+ * so the SR-5 attestation logic is unit-tested with no subprocess.
+ *
+ * Served-model discovery (Phase 1.3): the Claude stream exposes the served model on
+ * (in order of authority) the `result` envelope's `model`, then each `assistant`
+ * message's `message.model`, then the `system`/init envelope's `model`. Whichever is
+ * present POSITIVELY attests (`model_attested:true`); if NONE exposes a served-model id
+ * the stamp DEGRADES (SR-5 — never fabricate). Today `claude -p` emits the model on the
+ * assistant/init frames, so the positive branch is exercised live; the degrade branch
+ * is the documented fallback if a future CLI build drops the field.
+ * @param {string} stdout            raw newline-delimited JSON frames
+ * @param {object} [meta]
+ * @param {string} [meta.label]
+ * @param {?number}[meta.cli_status] process exit code
+ * @returns {{ text:string, rec:object }}
+ */
+export function parseClaudeFrames(stdout, { label = '(unlabeled)', cli_status = null } = {}) {
+  let finalEnv = null, lastText = '', tools = 0, servedModel = null;
+  for (const raw of String(stdout).split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    let o; try { o = JSON.parse(line); } catch { continue; }
+    if (o.type === 'system' && typeof o.model === 'string' && o.model) {
+      servedModel = servedModel || o.model;
+    } else if (o.type === 'assistant' && o.message?.content) {
+      if (typeof o.message.model === 'string' && o.message.model) servedModel = o.message.model;
+      for (const x of o.message.content) {
+        if (x.type === 'tool_use') { tools++; }
+        else if (x.type === 'text' && x.text?.trim()) { lastText = x.text.trim(); }
+      }
+    } else if (o.type === 'result') {
+      finalEnv = o;
+      if (typeof o.model === 'string' && o.model) servedModel = o.model; // most authoritative
+    }
+  }
+  const rec = {
+    label, cli_status,
+    ok: !!finalEnv && finalEnv.is_error === false,
+    duration_ms: finalEnv?.duration_ms ?? null, tools,
+    output_tokens: finalEnv?.usage?.output_tokens ?? null,
+    cost_usd: finalEnv?.total_cost_usd ?? null,
+    ...attestStamp(servedModel), // SR-5 served-model stamp
+  };
+  return { text: finalEnv?.result ?? lastText ?? '', rec, _finalEnv: finalEnv };
 }
 
 /**
@@ -59,34 +108,13 @@ export function defaultRunClaude(fullPrompt, label, {
   }
   return new Promise((resolve) => {
     const child = spawn('claude', [...BASE_ARGS, '--allowedTools', allowedTools], { cwd: target });
-    let buf = '', finalEnv = null, lastText = '', tools = 0;
-    child.stdout.on('data', (d) => {
-      buf += d.toString();
-      let nl;
-      while ((nl = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
-        if (!line.trim()) continue;
-        let o; try { o = JSON.parse(line); } catch { continue; }
-        if (o.type === 'assistant' && o.message?.content) {
-          for (const x of o.message.content) {
-            if (x.type === 'tool_use') { tools++; }
-            else if (x.type === 'text' && x.text?.trim()) { lastText = x.text.trim(); }
-          }
-        } else if (o.type === 'result') { finalEnv = o; }
-      }
-    });
-    let stderr = '';
+    let out = '', stderr = '';
+    child.stdout.on('data', (d) => { out += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
     child.on('close', (code) => {
-      const rec = {
-        label, cli_status: code,
-        ok: !!finalEnv && finalEnv.is_error === false,
-        duration_ms: finalEnv?.duration_ms ?? null, tools,
-        output_tokens: finalEnv?.usage?.output_tokens ?? null,
-        cost_usd: finalEnv?.total_cost_usd ?? null,
-      };
-      if (!finalEnv) log(`!! ${label}: no result envelope. stderr=${stderr.slice(0, 300)}`);
-      resolve({ text: finalEnv?.result ?? lastText ?? '', rec });
+      const { text, rec, _finalEnv } = parseClaudeFrames(out, { label, cli_status: code });
+      if (!_finalEnv) log(`!! ${label}: no result envelope. stderr=${stderr.slice(0, 300)}`);
+      resolve({ text, rec });
     });
     child.stdin.write(fullPrompt);
     child.stdin.end();

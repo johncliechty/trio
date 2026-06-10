@@ -15,6 +15,8 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { attestStamp } from '../../drivers/attest.mjs';
+
 const argv = process.argv.slice(2);
 function flag(name, def) { const i = argv.indexOf(name); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def; }
 const PROJECT = path.resolve(argv.find((a) => !a.startsWith('--')) || process.cwd());
@@ -59,7 +61,7 @@ function runClaude(fullPrompt, label) {
     const secs = () => Math.round((Date.now() - t0) / 1000);
     emit(`┌ ${label} … launching agent`);
     const child = spawn('claude', CLAUDE_ARGS, { cwd: PROJECT });
-    let buf = '', finalEnv = null, tools = 0, lastText = '';
+    let buf = '', finalEnv = null, tools = 0, lastText = '', servedModel = null;
     const tick = setInterval(() => emit(`│ ${label} … working — ${secs()}s, ${tools} tool call(s) so far`), 20000);
     child.stdout.on('data', (d) => {
       buf += d.toString();
@@ -68,7 +70,11 @@ function runClaude(fullPrompt, label) {
         const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
         if (!line.trim()) continue;
         let o; try { o = JSON.parse(line); } catch { continue; }
+        if (o.type === 'system' && typeof o.model === 'string' && o.model) {
+          servedModel = servedModel || o.model; // init/system envelope carries the served model
+        }
         if (o.type === 'assistant' && o.message?.content) {
+          if (typeof o.message.model === 'string' && o.message.model) servedModel = o.message.model;
           for (const x of o.message.content) {
             if (x.type === 'tool_use') {
               tools++;
@@ -77,7 +83,10 @@ function runClaude(fullPrompt, label) {
               emit(`│ ${label} → ${x.name}${hint}  (${secs()}s)`);
             } else if (x.type === 'text' && x.text?.trim()) { lastText = x.text.trim(); }
           }
-        } else if (o.type === 'result') { finalEnv = o; }
+        } else if (o.type === 'result') {
+          finalEnv = o;
+          if (typeof o.model === 'string' && o.model) servedModel = o.model; // result envelope is authoritative
+        }
       }
     });
     let stderr = '';
@@ -90,6 +99,7 @@ function runClaude(fullPrompt, label) {
         duration_ms: finalEnv?.duration_ms ?? null, tools,
         output_tokens: u.output_tokens ?? null, cost_usd: finalEnv?.total_cost_usd ?? null,
         permission_denials: Array.isArray(finalEnv?.permission_denials) ? finalEnv.permission_denials.length : null,
+        ...attestStamp(servedModel), // SR-5 served-model stamp (degraded if the envelope exposed none)
       };
       calls.push(rec);
       emit(`└ ${label} done — code ${code}, ok ${rec.ok}, ${tools} tools, out ${rec.output_tokens}tok, ` +
@@ -126,7 +136,11 @@ async function agent(prompt, opts = {}) {
   return obj;
 }
 
-const { runProject } = await import('file:///C:/dev/foreman/bin/project-engine.mjs');
+// BLOCKER-1 fix (Phase 1.1): resolve the engine TREE-RELATIVE to this file, never via
+// an absolute `file:///C:/dev/foreman/...` archive path. `new URL(spec, import.meta.url)`
+// pins resolution inside the canonical trio tree, so a renamed/removed archive can never
+// be silently executed (asserted by drivers/test/canonical-no-escape.test.mjs).
+const { runProject } = await import(new URL('./project-engine.mjs', import.meta.url));
 // Wave 4: obtain the foreman driver seam through the trio driver registry (claude
 // default) rather than calling makeAgentDriver directly. The instrumented `agent`
 // above is injected unchanged, so the live `claude -p` path stays byte-for-byte

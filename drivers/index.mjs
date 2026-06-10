@@ -14,6 +14,7 @@
 
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { claudeDriver } from './claude.mjs';
+import { geminiCliDriver } from './gemini-cli.mjs';
 import { geminiDriver } from './gemini.mjs';
 import { openaiDriver } from './openai.mjs';
 import { grokDriver } from './grok.mjs';
@@ -39,6 +40,9 @@ export function registerDriver(driver) {
 // `runAgent` interface and are selected by `TRIO_DRIVER` (the Claude default is
 // unaffected). Registering here (rather than self-registering on import) keeps the
 // registry's contents explicit and order-stable for the capability matrix.
+// `gemini-cli` is the sub-agent-capable Gemini HOST backend (login-based `gemini -p`);
+// `gemini` remains the raw-HTTP API worker. Both register; they never collide on name.
+registerDriver(geminiCliDriver);
 registerDriver(geminiDriver);
 registerDriver(openaiDriver);
 registerDriver(grokDriver);
@@ -123,10 +127,17 @@ export async function makeForemanDriver({ driver, agent, ...opts } = {}) {
   let seamAgent = agent;
   if (!seamAgent) {
     const backend = getDriver(driver);
+    // Forward role + model per-call (nullish-fallback to driver-level opts) so the
+    // per-role model tier (e.g. TRIO_MODEL_<ROLE>, resolved in the gemini-cli driver)
+    // is actually reachable on the Foreman build path. Backends that ignore role/model
+    // (e.g. the Claude session-default driver) are unaffected.
     seamAgent = (prompt, o = {}) =>
-      backend.runAgent({ ...opts, prompt, schema: o.schema, label: o.label, freshContext: true });
+      backend.runAgent({
+        ...opts, prompt, schema: o.schema, label: o.label,
+        role: o.role ?? opts.role, model: o.model ?? opts.model, freshContext: true,
+      });
   }
   return makeAgentDriver({ agent: seamAgent });
 }
 
-export { claudeDriver, geminiDriver, openaiDriver, grokDriver };
+export { claudeDriver, geminiCliDriver, geminiDriver, openaiDriver, grokDriver };

@@ -25,6 +25,7 @@ const CAP = Number(flag('--cap', '3'));
 const MAX_WAVES = flag('--max-waves', null);
 const MAX_WALL_MIN = flag('--max-wallclock-min', null);
 const USE_GIT = argv.includes('--git');
+const RESUME = argv.includes('--resume');
 const BRANCH = flag('--branch', null);
 const STATUS_FILE = flag('--status', path.join(PROJECT, '_foreman-status.log'));
 const ALLOWED = flag('--allowed-tools', 'Bash,Edit,Write,Read,Glob,Grep');
@@ -167,6 +168,7 @@ try {
     reviewerCount: REVIEWERS,
     fixIterCap: CAP,
     budgetConfig,
+    resume: RESUME,
     git: USE_GIT ? (BRANCH ? { branch: BRANCH } : true) : false,
     log: (s) => emit(s),
   });

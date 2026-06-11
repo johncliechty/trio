@@ -18,7 +18,11 @@ import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { runWithSchema } from './_seam.mjs';
 
 export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.0-flash';
+// Rolling-latest alias: the prior pinned default (gemini-2.0-flash) was retired by the
+// API ("no longer available", HTTP 404 on generateContent). `gemini-flash-latest` tracks
+// the current GA flash model so this default cannot silently go stale again. Override per
+// call or via GEMINI_MODEL for a pinned id.
+export const DEFAULT_GEMINI_MODEL = 'gemini-flash-latest';
 
 /**
  * Build the `{ url, init }` for a Gemini `generateContent` request. When `schema`

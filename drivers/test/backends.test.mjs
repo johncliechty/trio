@@ -110,7 +110,7 @@ const CASES = [
     name: 'gemini', driver: 'gemini',
     envelope: geminiEnvelope,
     // Gemini encodes the model in the URL (verified by expectUrl), not the body.
-    expectUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+    expectUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',
     modelInBody: null,
     structuredKnob: (body) => body.generationConfig?.responseMimeType === 'application/json',
   },

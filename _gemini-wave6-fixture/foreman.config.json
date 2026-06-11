@@ -1,0 +1,5 @@
+{
+  "project": "gemini-wave6-litreview",
+  "docs": { "description": "description.md", "plan": "plan.md", "execution_log": "execution-log.md" },
+  "test_command": "node --test review-gate.test.mjs"
+}

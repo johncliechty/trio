@@ -1,0 +1,9 @@
+{
+  "project": "gemini-hop-fixture",
+  "docs": {
+    "description": "description.md",
+    "plan": "plan.md",
+    "execution_log": "execution-log.md"
+  },
+  "test_command": "node --test add.test.mjs"
+}

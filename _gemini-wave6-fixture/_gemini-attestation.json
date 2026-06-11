@@ -1,0 +1,28 @@
+{
+  "host": "gemini-cli",
+  "project": "C:\\dev\\trio-liveproof-wt\\_gemini-wave6-fixture",
+  "status": "DONE",
+  "sub_agent_calls": 2,
+  "all_attested": true,
+  "served_models": [
+    "gemini-3.1-pro-preview"
+  ],
+  "attestations": [
+    {
+      "label": "execute:w1",
+      "role": null,
+      "model_served": "gemini-3.1-pro-preview",
+      "model_attested": true,
+      "degraded": false,
+      "status": "success"
+    },
+    {
+      "label": "review:w1#0",
+      "role": null,
+      "model_served": "gemini-3.1-pro-preview",
+      "model_attested": true,
+      "degraded": false,
+      "status": "success"
+    }
+  ]
+}

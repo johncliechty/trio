@@ -11,6 +11,7 @@ import { HaltError } from '../crucible-lib.mjs';
 import { PACK_SCHEMA, validatePackSchema, assertValidPack } from './pack-schema.mjs';
 import { softwarePack } from './software-pack.mjs';
 import { literatureReviewPack } from './literature-review-pack.mjs';
+import { investmentMemoPack } from './investment-memo-pack.mjs';
 
 export { PACK_SCHEMA, validatePackSchema };
 
@@ -32,6 +33,11 @@ registerPack(softwarePack);
 // resolves by id. It is a pure PACK_SCHEMA instance — config over the same gate shell,
 // no engine fork (SR-6 inclusion test).
 registerPack(literatureReviewPack);
+
+// The investment-memo doc pack (Wave 4): the SECOND doc pack, seeded so
+// `loadPack('investment-memo')` resolves by id. Like the lit-review pack it is config-only
+// over the SAME gate shell (no engine fork — the Wave-4 inclusion test).
+registerPack(investmentMemoPack);
 
 /** The registered pack ids (software always present). */
 export function listPacks() {

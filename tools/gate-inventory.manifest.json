@@ -3,7 +3,7 @@
   "baseline": "tools/gate-inventory.manifest.json",
   "count": 504,
   "ids": {
-    "acceptance.test.mjs::ACCEPTANCE crit-1 / crit-5: full CBS closure (≥ C_min) is the Enhanced obligation, reserved behind the still-pending lineage-enum HALT": "2:deepEqual,equal",
+    "acceptance.test.mjs::ACCEPTANCE crit-1 / crit-5: full CBS closure (≥ C_min) is the Enhanced obligation — gated behind the committed lineage-enum + the (default-off) G8 flag": "4:equal,ok",
     "acceptance.test.mjs::ACCEPTANCE crit-1 / I2: CBS recall < C_min in default mode is carried as an honest CEILING, and the C_min floor BITES a claimed sub-floor closure": "7:equal,ok",
     "acceptance.test.mjs::ACCEPTANCE crit-1: G1-attributed recall closes ≥ G% of the CLOSABLE single-pass gap (baseline-by-hash)": "4:equal,ok",
     "acceptance.test.mjs::ACCEPTANCE crit-1: the residual to FULL ≥G closure is EXACTLY the (Enhanced-only) CBS class — no hidden shortfall": "2:equal,ok",
@@ -379,7 +379,7 @@
     "round.test.mjs::(f) orchestrateRound exposes a call-count spy seam for Synthesizer/Judge/debate": "6:deepEqual,equal",
     "round.test.mjs::(f) the debate seam stays silent with no conflict; judge/synthesizer still fire": "4:equal,rejects",
     "round.test.mjs::(h) ENABLED G8 counts origins ONLY via the shared module — byte-identical to a direct meetsQuorum call": "5:deepEqual,equal",
-    "round.test.mjs::(h) G8 is flagged-INERT by default — no cross-lineage origin claimed, even with the flag on while the enum is pending": "9:equal,match",
+    "round.test.mjs::(h) G8 is flagged-INERT by default — no cross-lineage origin claimed; enabling needs BOTH the flag AND the committed enum": "10:equal,match",
     "round.test.mjs::(h) no OTHER code path in the round layer increments independent_origins (source-level sole-counter guard)": "5:doesNotMatch,match",
     "round.test.mjs::(h) the round layer GATE-1 returns EXACTLY the shared module verdict (one canonical counter across the engine)": "2:deepEqual,equal",
     "scrub.test.mjs::CLI: --check on a clean fixture exits 0": "2:equal,match",

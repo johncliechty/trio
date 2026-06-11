@@ -163,13 +163,18 @@ test('ACCEPTANCE crit-1 / I2: CBS recall < C_min in default mode is carried as a
   assert.equal(cbsFloorGate(C_min, true), true, 'a claimed closure AT the floor passes');
 });
 
-test('ACCEPTANCE crit-1 / crit-5: full CBS closure (≥ C_min) is the Enhanced obligation, reserved behind the still-pending lineage-enum HALT', () => {
-  // The reason default mode cannot reach full ≥G closure is structural and ON THE RECORD: cross-lineage
-  // origin fusion (G8) is gated behind the closed attested-lineage enum, a RESERVED HUMAN DECISION that
-  // is still PENDING — so G8 is inert and CBS stays a ceiling. This is the crit-5 HALT, not a crit-1
-  // failure: crit-5 is "N/A by default", and CBS recovery is Enhanced-only (I1).
-  assert.equal(validateLineageEnum().committed, false, 'lineage enum is the reserved HALT (still pending)');
-  assert.deepEqual(committedLineages(), [], 'no committed lineages ⇒ G8 inert ⇒ CBS unclosable in default mode');
+test('ACCEPTANCE crit-1 / crit-5: full CBS closure (≥ C_min) is the Enhanced obligation — gated behind the committed lineage-enum + the (default-off) G8 flag', () => {
+  // The closed attested-lineage enum (crit-5) was COMMITTED at Phase 0.6 (a RESERVED HUMAN DECISION),
+  // so an attested set now exists and full CBS closure is AVAILABLE to Enhanced mode (G8 flag on).
+  // It remains N/A in DEFAULT mode: default research runs do not set the G8 flag, so G8 stays inert
+  // and CBS stays a measured ceiling (I1) — the reservation moved from "enum pending" to "Enhanced-only".
+  assert.equal(validateLineageEnum().committed, true, 'lineage enum committed at Phase 0.6 (reserved human decision)');
+  assert.ok(committedLineages().length >= 2, 'a committed attested set of >=2 distinct lineages now exists');
+  // The load-bearing invariant is UNCHANGED: default mode claims no cross-lineage origin and never
+  // closes CBS — it carries CBS as an honest ceiling, exactly as the crit-1 recall gates assert.
+  const res = measureRecall({ baselineHash: EXPECTED_BASELINE_HASH });
+  assert.equal(res.cbs.ceiling, true, 'default mode: CBS stays a measured ceiling, never a claimed closure (I1)');
+  assert.equal(res.cross_model, false, 'default same-lineage core claims no cross-lineage origin (I3)');
 });
 
 // ── CRIT-2 — Bounded low-stakes overhead ≤ X% over current researchPrime ─────────────────────────────

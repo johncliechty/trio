@@ -286,7 +286,7 @@ test('(f) the debate seam stays silent with no conflict; judge/synthesizer still
 
 // ── (h) G8 fusion routes through the shared module (the sole origin counter) ─────────────────────────
 
-test('(h) G8 is flagged-INERT by default — no cross-lineage origin claimed, even with the flag on while the enum is pending', () => {
+test('(h) G8 is flagged-INERT by default — no cross-lineage origin claimed; enabling needs BOTH the flag AND the committed enum', () => {
   const inert = g8FuseOrigins([{ lineage: 'claude' }, { lineage: 'gemini' }], { enabled: false });
   assert.equal(inert.inert, true);
   assert.equal(inert.origins, 0);
@@ -294,12 +294,15 @@ test('(h) G8 is flagged-INERT by default — no cross-lineage origin claimed, ev
   assert.match(inert.stamp, /INERT/);
   assert.equal(inert.stamp, G8_INERT_STAMP);
 
-  // The runtime default stays inert because the lineage-enum (crit-5) is uncommitted — so the flag
-  // alone cannot enable G8 (this is what keeps (a)–(f) GREEN before the enum is committed, (g)).
-  assert.equal(g8Enabled({ flag: true }), false, 'enum pending ⇒ inert even with the flag on');
+  // G8 needs BOTH the explicit flag AND a committed attested-lineage enum (crit-5). The flag ALONE
+  // can never enable G8 — an empty/pending enum keeps it inert even with the flag on:
+  assert.equal(g8Enabled({ flag: true, lineages: [] }), false, 'empty/pending enum ⇒ inert even with the flag on');
+  // The lineage-enum was COMMITTED at Phase 0.6, so the live default now enables WITH the flag on —
+  // and still stays inert with the flag OFF (default research runs do not set the G8 flag):
+  assert.equal(g8Enabled({ flag: true }), true, 'committed enum (0.6) + flag on ⇒ G8 enabled');
+  assert.equal(g8Enabled({ flag: false }), false, 'flag off ⇒ inert even with a committed enum (the default-run posture)');
   assert.equal(g8Enabled({ flag: true, lineages: ['claude', 'gemini'] }), true, 'flag on + committed enum ⇒ enabled');
   assert.equal(g8Enabled({ flag: false, lineages: ['claude', 'gemini'] }), false);
-  assert.equal(g8Enabled({ flag: true, lineages: [] }), false);
 });
 
 test('(h) ENABLED G8 counts origins ONLY via the shared module — byte-identical to a direct meetsQuorum call', () => {

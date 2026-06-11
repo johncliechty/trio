@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import { HaltError } from '../crucible-lib.mjs';
 import { PACK_SCHEMA, validatePackSchema, assertValidPack } from './pack-schema.mjs';
 import { softwarePack } from './software-pack.mjs';
+import { literatureReviewPack } from './literature-review-pack.mjs';
 
 export { PACK_SCHEMA, validatePackSchema };
 
@@ -26,6 +27,11 @@ export function registerPack(pack) {
 // The software pack is the EXTRACTED REFERENCE (SR-6): default behavior routes through
 // it and Layers 2-3 never fire. Seed it so `loadPack('software')` always resolves.
 registerPack(softwarePack);
+
+// The literature-review doc pack (Wave 1): seed it so `loadPack('literature-review')`
+// resolves by id. It is a pure PACK_SCHEMA instance — config over the same gate shell,
+// no engine fork (SR-6 inclusion test).
+registerPack(literatureReviewPack);
 
 /** The registered pack ids (software always present). */
 export function listPacks() {

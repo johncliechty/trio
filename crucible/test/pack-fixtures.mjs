@@ -62,6 +62,39 @@ export const battery = {
   ],
 };
 
+// --- Wave-1 literature-review fixtures (for the seeded 'literature-review' pack) ---
+// A well-formed lit-review carries every PRISMA section the pack requires; the malformed
+// one is identical EXCEPT it drops the "PRISMA Flow" section (the model-free Layer-1
+// validator must go RED and NAME it).
+export const litReviewWellFormed = `# Methods
+Eligibility criteria, information sources, and the selection process are described.
+
+# Search Strategy
+PubMed and Embase were searched 2010-01-01 to 2025-12-31 with the full query string below.
+
+# PRISMA Flow
+1,204 records identified, 980 screened, 42 included; exclusions are tabulated with reasons.
+
+# Results
+Pooled findings with per-study citations and risk-of-bias ratings.
+
+# Discussion
+Interpretation, limitations, and threats to validity.
+`;
+
+export const litReviewMissingPrisma = `# Methods
+Eligibility criteria, information sources, and the selection process are described.
+
+# Search Strategy
+PubMed and Embase were searched 2010-01-01 to 2025-12-31 with the full query string below.
+
+# Results
+Pooled findings with per-study citations and risk-of-bias ratings.
+
+# Discussion
+Interpretation, limitations, and threats to validity.
+`; // missing the required "PRISMA Flow" section
+
 /** Honest deterministic entailment heuristic: entailed iff the source literally states
  *  the claim. Entailed fixtures match their source exactly; over-claims do not. */
 export function stubEntail({ claim, source }) {

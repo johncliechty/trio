@@ -59,6 +59,15 @@ export async function runPackGate({
   if (battery) {
     const b = await runEntailmentBattery({ battery, entail, agent, pack, log });
     layer2 = { ...b, pass: b.meetsMinima };
+    // The battery CALIBRATES the entailment judge (measured catch-rate / false-positive vs
+    // the pack minima); it does NOT evaluate THIS deliverable. When the deliverable's own
+    // claims are supplied, also run them so the end-to-end gate actually checks the
+    // deliverable's evidence faithfulness — the pass then requires BOTH a calibrated judge
+    // AND a faithful deliverable.
+    if (layer2.pass && claims.length) {
+      const deliverable = await assessEvidenceFaithfulness({ claims, sources, entail, agent, pack, log });
+      layer2 = { ...layer2, deliverable, pass: layer2.meetsMinima && deliverable.pass };
+    }
   } else {
     layer2 = await assessEvidenceFaithfulness({ claims, sources, entail, agent, pack, log });
   }

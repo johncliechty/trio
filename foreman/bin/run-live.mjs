@@ -11,11 +11,11 @@
 // only drive execute/review/fix. NO ANTHROPIC_API_KEY in env => subscription usage; the
 // per-call `$` is a subscription EQUIVALENT-cost estimate, not a metered API charge.
 
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { attestStamp } from '../../drivers/attest.mjs';
+import { classifyExit, makeTelemetryRecord } from './transport.mjs';
+import { spawnGuarded, makeChildRegistry, acquireLock } from './proc-guard.mjs';
 
 const argv = process.argv.slice(2);
 function flag(name, def) { const i = argv.indexOf(name); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def; }
@@ -29,6 +29,10 @@ const RESUME = argv.includes('--resume');
 const BRANCH = flag('--branch', null);
 const STATUS_FILE = flag('--status', path.join(PROJECT, '_foreman-status.log'));
 const ALLOWED = flag('--allowed-tools', 'Bash,Edit,Write,Read,Glob,Grep');
+// Wave 7: per-call hard timeout (SIGKILL a hung sub-agent) + the single-run lock.
+const CALL_TIMEOUT_MIN = flag('--call-timeout-min', '20');
+const CALL_TIMEOUT_MS = Number(CALL_TIMEOUT_MIN) > 0 ? Number(CALL_TIMEOUT_MIN) * 60000 : null;
+const LOCK_FILE = flag('--lock', path.join(PROJECT, '.foreman', 'run.lock'));
 
 const CLAUDE_ARGS = ['-p', '--output-format', 'stream-json', '--verbose',
   '--permission-mode', 'acceptEdits', '--allowedTools', ALLOWED,
@@ -45,6 +49,12 @@ function emit(line) {
 
 const calls = [];
 
+// Wave 7 kill-on-exit: every spawned sub-agent is tracked here; an orchestrator
+// teardown (clean exit OR SIGINT/SIGTERM) SIGKILLs any still-live child, so no
+// leaked, wedged claude process survives the run (the induced-kill invariant).
+const registry = makeChildRegistry({ log: emit });
+registry.install();
+
 function extractJson(text) {
   if (typeof text !== 'string') return null;
   let t = text.trim();
@@ -60,57 +70,74 @@ function runClaude(fullPrompt, label) {
   return new Promise((resolve) => {
     const t0 = Date.now();
     const secs = () => Math.round((Date.now() - t0) / 1000);
-    emit(`┌ ${label} … launching agent`);
-    const child = spawn('claude', CLAUDE_ARGS, { cwd: PROJECT });
-    let buf = '', finalEnv = null, tools = 0, lastText = '', servedModel = null;
-    const tick = setInterval(() => emit(`│ ${label} … working — ${secs()}s, ${tools} tool call(s) so far`), 20000);
-    child.stdout.on('data', (d) => {
-      buf += d.toString();
-      let nl;
-      while ((nl = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
-        if (!line.trim()) continue;
-        let o; try { o = JSON.parse(line); } catch { continue; }
-        if (o.type === 'system' && typeof o.model === 'string' && o.model) {
-          servedModel = servedModel || o.model; // init/system envelope carries the served model
-        }
-        if (o.type === 'assistant' && o.message?.content) {
-          if (typeof o.message.model === 'string' && o.message.model) servedModel = o.message.model;
-          for (const x of o.message.content) {
-            if (x.type === 'tool_use') {
-              tools++;
-              const hint = x.input?.file_path ? ` ${String(x.input.file_path).split(/[\\/]/).pop()}`
-                : x.input?.command ? ` ${String(x.input.command).slice(0, 44)}` : '';
-              emit(`│ ${label} → ${x.name}${hint}  (${secs()}s)`);
-            } else if (x.type === 'text' && x.text?.trim()) { lastText = x.text.trim(); }
-          }
-        } else if (o.type === 'result') {
-          finalEnv = o;
-          if (typeof o.model === 'string' && o.model) servedModel = o.model; // result envelope is authoritative
-        }
-      }
+    emit(`┌ ${label} … launching agent` + (CALL_TIMEOUT_MS ? ` (per-call timeout ${CALL_TIMEOUT_MIN}m)` : ''));
+    // Spawn under the timeout + kill-on-exit guard (proc-guard). `done` resolves
+    // with the typed-exit inputs; we attach our own stream-json listeners to the
+    // returned child for the served-model/tool/usage telemetry.
+    const { child, done } = spawnGuarded({
+      command: 'claude', args: CLAUDE_ARGS, cwd: PROJECT, timeoutMs: CALL_TIMEOUT_MS, registry,
     });
-    let stderr = '';
-    child.stderr.on('data', (d) => { stderr += d.toString(); });
-    child.on('close', (code) => {
+    let buf = '', finalEnv = null, tools = 0, lastText = '', servedModel = null, stderr = '';
+    const tick = setInterval(() => emit(`│ ${label} … working — ${secs()}s, ${tools} tool call(s) so far`), 20000);
+    if (typeof tick.unref === 'function') tick.unref();
+
+    if (child) {
+      child.stdout.on('data', (d) => {
+        buf += d.toString();
+        let nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+          if (!line.trim()) continue;
+          let o; try { o = JSON.parse(line); } catch { continue; }
+          if (o.type === 'system' && typeof o.model === 'string' && o.model) {
+            servedModel = servedModel || o.model; // init/system envelope carries the served model
+          }
+          if (o.type === 'assistant' && o.message?.content) {
+            if (typeof o.message.model === 'string' && o.message.model) servedModel = o.message.model;
+            for (const x of o.message.content) {
+              if (x.type === 'tool_use') {
+                tools++;
+                const hint = x.input?.file_path ? ` ${String(x.input.file_path).split(/[\\/]/).pop()}`
+                  : x.input?.command ? ` ${String(x.input.command).slice(0, 44)}` : '';
+                emit(`│ ${label} → ${x.name}${hint}  (${secs()}s)`);
+              } else if (x.type === 'text' && x.text?.trim()) { lastText = x.text.trim(); }
+            }
+          } else if (o.type === 'result') {
+            finalEnv = o;
+            if (typeof o.model === 'string' && o.model) servedModel = o.model; // result envelope is authoritative
+          }
+        }
+      });
+      child.stderr.on('data', (d) => { stderr += d.toString(); });
+      child.stdin.write(fullPrompt);
+      child.stdin.end();
+    }
+
+    done.then(({ code, signal, timedOut, spawnError }) => {
       clearInterval(tick);
+      // Wave 7: TYPE the outcome (exit-class taxonomy) and stamp a schema-valid
+      // per-call telemetry record. Every call is classified — no unclassified exit.
+      const classification = classifyExit({ spawnError, timedOut, code, signal, finalEnv });
       const u = finalEnv?.usage || {};
-      const rec = {
-        label, cli_status: code, ok: !!finalEnv && finalEnv.is_error === false,
-        duration_ms: finalEnv?.duration_ms ?? null, tools,
-        output_tokens: u.output_tokens ?? null, cost_usd: finalEnv?.total_cost_usd ?? null,
+      const rec = makeTelemetryRecord({
+        label,
+        classification,
+        cli_status: typeof code === 'number' ? code : null,
+        signal: signal || null,
+        duration_ms: finalEnv?.duration_ms ?? (Date.now() - t0),
+        tools,
+        output_tokens: u.output_tokens ?? null,
+        cost_usd: finalEnv?.total_cost_usd ?? null,
         permission_denials: Array.isArray(finalEnv?.permission_denials) ? finalEnv.permission_denials.length : null,
-        ...attestStamp(servedModel), // SR-5 served-model stamp (degraded if the envelope exposed none)
-      };
+        servedModel,
+      });
       calls.push(rec);
-      emit(`└ ${label} done — code ${code}, ok ${rec.ok}, ${tools} tools, out ${rec.output_tokens}tok, ` +
-        `~$${(rec.cost_usd ?? 0).toFixed(4)} est (subscription equiv, not an API charge), ${rec.duration_ms}ms` +
-        (rec.permission_denials ? `, denials ${rec.permission_denials}` : ''));
-      if (!finalEnv) emit(`   !! no result envelope. stderr=${stderr.slice(0, 300)}`);
+      emit(`└ ${label} done — class ${rec.exit_class}, code ${code ?? signal ?? '?'}, ok ${rec.ok}, ${tools} tools, ` +
+        `out ${rec.output_tokens}tok, ~$${(rec.cost_usd ?? 0).toFixed(4)} est (subscription equiv, not an API charge), ` +
+        `${rec.duration_ms}ms` + (rec.permission_denials ? `, denials ${rec.permission_denials}` : ''));
+      if (!finalEnv) emit(`   !! ${classification.detail}${stderr ? `. stderr=${stderr.slice(0, 300)}` : ''}`);
       resolve({ text: finalEnv?.result ?? lastText ?? '', rec });
     });
-    child.stdin.write(fullPrompt);
-    child.stdin.end();
   });
 }
 
@@ -154,6 +181,21 @@ emit(`=== FOREMAN LIVE RUN ===`);
 emit(`project: ${PROJECT}`);
 emit(`reviewers=${REVIEWERS} fixIterCap=${CAP} maxWaves=${MAX_WAVES ?? '∞'} maxWallClock=${MAX_WALL_MIN ?? '∞'}min git=${USE_GIT} branch=${BRANCH ?? 'foreman/run'}`);
 emit(`binding: headless \`claude -p … --permission-mode acceptEdits --allowedTools ${ALLOWED}\` (cwd=project); ground truth = orchestrator gate`);
+
+// Wave 7: acquire the single-run lock. A lock held by a LIVE pid refuses a
+// concurrent run; a lock left by a crashed/killed run (dead pid) is stale and is
+// reclaimed. The lock RELEASES on exit (clean OR signalled — registered below),
+// so a mid-wave kill never wedges the next --resume out.
+try { fs.mkdirSync(path.dirname(LOCK_FILE), { recursive: true }); } catch { /* dir may exist */ }
+let lock;
+try {
+  lock = acquireLock(LOCK_FILE, { label: `run-live ${PROJECT}` });
+  emit(`lock: acquired ${LOCK_FILE} (pid ${process.pid})`);
+} catch (e) {
+  emit(`!! could not acquire run lock: ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
+  process.exit(3);
+}
+process.on('exit', () => { try { lock.release(); } catch { /* best-effort */ } });
 
 const budgetConfig = (MAX_WAVES != null || MAX_WALL_MIN != null) ? {
   maxWaves: MAX_WAVES != null ? Number(MAX_WAVES) : null,

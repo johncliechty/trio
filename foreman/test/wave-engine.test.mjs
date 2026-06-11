@@ -140,6 +140,50 @@ test('anti-test-weakening: deleting a test HALTs (no plan citation)', async () =
   } finally { cleanup(dir); }
 });
 
+test('test-immutability (Wave 7): a FIX that edits a test file HALTs (no count drop, no citation)', async () => {
+  const dir = freshCopy();
+  try {
+    const { docs, waves, testCmd, wave } = contractOf(dir);
+    // The fix both repairs the source AND rewrites a test file (prepends a comment:
+    // same test/assert count, so the anti-weakening guard would NOT catch it). The
+    // immutability guard must HALT on the test-file edit by the fix loop.
+    const driver = makeScriptedDriver({
+      repairs: [
+        CALC_REPAIR,
+        { file: 'test/calc.test.mjs', findLast: 'import test from', replace: '/* fix-touch */ import test from' },
+      ],
+    });
+    const result = await runWave({
+      projectDir: dir, testCommand: testCmd.command, wave, totalWaves: waves.length,
+      planPath: docs.plan, driver, reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(result.status, 'HALT');
+    assert.match(result.haltReason, /test-immutability HALT: fix agent modified test file test\/calc\.test\.mjs/);
+  } finally { cleanup(dir); }
+});
+
+test('test-immutability (Wave 7): a plan citation authorizes a fix-time test change (no false HALT)', async () => {
+  const dir = freshCopy();
+  try {
+    const { docs, waves, testCmd, wave } = contractOf(dir);
+    // Same test edit, but the driver carries a plan citation — the change is
+    // authorized, so the wave converges normally (source repaired, gate GREEN).
+    const driver = makeScriptedDriver({
+      citation: 'plan §X authorizes the test update',
+      repairs: [
+        CALC_REPAIR,
+        { file: 'test/calc.test.mjs', findLast: 'import test from', replace: '/* authorized */ import test from' },
+      ],
+    });
+    const result = await runWave({
+      projectDir: dir, testCommand: testCmd.command, wave, totalWaves: waves.length,
+      planPath: docs.plan, driver, reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(result.status, 'GO', 'a cited test change is authorized — no immutability HALT');
+    assert.equal(result.gate.green, true);
+  } finally { cleanup(dir); }
+});
+
 test('vacuous-GREEN guard: a GREEN gate that exercises no changed source HALTs (unit)', () => {
   const dir = freshCopy();
   try {

@@ -19,8 +19,14 @@ import { parseGeminiCliFrames } from '../gemini-cli.mjs';
 
 const TRIO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SKIP_DIRS = new Set(['node_modules', '.git', '.foreman', 'test']);
-const SPAWN_RE = /spawn\(\s*['"](claude|gemini)['"]/; // a model sub-agent spawn
-const ATTEST_MARKER = /model_attested|attestStamp/;    // the file produces an SR-5 stamp
+// A model sub-agent spawn, in either form: the direct `spawn('claude'…)` driver
+// transports, OR the Wave-7 guarded form `spawnGuarded({ command: 'claude' })` that
+// run-live.mjs uses (per-call timeout + kill-on-exit wrapper) — both launch a model
+// child and so must attest.
+const SPAWN_RE = /spawn\(\s*['"](claude|gemini)['"]|command:\s*['"](claude|gemini)['"]/;
+// The file produces an SR-5 stamp — directly (attestStamp/model_attested) or via the
+// Wave-7 telemetry builder (makeTelemetryRecord folds the SR-5 stamp in).
+const ATTEST_MARKER = /model_attested|attestStamp|makeTelemetryRecord/;
 
 function walk(dir, hit) {
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {

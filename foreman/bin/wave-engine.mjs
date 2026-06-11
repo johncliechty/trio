@@ -178,6 +178,45 @@ function checkTestWeakening(before, after, citation, actuallySkipped = 0) {
 }
 
 // ---------------------------------------------------------------------------
+// Test-immutability guard (Wave 7 — Front 2). The anti-weakening check above
+// only catches a DROP in test/assert count; it would miss a fix agent silently
+// REWRITING a test (same count, changed meaning) to make a red gate go green.
+//
+// The invariant: a wave's tests are EXECUTE's deliverable; the FIX loop may only
+// edit non-test code. So we snapshot every test file's content hash AFTER execute
+// (the legitimate moment tests are authored), and on each fix iteration HALT if
+// any test file was modified, added, or deleted with no plan citation. (A genuine
+// plan-authorized test change is carried on `citation`, exactly like weakening.)
+// ---------------------------------------------------------------------------
+
+/** relpath -> sha256 for every test file (the post-execute immutability baseline). */
+function testHashSnapshot(root, foremanDir) {
+  const snap = {};
+  for (const rel of testFilesOf(root, foremanDir)) {
+    try { snap[rel] = hashFile(path.join(root, rel)); } catch { /* unreadable: treat as absent */ }
+  }
+  return snap;
+}
+
+/**
+ * Compare current test-file hashes to the post-execute baseline. Returns a HALT
+ * reason string if the FIX loop touched a test file (modified/added/deleted) with
+ * no plan citation, else null.
+ */
+function checkTestImmutability(baseline, root, foremanDir, citation) {
+  if (citation) return null; // an explicit plan citation authorizes the test change
+  const now = testHashSnapshot(root, foremanDir);
+  for (const rel of Object.keys(baseline)) {
+    if (!(rel in now)) return `fix agent deleted test file ${rel}`;
+    if (now[rel] !== baseline[rel]) return `fix agent modified test file ${rel}`;
+  }
+  for (const rel of Object.keys(now)) {
+    if (!(rel in baseline)) return `fix agent added test file ${rel}`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Vacuous-GREEN guard (§5). A GREEN gate must actually exercise something this
 // wave changed. Without coverage instrumentation tied to an arbitrary discovered
 // command, we use a deterministic, command-agnostic proxy: import-reachability —
@@ -759,6 +798,11 @@ export async function runWave(o) {
   steps.push(`▸ execute… ${exec?.note || 'done'}`);
   log(`execute: ${exec?.note || 'done'}`);
 
+  // Wave 7 test-immutability baseline: tests are EXECUTE's deliverable, so snapshot
+  // them NOW (post-execute); the fix loop below must not modify/add/delete any of
+  // them (checked each iteration). A genuine plan-authorized change rides `citation`.
+  const testBaseline = testHashSnapshot(projectDir, foremanDir);
+
   let iteration = seededIteration;
   let findings = [];
   let lastGate = null;
@@ -800,6 +844,16 @@ export async function runWave(o) {
       steps.push(`✗ ${reason}`);
       return finishHalt({ reason, recommend:
         `restore the removed/weakened tests, or cite the plan line that authorizes the change, then re-invoke wave ${wave.n}` });
+    }
+
+    // ----- Wave 7 test-immutability guard: the FIX loop must not touch tests -----
+    const immutable = checkTestImmutability(testBaseline, projectDir, foremanDir, lastCitation);
+    if (immutable) {
+      const reason = `test-immutability HALT: ${immutable}`;
+      steps.push(`✗ ${reason}`);
+      return finishHalt({ reason, recommend:
+        `the fix loop edited a test file — FIX may only change non-test code (tests are EXECUTE's deliverable). ` +
+        `Revert the test change, or cite the plan line that authorizes it, then re-invoke wave ${wave.n}` });
     }
 
     // ----- REVIEW: REVIEWER_COUNT independent reviewers, SEQUENTIAL (§3) -----
@@ -1000,6 +1054,8 @@ export async function runWave(o) {
 export const _internals = {
   inventory, checkTestWeakening, checkVacuousGreen, reachableFromTests,
   changedSince, snapshotHashes, parseCount, hasRealTestEvents, countTestEvents, findingId,
+  // Wave 7 test-immutability guard:
+  testHashSnapshot, checkTestImmutability,
   // Phase 3d (Python/pytest generalization) internals:
   isTestFile, looksLikePytest, parsePytestCount, extractImports, resolveImportTargets,
 };

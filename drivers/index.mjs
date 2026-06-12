@@ -127,8 +127,13 @@ export async function runAgent(opts = {}) {
 export async function makeForemanDriver({ driver, agent, reliability, ...opts } = {}) {
   const { makeAgentDriver } = await import('../foreman/bin/wave-workflow.js');
   let seamAgent = agent;
+  // Provider key for the Wave-2 per-provider breaker: the selected backend's name when
+  // we build the seam, else 'injected' for an already-instrumented agent. A sick backend
+  // is then degraded under its OWN bucket, never globally.
+  let providerName = 'injected';
   if (!seamAgent) {
     const backend = getDriver(driver);
+    providerName = backend.name;
     // Forward role + model per-call (nullish-fallback to driver-level opts) so the
     // per-role model tier (e.g. TRIO_MODEL_<ROLE>, resolved in the gemini-cli driver)
     // is actually reachable on the Foreman build path. Backends that ignore role/model
@@ -143,9 +148,16 @@ export async function makeForemanDriver({ driver, agent, reliability, ...opts } 
   // injected-agent and built-backend modes), so the Foreman build path gets typed
   // retry + round-aware idempotency. Transparent on the success path; pass
   // `reliability:false` to opt out.
+  //
+  // Wave 2: default a LIGHT per-provider breaker (keyed by the backend name) on so a
+  // sick provider degrades for the session instead of being hammered — still inert
+  // until N consecutive recoverable failures, so a healthy build is unaffected. The
+  // idle sliver + anti-laundering telemetry stay opt-in via the `reliability` config
+  // (live wiring of stdout-heartbeat / a telemetry sink is the runner's job). Any of
+  // these can be overridden — or the breaker disabled with `reliability:{breaker:false}`.
   const reliableSeam = reliability === false
     ? seamAgent
-    : makeReliableAgent({ agent: seamAgent, ...(reliability || {}) });
+    : makeReliableAgent({ agent: seamAgent, provider: providerName, breaker: {}, ...(reliability || {}) });
   return makeAgentDriver({ agent: reliableSeam });
 }
 

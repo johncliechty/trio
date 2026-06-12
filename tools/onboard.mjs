@@ -38,6 +38,7 @@
 //   node tools/onboard.mjs --skills-dir D  # link into D only (single-dir, host-agnostic)
 
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -377,11 +378,374 @@ export function uninstallAllHosts({
   return { hosts: results, removed, kept };
 }
 
+// --- provenance lock (.agent-sync/state.json) — Wave 5, Phase D ------------
+//
+// The link installer leaves no record of WHAT it provisioned or from WHICH source
+// revision. Phase D adds a verifiable provenance LOCK so an install is reproducible
+// (`restore`), no-clobber gets a content-true gate (per-file SHA256, not just the
+// `ours` link flag), and uninstall can target ONLY the links provenance still owns.
+//
+// Lock shape (.agent-sync/state.json under HOME):
+//   { version, source_commit, installed_by,
+//     skills: { <name>: { files: { "<posix/rel/path>": "<sha256-hex>", ... } } } }
+//
+// The per-skill per-file SHA256 map is the authority that distinguishes ADOPT (a
+// foreign on-disk copy whose bytes are IDENTICAL to the source — safe to convert into
+// a link, no user data exists to lose) from PRESERVE (a target whose SHA DIFFERS — a
+// user-modified copy — never clobbered by the default path). See `classifyProvenance`.
+
+/** Lock-format version (bump only on a breaking shape change). */
+export const LOCK_VERSION = 1;
+/** Directory (under HOME) that holds the provenance lock. */
+export const AGENT_SYNC_DIRNAME = '.agent-sync';
+
+/**
+ * List every regular file under `dir`, returned as sorted POSIX-relative paths
+ * (deterministic across OSes). Nested symlinks are skipped (the trio skills are plain
+ * files + dirs); an unreadable dir yields `[]`.
+ */
+function listFilesRel(dir, base = dir) {
+  const out = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...listFilesRel(full, base));
+    else if (e.isFile()) out.push(path.relative(base, full).split(path.sep).join('/'));
+    // symlinks / sockets / fifos: intentionally skipped (non-content, non-portable)
+  }
+  out.sort();
+  return out;
+}
+
+/** SHA256 (hex) of a file's bytes. */
+function sha256File(p) {
+  return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+}
+
+/**
+ * Per-file SHA256 map for a directory tree: `{ "<posix/rel/path>": "<sha256-hex>" }`.
+ * Used both to BUILD the lock (over a skill's source dir) and to VERIFY a foreign
+ * on-disk entry against the lock (adopt-vs-preserve).
+ */
+export function fileShas(dir) {
+  const out = {};
+  for (const rel of listFilesRel(dir)) out[rel] = sha256File(path.join(dir, rel));
+  return out;
+}
+
+/** True iff two `{rel: sha}` maps have identical key sets AND identical hashes. */
+function shaMapsEqual(a, b) {
+  if (!a || !b) return false;
+  const ak = Object.keys(a).sort();
+  const bk = Object.keys(b).sort();
+  if (ak.length !== bk.length) return false;
+  for (let i = 0; i < ak.length; i++) {
+    if (ak[i] !== bk[i] || a[ak[i]] !== b[ak[i]]) return false;
+  }
+  return true;
+}
+
+/**
+ * Best-effort source commit of the repo (the revision this install/lock came from).
+ * Returns the HEAD sha, or `null` when git is absent or the dir is not a repo —
+ * provenance is never fatal to onboarding (matches the non-fatal prereq posture).
+ */
+export function sourceCommit(repoRoot = REPO_ROOT) {
+  try {
+    const r = spawnSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+    if (r.status === 0 && r.stdout && r.stdout.trim()) return r.stdout.trim();
+  } catch {
+    /* git not on PATH — leave source_commit null */
+  }
+  return null;
+}
+
+/** A stable `installed_by` stamp (`user@host (trio-onboard)`), best-effort. */
+function defaultInstalledBy() {
+  let who = 'unknown';
+  let host = 'unknown';
+  try {
+    who = os.userInfo().username || who;
+  } catch {
+    /* userInfo can throw on some CI — leave default */
+  }
+  try {
+    host = os.hostname() || host;
+  } catch {
+    /* leave default */
+  }
+  return `${who}@${host} (trio-onboard)`;
+}
+
+/**
+ * Build the provenance lock for the repo's discovered skills: source commit +
+ * per-skill per-file SHA256 + `installed_by`. Pure (no filesystem writes).
+ */
+export function buildLock({ repoRoot = REPO_ROOT, installedBy = defaultInstalledBy() } = {}) {
+  const skills = {};
+  for (const s of discoverSkills(repoRoot)) {
+    skills[s.name] = { files: fileShas(s.target) };
+  }
+  return {
+    version: LOCK_VERSION,
+    source_commit: sourceCommit(repoRoot),
+    installed_by: installedBy,
+    skills,
+  };
+}
+
+/** Absolute path of the provenance lock under `home` (~/.agent-sync/state.json). */
+export function lockPath(home) {
+  return path.join(home, AGENT_SYNC_DIRNAME, 'state.json');
+}
+
+/** Write the lock as pretty JSON under `home`. Returns the path written. */
+export function writeLock({ home, lock, dryRun = false }) {
+  const p = lockPath(home);
+  if (!dryRun) {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(lock, null, 2) + '\n');
+  }
+  return p;
+}
+
+/** Read the lock under `home`, or `null` if absent/unparseable. */
+export function readLock({ home }) {
+  try {
+    return JSON.parse(fs.readFileSync(lockPath(home), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Provenance classification for one skill's link site, layered ON TOP of `inspectLink`.
+ * This is where adopt-vs-relink is spelled out:
+ *   - create   : nothing there yet.
+ *   - skip     : our link, already pointing at this skill (idempotent).
+ *   - relink   : our link, but pointing ELSEWHERE in-repo (re-point it).
+ *   - adopt    : a FOREIGN real dir whose per-file SHA256 EQUALS the lock — a verbatim
+ *                copy of our content, so converting it to a link loses nothing.
+ *   - preserve : a foreign entry whose SHA DIFFERS (or a foreign/dangling link, or no
+ *                lock to compare) — user data; NEVER clobbered by the default path.
+ *   - replace  : a foreign entry under `--force` (explicitly destructive override).
+ * @returns {{kind:string, info:object, reason?:string}}
+ */
+export function classifyProvenance({ link, target, repoRoot = REPO_ROOT, lockFiles = null, force = false }) {
+  const info = inspectLink(link, repoRoot);
+  if (!info.exists) return { kind: 'create', info };
+  if (info.isLink && info.ours && samePath(info.target, target)) {
+    return { kind: 'skip', info, reason: 'already linked' };
+  }
+  if (info.isLink && info.ours) {
+    return { kind: 'relink', info, reason: 'ours-link points elsewhere in this repo' };
+  }
+  // Foreign entry. A real dir can be SHA-checked against the lock; a foreign/dangling
+  // link cannot (no content to hash) and is always preserved unless forced.
+  if (!info.isLink && lockFiles) {
+    if (shaMapsEqual(fileShas(link), lockFiles)) {
+      return { kind: 'adopt', info, reason: 'foreign dir is a verbatim copy (SHA matches lock)' };
+    }
+    if (force) return { kind: 'replace', info, reason: 'foreign dir modified (SHA differs) — forced' };
+    return { kind: 'preserve', info, reason: 'foreign dir modified (SHA differs) — preserved' };
+  }
+  if (force) {
+    return { kind: 'replace', info, reason: info.isLink ? 'foreign link — forced' : 'foreign dir — forced' };
+  }
+  return { kind: 'preserve', info, reason: info.isLink ? 'foreign link' : 'foreign dir' };
+}
+
+/**
+ * Compute the provenance-aware plan for `skillsDir` against `lock`. `only` (a Set of
+ * skill names) restricts the plan to a subset — used by `restore` to act on exactly the
+ * lock-recorded skills.
+ * @returns {{name,link,target,kind,reason?}[]}
+ */
+export function computeProvenancePlan({ repoRoot = REPO_ROOT, skillsDir, lock = null, force = false, only = null }) {
+  const actions = [];
+  for (const skill of discoverSkills(repoRoot)) {
+    if (only && !only.has(skill.name)) continue;
+    const link = path.join(skillsDir, skill.name);
+    const lockFiles = lock && lock.skills && lock.skills[skill.name] ? lock.skills[skill.name].files : null;
+    const c = classifyProvenance({ link, target: skill.target, repoRoot, lockFiles, force });
+    actions.push({ name: skill.name, link, target: skill.target, kind: c.kind, reason: c.reason });
+  }
+  return actions;
+}
+
+/**
+ * Provenance-aware install: like `install`, but with the SHA-gated no-clobber.
+ * `adopt` safely converts a verbatim on-disk copy into a link; `preserve` reports a
+ * SHA-modified target and leaves it BYTE-FOR-BYTE untouched.
+ * @returns {{actions, changed, adopted, preserved, conflicts, ok}}
+ */
+export function installProvenance({
+  repoRoot = REPO_ROOT,
+  skillsDir,
+  lock = null,
+  force = false,
+  dryRun = false,
+  only = null,
+  log = () => {},
+}) {
+  const actions = computeProvenancePlan({ repoRoot, skillsDir, lock, force, only });
+  if (!dryRun) fs.mkdirSync(skillsDir, { recursive: true });
+  let changed = 0;
+  let adopted = 0;
+  let preserved = 0;
+  let conflicts = 0;
+  for (const a of actions) {
+    if (a.kind === 'skip') {
+      log(`  = ${a.name}  already linked`);
+      continue;
+    }
+    if (a.kind === 'preserve') {
+      preserved++;
+      conflicts++;
+      log(`  ! ${a.name}  preserved ${a.reason} at ${a.link} (use --force to overwrite)`);
+      continue;
+    }
+    if (dryRun) {
+      log(`  + ${a.name}  would ${a.kind} -> ${a.target}`);
+      changed++;
+      if (a.kind === 'adopt') adopted++;
+      continue;
+    }
+    if (a.kind === 'relink' || a.kind === 'replace' || a.kind === 'adopt') removeEntry(a.link);
+    fs.symlinkSync(a.target, a.link, linkType());
+    if (a.kind === 'adopt') {
+      adopted++;
+      log(`  ~ ${a.name}  adopted (verbatim copy) ->  ${a.target}`);
+    } else {
+      log(`  + ${a.name}  ->  ${a.target}`);
+    }
+    changed++;
+  }
+  return { actions, changed, adopted, preserved, conflicts, ok: conflicts === 0 };
+}
+
+/**
+ * Restore: rebuild the install from the provenance lock onto a (possibly clean) HOME.
+ * Reads the lock under `home` (or uses an explicit `lock`), then re-links every
+ * lock-recorded skill that is still discoverable in the repo into each host's skills
+ * dir. Reproducible: a clean HOME yields exactly the recorded link set. SHA-modified
+ * targets are still preserved (the no-clobber gate applies during restore too).
+ * @returns {{ok, reason?, lock?, hosts, changed, conflicts, allRestored?}}
+ */
+export function restore({
+  repoRoot = REPO_ROOT,
+  home = os.homedir(),
+  hosts = HOSTS,
+  lock = null,
+  force = false,
+  dryRun = false,
+  log = () => {},
+}) {
+  const theLock = lock || readLock({ home });
+  if (!theLock) {
+    log('onboard: no provenance lock found — nothing to restore.');
+    return { ok: false, reason: 'no-lock', hosts: [], changed: 0, conflicts: 0 };
+  }
+  const only = new Set(Object.keys(theLock.skills || {}));
+  const results = [];
+  let changed = 0;
+  let conflicts = 0;
+  for (const h of hosts) {
+    const skillsDir = hostSkillsDir(h, { home });
+    log(
+      `onboard[${h.label}]: restoring ${only.size} skill(s) from lock into ${skillsDir}` +
+        (dryRun ? ' (dry-run)' : ''),
+    );
+    const r = installProvenance({ repoRoot, skillsDir, lock: theLock, force, dryRun, only, log });
+    results.push({ id: h.id, label: h.label, skillsDir, result: r });
+    changed += r.changed;
+    conflicts += r.conflicts;
+  }
+  return {
+    ok: conflicts === 0,
+    lock: theLock,
+    hosts: results,
+    changed,
+    conflicts,
+    allRestored: results.length > 0 && results.every((x) => x.result.ok),
+  };
+}
+
+/**
+ * Provenance uninstall: remove ONLY orphaned `ours` links — links that the lock records
+ * as provenance-owned but whose skill is NO LONGER discoverable in the repo (the skill
+ * was removed upstream, so the link is now dangling/stale). Live `ours` links (still a
+ * current skill), foreign entries, and `ours` links the lock does not record are all
+ * left untouched.
+ * @returns {{removed, kept, orphans:string[]}}
+ */
+export function provenanceUninstall({ repoRoot = REPO_ROOT, skillsDir, lock = null, dryRun = false, log = () => {} }) {
+  const recorded = new Set(lock && lock.skills ? Object.keys(lock.skills) : []);
+  const live = new Set(discoverSkills(repoRoot).map((s) => s.name));
+  let entries;
+  try {
+    entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+  } catch {
+    return { removed: 0, kept: 0, orphans: [] };
+  }
+  let removed = 0;
+  let kept = 0;
+  const orphans = [];
+  for (const e of entries) {
+    const link = path.join(skillsDir, e.name);
+    const info = inspectLink(link, repoRoot);
+    const isOurs = info.exists && info.isLink && info.ours;
+    if (!isOurs) continue; // foreign / unrelated entry — never our concern
+    const orphaned = recorded.has(e.name) && !live.has(e.name);
+    if (orphaned) {
+      if (!dryRun) removeEntry(link);
+      log(`  - ${e.name}  ${dryRun ? 'would remove' : 'removed'} orphaned provenance link`);
+      removed++;
+      orphans.push(e.name);
+    } else {
+      log(`  · ${e.name}  kept (live provenance link)`);
+      kept++;
+    }
+  }
+  return { removed, kept, orphans };
+}
+
+/** Provenance uninstall across every host's skills dir (orphans only). */
+export function provenanceUninstallAllHosts({
+  repoRoot = REPO_ROOT,
+  home = os.homedir(),
+  hosts = HOSTS,
+  lock = null,
+  dryRun = false,
+  log = () => {},
+}) {
+  const theLock = lock || readLock({ home });
+  const results = [];
+  let removed = 0;
+  let kept = 0;
+  for (const h of hosts) {
+    const skillsDir = hostSkillsDir(h, { home });
+    log(`onboard[${h.label}]: pruning orphaned provenance links from ${skillsDir}`);
+    const r = provenanceUninstall({ repoRoot, skillsDir, lock: theLock, dryRun, log });
+    results.push({ id: h.id, label: h.label, skillsDir, ...r });
+    removed += r.removed;
+    kept += r.kept;
+  }
+  return { hosts: results, removed, kept };
+}
+
 // --- CLI -------------------------------------------------------------------
 
 function parseArgs(argv) {
   const args = {
     uninstall: false,
+    restore: false,
+    prune: false,
     force: false,
     dryRun: false,
     home: null,
@@ -392,6 +756,8 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--uninstall') args.uninstall = true;
+    else if (a === '--restore') args.restore = true;
+    else if (a === '--prune') args.prune = true;
     else if (a === '--force') args.force = true;
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--home') args.home = argv[++i];
@@ -412,6 +778,8 @@ Usage:
   node tools/onboard.mjs --dry-run       show what would happen, change nothing
   node tools/onboard.mjs --force         overwrite a foreign dir/link at <name>
   node tools/onboard.mjs --uninstall     remove only links that point into this repo (every host)
+  node tools/onboard.mjs --restore       rebuild the install from ~/.agent-sync/state.json (the lock)
+  node tools/onboard.mjs --prune         remove only ORPHANED provenance links (stale skills) (every host)
   node tools/onboard.mjs --host ID       restrict to one host (claude | gemini)
   node tools/onboard.mjs --home DIR      treat DIR as HOME (override ~)
   node tools/onboard.mjs --skills-dir D  link into D only (single-dir, host-agnostic)
@@ -480,6 +848,29 @@ function main(argv) {
     );
   }
 
+  if (args.restore) {
+    const r = restore({ repoRoot, home, hosts, force: args.force, dryRun: args.dryRun, log });
+    if (!r.ok && r.reason === 'no-lock') return 1;
+    log(
+      `onboard: restored ${r.changed} link(s) from lock across ${hosts.length} host(s)` +
+        (args.dryRun ? ' (dry-run)' : ''),
+    );
+    if (r.conflicts > 0) {
+      log('onboard: some targets were SHA-modified and preserved — re-run with --force to overwrite.');
+      return 1;
+    }
+    return 0;
+  }
+
+  if (args.prune) {
+    const r = provenanceUninstallAllHosts({ repoRoot, home, hosts, dryRun: args.dryRun, log });
+    log(
+      `onboard: ${r.removed} orphaned link(s) removed across ${hosts.length} host(s)` +
+        (args.dryRun ? ' (dry-run)' : ''),
+    );
+    return 0;
+  }
+
   if (args.uninstall) {
     const r = uninstallAllHosts({ repoRoot, home, hosts, dryRun: args.dryRun, log });
     log(`onboard: ${r.removed} removed across ${hosts.length} host(s)${args.dryRun ? ' (dry-run)' : ''}`);
@@ -495,6 +886,15 @@ function main(argv) {
   if (r.allProvisioned) {
     const which = hosts.length === HOSTS.length ? 'both hosts' : `${hosts.length} host(s)`;
     log(`onboard: ${which} provisioned (${hosts.map((h) => h.label).join(' + ')})`);
+  }
+  // Wave 5: record the provenance lock so `--restore` can rebuild this exact install.
+  if (!args.dryRun) {
+    try {
+      const p = writeLock({ home, lock: buildLock({ repoRoot }) });
+      log(`onboard: provenance lock written -> ${p}`);
+    } catch (e) {
+      log(`onboard: warning — could not write provenance lock (${e.message})`);
+    }
   }
   if (!args.dryRun) log('onboard: done — restart the host (or reload skills) to activate.');
   return 0;

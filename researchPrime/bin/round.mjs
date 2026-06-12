@@ -38,6 +38,7 @@ import {
 } from '#trio-core/independence-accounting.mjs';
 import { committedLineages } from './lineage-enum.mjs';
 import { loadPreregistration } from './preregistration.mjs';
+import { makeReliableAgent } from '../../drivers/reliability.mjs';
 
 // Reused trio symbols (the frozen contract surface, bin/contract.mjs). G3/G5/G6 ride on the trio
 // tally + roster; G4 on the Judge; the active Synthesizer on makeSynthesizer.
@@ -367,11 +368,18 @@ export async function orchestrateRound({
     throw new HaltError('orchestrateRound requires a reviews[] array (the round\'s lineage-tagged reviews)');
   }
 
+  // Wave 1: reliability-wrap the injected seam at this injection boundary, so every
+  // adjudication call inherits typed retry + round-aware idempotency. The spy still
+  // counts ONE logical call per dispatch (it wraps the reliable seam); the wrapper's
+  // `round` keying guarantees NO cross-round dedup — two same-role calls in different
+  // rounds both execute. Transparent on the success path (one inner call per dispatch).
+  const reliableAgent = makeReliableAgent({ agent });
+
   // The call-count spy seam (f): one counting wrapper per adjudication role.
   const counts = { synthesizer: 0, judge: 0, debate: 0 };
   const spy = (role) => async (prompt, opts = {}) => {
     counts[role] += 1;
-    return agent(prompt, { ...opts, role });
+    return reliableAgent(prompt, { ...opts, role, round });
   };
 
   // G3 ≥2-agree + G6 identity + G5 dry: the trio tally (the load-bearing reuse).

@@ -13,6 +13,7 @@
 // `schema` is supplied (the Claude backend retries once then ABSTAINs).
 
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
+import { makeReliableAgent } from './reliability.mjs';
 import { claudeDriver } from './claude.mjs';
 import { geminiCliDriver } from './gemini-cli.mjs';
 import { geminiDriver } from './gemini.mjs';
@@ -118,11 +119,12 @@ export async function runAgent(opts = {}) {
  *     run on. Extra opts (e.g. an injected `runClaude` stub, `env`, `target`, `log`)
  *     thread through to the backend's `runAgent`.
  * @param {object}   [opts]
- * @param {string}   [opts.driver]  explicit backend name (overrides TRIO_DRIVER)
- * @param {Function} [opts.agent]   pre-built `agent(prompt, opts)` to route as-is
+ * @param {string}   [opts.driver]      explicit backend name (overrides TRIO_DRIVER)
+ * @param {Function} [opts.agent]       pre-built `agent(prompt, opts)` to route as-is
+ * @param {object|false} [opts.reliability]  Wave-1 reliability-wrapper opts, or `false` to opt out
  * @returns {Promise<{execute:Function, review:Function, fix:Function}>}
  */
-export async function makeForemanDriver({ driver, agent, ...opts } = {}) {
+export async function makeForemanDriver({ driver, agent, reliability, ...opts } = {}) {
   const { makeAgentDriver } = await import('../foreman/bin/wave-workflow.js');
   let seamAgent = agent;
   if (!seamAgent) {
@@ -137,7 +139,14 @@ export async function makeForemanDriver({ driver, agent, ...opts } = {}) {
         role: o.role ?? opts.role, model: o.model ?? opts.model, freshContext: true,
       });
   }
-  return makeAgentDriver({ agent: seamAgent });
+  // Wave 1: apply the reliability wrapper at THIS agent-injection boundary (both the
+  // injected-agent and built-backend modes), so the Foreman build path gets typed
+  // retry + round-aware idempotency. Transparent on the success path; pass
+  // `reliability:false` to opt out.
+  const reliableSeam = reliability === false
+    ? seamAgent
+    : makeReliableAgent({ agent: seamAgent, ...(reliability || {}) });
+  return makeAgentDriver({ agent: reliableSeam });
 }
 
 export { claudeDriver, geminiCliDriver, geminiDriver, openaiDriver, grokDriver };

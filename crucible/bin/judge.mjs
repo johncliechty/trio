@@ -19,6 +19,7 @@
 // provenance shows exactly how much cross-model independence it actually got.
 
 import { HaltError } from './crucible-lib.mjs';
+import { makeReliableAgent } from '../../drivers/reliability.mjs';
 
 export const JUDGE_ROLE = 'Judge';
 
@@ -163,6 +164,10 @@ export function makeJudge({ agent, authorFamily = 'claude', probeCrossModel = de
       'pass the Wave-1 seam: makeJudge({ agent: makeAgentSeam(...).agent })',
     );
   }
+  // Wave 1: the injected seam is reliability-wrapped HERE, at its injection point,
+  // so the Judge's adjudication call inherits typed retry + round-aware idempotency.
+  // Transparent on the success path (one inner call, opts unchanged).
+  const reliableAgent = makeReliableAgent({ agent });
   const selection = selectJudgeModel({ authorFamily, probe: probeCrossModel });
   const stamp = stampRole({ role: JUDGE_ROLE, model: selection.model, family: selection.family, mode: selection.mode, reachable: selection.reachable });
 
@@ -184,7 +189,7 @@ export function makeJudge({ agent, authorFamily = 'claude', probeCrossModel = de
      */
     async decide({ northStar, findings = [], acceptanceCriteria = [], freshEyes = null, round = 0 } = {}) {
       const prompt = judgePrompt({ northStar, findings, acceptanceCriteria, freshEyes });
-      const out = await agent(prompt, { label: `judge:r${round}:${selection.model}`, schema: JUDGE_SCHEMA });
+      const out = await reliableAgent(prompt, { label: `judge:r${round}:${selection.model}`, schema: JUDGE_SCHEMA, role: 'judge', round });
 
       // The Judge MUST decide. An abstain (answerable:no) or a reply without a
       // decision cannot be read as a silent pass — escalate to the human.

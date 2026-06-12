@@ -19,6 +19,7 @@
 
 import { HaltError } from './crucible-lib.mjs';
 import { stampRole } from './judge.mjs';
+import { makeReliableAgent } from '../../drivers/reliability.mjs';
 
 export const SYNTHESIZER_ROLE = 'Synthesizer';
 
@@ -144,6 +145,11 @@ export function makeSynthesizer({ agent, northStar = null, model = 'claude', fam
   const instanceId = `synthesizer#${++SYNTH_SEQ}`;
   const stamp = stampRole({ role: SYNTHESIZER_ROLE, model, family, mode });
 
+  // Wave 1: reliability-wrap the injected seam at its injection point, so the
+  // Director's steering call gets typed retry + round-aware idempotency.
+  // Transparent on the success path (one inner call, opts unchanged).
+  const reliableAgent = makeReliableAgent({ agent });
+
   // Persistent state (simplified persistence per §7).
   const journal = []; // the running direction log
   let lastRound = null; // the last round, stored VERBATIM
@@ -185,9 +191,11 @@ export function makeSynthesizer({ agent, northStar = null, model = 'claude', fam
     async direct({ round = 0, verdict, northStar: ns = null, research = null } = {}) {
       lastRound = { round, verdict }; // LAST ROUND VERBATIM
       const star = ns ?? northStar;
-      const out = await agent(directionPrompt({ northStar: star, lastRound, journal, research }), {
+      const out = await reliableAgent(directionPrompt({ northStar: star, lastRound, journal, research }), {
         label: `synthesizer:direct:r${round}`,
         schema: DIRECTION_SCHEMA,
+        role: 'synthesizer',
+        round,
       });
       const entry = {
         round,
@@ -234,7 +242,9 @@ export async function freshEyesColdPass({ agent, transcripts, northStar = null, 
   const cold = makeSynthesizer({ agent, northStar, model, family, mode, log });
   const journalAtStart = cold.snapshot().journal; // MUST be [] — the isolation invariant
   const promptSent = freshEyesPrompt({ northStar, transcripts });
-  const out = await agent(promptSent, { label: `synthesizer:fresh-eyes:${cold.instanceId}`, schema: FRESH_EYES_SCHEMA });
+  // Wave 1: the cold pass's own injected call is reliability-wrapped here too.
+  const reliableAgent = makeReliableAgent({ agent });
+  const out = await reliableAgent(promptSent, { label: `synthesizer:fresh-eyes:${cold.instanceId}`, schema: FRESH_EYES_SCHEMA, role: 'synthesizer' });
   const assessment = {
     lean: out?.lean ?? 'unknown',
     concerns: Array.isArray(out?.concerns) ? out.concerns : [],

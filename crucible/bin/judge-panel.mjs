@@ -161,6 +161,113 @@ export async function runRubricPanel({ doc, pack, members, attestedLineages, log
   };
 }
 
+// ---------------------------------------------------------------------------
+// Wave 3 (Phase C): the CROSS-FAMILY panel is the DEFAULT, with a degrade ladder.
+//
+// The gate no longer waits to be HANDED a cross-family roster — it TRIES for one by
+// default and degrades HONESTLY down a fixed ladder when a second family cannot be
+// reached or attested:
+//   1. 'cross-family'      — a second model family is probed reachable -> a >=2-family panel.
+//   2. 'same-family-fresh' — no second family reachable -> >=2 SAME-family FRESH-CONTEXT
+//                            judges (each attested), recorded as a degrade (not cross-family).
+//   3. 'attested-degrade'  — not even a same-family served model can be attested -> >=2
+//                            UNATTESTED same-family judges, fully degraded + recorded.
+// Every rung runs through `runRubricPanel`, so the independence count stays delegated to
+// the single committed-enum counter and a degrade can never masquerade as cross-family.
+// ---------------------------------------------------------------------------
+
+/** The fixed degrade ladder, best-first. */
+export const DEGRADE_LADDER = ['cross-family', 'same-family-fresh', 'attested-degrade'];
+
+/**
+ * Run the rubric gate with the cross-family panel as the DEFAULT, degrading honestly when
+ * no second family is reachable/attested. With the default probe (no live cross-family key)
+ * this records a same-family-fresh degrade + attestation — deterministically.
+ *
+ * @param {object} o
+ * @param {string} o.doc
+ * @param {object} o.pack
+ * @param {Function} [o.probe=defaultProbeCrossModel]  cross-family capability probe (Wave-9 binds CLIs)
+ * @param {Function} [o.score]  injected rubric scorer (test/oracle) OR
+ * @param {Function} [o.agent]  the live agent seam
+ * @param {string} [o.authorFamily='claude']
+ * @param {?string} [o.authorServedModel=null]   the SERVED model id attesting same-family judges
+ * @param {?string} [o.secondFamilyServedModel=null]  the SERVED model id for the second-family member
+ * @param {Iterable<string>} [o.attestedLineages]
+ * @param {Function} [o.log=()=>{}]
+ * @returns {Promise<object>} the panel result plus { gate_tier, degraded, degrade_reason }
+ */
+export async function runDefaultRubricGate({
+  doc, pack, probe = defaultProbeCrossModel,
+  score, agent,
+  authorFamily = 'claude', authorServedModel = null, secondFamilyServedModel = null,
+  attestedLineages, log = () => {},
+}) {
+  const reachable = typeof probe === 'function' ? probe() : null;
+  let gate_tier;
+  let degrade_reason = null;
+  let members;
+
+  if (reachable && reachable.family && reachable.family !== authorFamily) {
+    // RUNG 1: cross-family is the DEFAULT.
+    gate_tier = 'cross-family';
+    members = [
+      { family: authorFamily, servedModel: authorServedModel, score, agent },
+      {
+        family: reachable.family,
+        probeCrossModel: () => ({ model: reachable.model || reachable.family, family: reachable.family }),
+        servedModel: secondFamilyServedModel || reachable.model || reachable.family,
+        score, agent,
+      },
+    ];
+  } else if (authorServedModel) {
+    // RUNG 2: no second family reachable -> >=2 same-family FRESH-CONTEXT judges (attested).
+    gate_tier = 'same-family-fresh';
+    degrade_reason =
+      `no cross-family model reachable (probe found ${reachable ? JSON.stringify(reachable) : 'none'}); ` +
+      `fell back to ${STATIC_QUORUM_FLOOR} same-family fresh-context ${authorFamily} judge(s)`;
+    members = Array.from({ length: STATIC_QUORUM_FLOOR }, () => ({
+      family: authorFamily, servedModel: authorServedModel, score, agent,
+    }));
+  } else {
+    // RUNG 3: cannot even attest a same-family served model -> fully degraded judges.
+    gate_tier = 'attested-degrade';
+    degrade_reason =
+      'no cross-family model reachable AND no attested same-family served model; ' +
+      'judges run UNATTESTED (fully degraded)';
+    members = Array.from({ length: STATIC_QUORUM_FLOOR }, () => ({
+      family: authorFamily, attest: attestStamp(null), score, agent,
+    }));
+  }
+
+  const panel = await runRubricPanel({ doc, pack, members, attestedLineages, log });
+  // Degraded unless we both AIMED for cross-family AND the DISPATCHER actually served two
+  // attested families (a cross-family aim served same-family is still an honest degrade).
+  const degraded = !(gate_tier === 'cross-family' && panel.crossFamily === true);
+  if (gate_tier === 'cross-family' && degraded) {
+    degrade_reason =
+      `cross-family requested but the dispatcher served only ${panel.independentOrigins} ` +
+      `attested origin(s) [${panel.attestedFamilies.join(', ')}]`;
+  }
+
+  log(`rubric-gate: tier=${gate_tier} degraded=${degraded} cross-family=${panel.crossFamily}` +
+    (degrade_reason ? ` (${degrade_reason})` : ''));
+
+  return {
+    role: PANEL_ROLE,
+    contract: 'rubric-gate',
+    gate_tier,
+    degraded,
+    degrade_reason,
+    cross_family: panel.crossFamily,
+    independent_origins: panel.independentOrigins,
+    attested_families: panel.attestedFamilies,
+    attestations: panel.attestations,
+    verdict: panel.verdict,
+    panel,
+  };
+}
+
 /**
  * The two-family ASSERTION (the gate Front 3 closes on). A SINGLE-family run — including a
  * Gemini-only enhanced run, an argv-claims-two-but-served-one run, or a degraded second family —

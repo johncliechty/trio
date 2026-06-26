@@ -360,6 +360,7 @@ export async function runProject(o) {
 
     // GO: the per-wave checkpoint now encodes progress (current_wave=k,
     // last_verdict=GO; status='running' until the terminal wave sets 'done').
+    log(`✓ WAVE ${k} COMPLETED SUCCESSFULLY!`);
     if (k < totalWaves) {
       log(`→ advancing to wave ${k + 1}/${totalWaves}`);
     }

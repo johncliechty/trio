@@ -35,6 +35,9 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { extractJson } from './claude.mjs';
@@ -51,7 +54,7 @@ export const GEMINI_CLI_BASE_ARGS = ['--skip-trust', '--output-format', 'stream-
 
 // A capable, designated Gemini 3.1 model (the model `-m auto` actually served in the
 // 2026-06-10 smoke). Override per call (opts.model) or per env (TRIO_MODEL/GEMINI_MODEL).
-export const DEFAULT_GEMINI_CLI_MODEL = 'gemini-3.1-pro-preview';
+export const DEFAULT_GEMINI_CLI_MODEL = 'gemini-3.1-pro';
 
 // `auto_edit` auto-approves file edits (the Claude `acceptEdits` analog) — the right
 // default for execute/fix roles. Read-only roles (reviewers/judges) get `plan`.
@@ -97,97 +100,56 @@ export function resolveGeminiModel({ model, role, env = process.env } = {}) {
   );
 }
 
-/** Build the `gemini` argv (pure/testable): base args + approval mode + `-m <model>`. */
-export function buildGeminiCliArgs({ model, approvalMode = DEFAULT_GEMINI_APPROVAL_MODE } = {}) {
-  return [...GEMINI_CLI_BASE_ARGS, '--approval-mode', approvalMode, '-m', model ?? DEFAULT_GEMINI_CLI_MODEL];
+/** Build the `agy` argv: `--dangerously-skip-permissions` + `--model <model>`. */
+export function buildGeminiCliArgs({ model } = {}) {
+  return ['--dangerously-skip-permissions', '--model', model ?? DEFAULT_GEMINI_CLI_MODEL];
 }
 
 /**
- * Resolve how to launch gemini. `gemini` ships as an npm shim (`gemini.cmd` on Windows)
- * wrapping `node .../@google/gemini-cli/bundle/gemini.js`. Spawning that bundle with
- * `node` directly (shell:false) lets us pass an arbitrary-content prompt (JSON, quotes,
- * newlines) as ONE clean positional arg with no shell quoting — the Windows `.cmd`
- * shim would otherwise require `shell:true` and mangle the prompt. Falls back to the
- * `gemini` shim (shell on win32) when the bundle can't be located.
- * @returns {{ mode:'node', entry:string } | { mode:'shell' }}
+ * The Antigravity CLI binary is always `agy` and must be globally available.
+ * Previous fallback logic for npm shims has been removed in the v2 migration.
  */
-export function resolveGeminiEntry(env = process.env) {
-  if (env.GEMINI_CLI_JS && existsSync(env.GEMINI_CLI_JS)) return { mode: 'node', entry: env.GEMINI_CLI_JS };
-  const rel = ['node_modules', '@google', 'gemini-cli', 'bundle', 'gemini.js'];
-  const candidates = [];
-  if (process.platform === 'win32' && env.APPDATA) candidates.push(path.join(env.APPDATA, 'npm', ...rel));
-  if (env.npm_config_prefix) candidates.push(path.join(env.npm_config_prefix, 'lib', ...rel));
-  if (env.HOME) candidates.push(path.join(env.HOME, '.npm-global', 'lib', ...rel));
-  for (const c of candidates) if (existsSync(c)) return { mode: 'node', entry: c };
-  return { mode: 'shell' };
-}
 
 /**
- * Parse a Gemini stream-json STDOUT dump into `{ text, rec }` (pure/testable — no
- * subprocess). Frame shapes (verified live 2026-06-10):
- *   { type:'init',    model:<requested> }                       // argv model, NOT served
- *   { type:'message', role:'user'|'assistant', content:<str> }  // assistant text (delta:true)
- *   { type:'result',  status:'success'|..., stats:{ ... models:{ <SERVED>:{...} } } }
- * The SERVED model is the KEY of `stats.models` — the attestation source.
- * @param {string} stdout            raw newline-delimited JSON frames
+ * Parse an `agy` stdout dump into `{ text, rec }` (pure/testable — no subprocess).
+ * Since `agy` emits plaintext (possibly with ANSI), we strip ANSI and capture the whole response.
+ * @param {string} stdout            raw stdout buffer
  * @param {object} [meta]
  * @param {string} [meta.label]
  * @param {?number}[meta.cli_status] process exit code
  * @returns {{ text:string, rec:object }}
  */
 export function parseGeminiCliFrames(stdout, { label = '(unlabeled)', cli_status = null } = {}) {
-  let assistant = '';
-  let result = null;
-  for (const raw of String(stdout).split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    let o; try { o = JSON.parse(line); } catch { continue; }
-    if (o.type === 'message' && o.role === 'assistant' && typeof o.content === 'string') {
-      assistant += o.content;
-    } else if (o.type === 'result') {
-      result = o;
-    }
-  }
-  const stats = result?.stats ?? {};
-  // Attestation guard (SR-5 "unattestable => degrade, never claim"): only a PLAIN object
-  // keyed by model id attests. An array (typeof [] === 'object', Object.keys -> "0"), a
-  // null, or a non-string/empty key must NOT produce a confident-but-fabricated stamp.
-  const m = stats.models;
-  const servedKeys = (m && typeof m === 'object' && !Array.isArray(m)) ? Object.keys(m) : [];
-  const firstKey = servedKeys[0];
-  const modelServed = (typeof firstKey === 'string' && firstKey.length) ? firstKey : null;
-  // More than one served model in a single envelope is a multi-model run we can't
-  // single-stamp; surface it rather than silently picking [0].
-  const multiModel = servedKeys.length > 1;
+  // Strip ANSI control codes and raw carriage returns
+  // Matches all VT escape sequences (not just SGR), plus we strip \r explicitly
+  const cleanStdout = String(stdout).replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\r/g, '');
+  
+  const text = cleanStdout.trim();
+  const ok = cli_status === 0;
+
   const rec = {
     label,
     cli_status,
-    ok: result?.status === 'success',
-    status: result?.status ?? null,
-    duration_ms: stats.duration_ms ?? null,
-    tools: stats.tool_calls ?? 0,
-    output_tokens: stats.output_tokens ?? null,
-    input_tokens: stats.input_tokens ?? null,
-    total_tokens: stats.total_tokens ?? null,
-    // The Gemini envelope carries NO total cost (unlike Claude's total_cost_usd); cost
-    // must be derived from tokens × per-model pricing downstream, so it is honestly null.
+    ok,
+    status: ok ? 'success' : 'cli_error',
+    duration_ms: null,
+    tools: 0,
+    output_tokens: null,
+    input_tokens: null,
+    total_tokens: null,
     cost_usd: null,
-    // Attestation: served model read from the envelope, never from argv.
-    model_served: modelServed,
-    model_attested: modelServed !== null,
-    degraded: modelServed === null, // SR-5 symmetry with claude.mjs / run-live.mjs
-    multi_model: multiModel,
+    model_served: null,
+    model_attested: false,
+    degraded: true, 
+    multi_model: false,
   };
-  // Assistant deltas are the response; fall back to a `result.response` field if a
-  // future CLI build emits the answer only on the result envelope.
-  const text = assistant.trim() || (typeof result?.response === 'string' ? result.response.trim() : '');
   return { text, rec };
 }
 
 // Default per-call wall-clock ceiling (12 min) — kills a child that hangs (e.g. a
 // headless approval prompt under a too-permissive approval mode) so the orchestrator
 // never blocks forever. Override via opts.timeoutMs (0 disables).
-export const DEFAULT_GEMINI_TIMEOUT_MS = 12 * 60 * 1000;
+export const DEFAULT_GEMINI_TIMEOUT_MS = 60 * 60 * 1000;
 
 // `-p` is the headless SWITCH and REQUIRES a value, but its value is *appended to stdin*
 // (gemini 0.44.1 help: "Appended to input on stdin (if any)"). So the FULL prompt is
@@ -196,10 +158,8 @@ export const DEFAULT_GEMINI_TIMEOUT_MS = 12 * 60 * 1000;
 const PROMPT_STDIN_SENTINEL = ' ';
 
 /**
- * Live transport: spawn `gemini`, write the full prompt to STDIN (so there is no argv
- * length limit and no shell-quoting exposure), and resolve `{ text, rec }` once the
- * process closes. ENV-GATED — throws unless CRUCIBLE_AGENT_LIVE=1 so it can never fire
- * by accident (tests inject a stub `runGemini` instead).
+ * Live transport: spawn `agy`, pass the prompt via `-p`, and resolve `{ text, rec }`.
+ * ENV-GATED — throws unless CRUCIBLE_AGENT_LIVE=1.
  * @param {string} fullPrompt
  * @param {string} label
  * @param {object} [o]
@@ -224,43 +184,40 @@ export function defaultRunGeminiCli(fullPrompt, label, {
   if (env.CRUCIBLE_AGENT_LIVE !== '1') {
     throw new HaltError(
       'live agent seam is disabled',
-      'set CRUCIBLE_AGENT_LIVE=1 to spawn a real `gemini -p` sub-agent, or inject a stub `runGemini` (tests/orchestrator)',
+      'set CRUCIBLE_AGENT_LIVE=1 to spawn a real `agy -p` sub-agent, or inject a stub `runGemini` (tests/orchestrator)',
     );
   }
+  
   const mdl = resolveGeminiModel({ model, role, env });
-  const mode = approvalModeFor({ approvalMode, role, label });
-  // Only fixed flags + model id + the sentinel are on the command line; the prompt goes
-  // to stdin. The shell fallback (win32, when the node bundle isn't found) is therefore
-  // safe — there is no untrusted prompt text for cmd.exe to mangle.
-  const args = [...buildGeminiCliArgs({ model: mdl, approvalMode: mode }), '-p', PROMPT_STDIN_SENTINEL];
-  const launch = resolveGeminiEntry(env);
+  const childEnv = Object.assign({}, env, { NO_COLOR: "1", FORCE_COLOR: "0" });
+
   return new Promise((resolve) => {
-    const child = launch.mode === 'node'
-      ? spawn(process.execPath, [launch.entry, ...args], { cwd: target, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
-      : spawn('gemini', args, { cwd: target, stdio: ['pipe', 'pipe', 'pipe'], shell: process.platform === 'win32', windowsHide: true });
+    const args = buildGeminiCliArgs({ model: mdl });
+    args.push('-p', fullPrompt);
+    const child = spawn('agy.exe', args, { cwd: target, env: childEnv, windowsHide: true });
+      
     let buf = '', stderr = '', settled = false, timedOut = false;
     const finish = (payload) => { if (settled) return; settled = true; clearTimeout(timer); resolve(payload); };
     const timer = timeoutMs > 0 ? setTimeout(() => {
       timedOut = true;
-      log(`!! ${label}: gemini exceeded ${timeoutMs}ms — killing child`);
-      try { child.kill('SIGKILL'); } catch { /* already gone */ }
+      log(`!! ${label}: agy exceeded ${timeoutMs}ms - killing child`);
+      try { child.kill('SIGKILL'); } catch { }
       finish({ text: '', rec: { label, cli_status: null, ok: false, status: 'timeout', requested_model: mdl, model_served: null, model_attested: false, cost_usd: null } });
     }, timeoutMs) : null;
     if (timer && typeof timer.unref === 'function') timer.unref();
+
+    child.stdin.end();
+
     child.stdout.on('data', (d) => { buf += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
     child.on('error', (err) => {
-      // Transport failure (e.g. gemini not found): surface a typed result rather than a
-      // silent empty success, so the orchestrator can classify/retry it.
       finish({ text: '', rec: { label, cli_status: null, ok: false, status: 'transport-error', error: String(err?.message ?? err), requested_model: mdl, model_served: null, model_attested: false, cost_usd: null } });
     });
-    // Deliver the full prompt over stdin (gemini appends the `-p` sentinel to it).
-    try { child.stdin.write(fullPrompt); child.stdin.end(); } catch { /* error event handles it */ }
     child.on('close', (code) => {
-      if (timedOut) return; // already settled by the timeout path
+      if (timedOut) return; 
       const { text, rec } = parseGeminiCliFrames(buf, { label, cli_status: code });
       rec.requested_model = mdl;
-      if (!rec.ok) log(`!! ${label}: gemini exit ${code}, status=${rec.status}. stderr=${stderr.slice(0, 300)}`);
+      if (!rec.ok) log(`!! ${label}: agy exit ${code}, status=${rec.status}. stderr=${stderr.slice(0, 300)}`);
       finish({ text, rec });
     });
   });
@@ -347,3 +304,5 @@ export const geminiCliDriver = {
 };
 
 export default geminiCliDriver;
+
+

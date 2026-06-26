@@ -20,7 +20,7 @@ import { geminiDriver } from './gemini.mjs';
 import { openaiDriver } from './openai.mjs';
 import { grokDriver } from './grok.mjs';
 
-const DEFAULT_DRIVER = 'claude';
+const DEFAULT_DRIVER = process.env.ANTIGRAVITY_AGENT ? 'gemini-cli' : 'claude';
 
 /** name -> driver object. Seeded with the always-present Claude default. */
 const REGISTRY = new Map([[claudeDriver.name, claudeDriver]]);

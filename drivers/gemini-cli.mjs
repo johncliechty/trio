@@ -193,11 +193,14 @@ export function defaultRunGeminiCli(fullPrompt, label, {
 
   return new Promise((resolve) => {
     const args = buildGeminiCliArgs({ model: mdl });
-    args.push('-p', fullPrompt);
+    args.push('-p', ' ');
     const cmdName = process.platform === 'win32' ? 'agy.exe' : 'agy';
     const child = spawn(cmdName, args, { cwd: target, env: childEnv, detached: true, windowsHide: true });
     
-    if (child.stdin) child.stdin.end();
+    if (child.stdin) {
+      child.stdin.write(fullPrompt);
+      child.stdin.end();
+    }
       
     let out = '', stderr = '', settled = false, timedOut = false;
     const finish = (payload) => { if (settled) return; settled = true; clearTimeout(timer); resolve(payload); };

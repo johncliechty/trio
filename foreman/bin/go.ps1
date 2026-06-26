@@ -37,7 +37,10 @@ $env:ANTHROPIC_API_KEY = $null
 # MUST enable live agents to prevent 'live agent seam is disabled' halts
 $env:CRUCIBLE_AGENT_LIVE = "1"
 
-
+# Auto-detect host environment for robust driver selection
+if ($env:ANTIGRAVITY_AGENT) {
+  $env:TRIO_DRIVER = "gemini-cli"
+}
 
 $gitArgs = @()
 $WorkBranch = $null

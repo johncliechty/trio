@@ -558,6 +558,7 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
   const res = spawnSync(testCommand, {
     cwd: projectDir,
     shell: true,
+    windowsHide: true,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     env,

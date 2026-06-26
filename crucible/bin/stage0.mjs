@@ -40,6 +40,116 @@ import path from 'node:path';
 import { HaltError, haltForHuman, HALT_GATES } from './crucible-lib.mjs';
 
 // ---------------------------------------------------------------------------
+// Complexity triage (C3) — the FIRST step of Stage 0, ahead of tier selection.
+//
+// Crucible's full pipeline (3 stages + multi-round Shark Tank) is heavyweight by
+// design. For a genuinely small/clear task that ceremony is wasteful; for a
+// genuinely uncertain one, over-planning is itself the failure mode. This triage
+// reads CHEAP signals available at intake (scope size, novelty/uncertainty,
+// stakes/irreversibility, count of unknowns) and RECOMMENDS a pipeline depth:
+//
+//   LITE        — a single-pass plan, minimal/no Shark rounds (Clear/small work).
+//   FULL        — the current 3-stage + Shark-Tank machinery (the default).
+//   SPIKE-FIRST — run a probe/experiment BEFORE planning (genuinely uncertain work
+//                 where committing to a plan too early is the mistake).
+//
+// ANTI-DRIFT — this ONLY right-sizes ceremony. The North-Star LOCK, post-lock
+// drift detection, the inclusion test, and (when FULL is chosen) full Shark-Tank
+// rigor are UNCHANGED in every band. The North Star is still locked and drift-
+// checked in LITE and SPIKE-FIRST too. Right-sizing is a USER judgment, so this
+// HALTs with a recommendation for the user to confirm; it NEVER auto-applies, and
+// it DEFAULTS TO FULL whenever uncertain or whenever stakes are high — rigor is
+// never silently downgraded on a high-stakes intake.
+// ---------------------------------------------------------------------------
+
+export const COMPLEXITY_BANDS = {
+  LITE: 'lite',
+  FULL: 'full',
+  SPIKE_FIRST: 'spike-first',
+};
+
+/**
+ * Triage an intake into a complexity band + a recommended pipeline depth, from the
+ * cheap signals available before any framing/ingest work. The result is a
+ * RECOMMENDATION the user confirms — it carries a HALT (`recommendation` /
+ * `confirm-complexity-band`) the caller throws to surface the choice.
+ *
+ * High stakes / irreversibility FORCE FULL (rigor is never silently downgraded).
+ * Otherwise: many unknowns + novelty ⇒ SPIKE-FIRST (probe before planning); a small,
+ * clear, low-novelty, low-stakes intake ⇒ LITE; everything else (incl. any genuine
+ * uncertainty about the band) ⇒ FULL, the safe default.
+ *
+ * @param {object} [intake]
+ * @param {string}  [intake.intent]               the raw intent (length is a weak scope signal)
+ * @param {string}  [intake.scope]                'small' | 'medium' | 'large' (else inferred)
+ * @param {number}  [intake.unknowns]             count of open unknowns at intake
+ * @param {boolean} [intake.novel]                genuinely novel / unfamiliar territory
+ * @param {boolean} [intake.highStakes]           high-impact outcome
+ * @param {boolean} [intake.irreversible]         hard/impossible to undo if wrong
+ * @param {boolean} [intake.brownfield]           an existing project (raises the floor)
+ * @returns {{band:string, depth:string, rationale:string, defaultedToFull:boolean,
+ *            signals:object, halt:HaltError}}
+ */
+export function assessComplexity(intake = {}) {
+  const i = intake || {};
+  const intent = typeof i.intent === 'string' ? i.intent : '';
+  // Cheap scope signal: explicit `scope`, else a coarse read of the intent length.
+  const scope =
+    i.scope ||
+    (intent.length > 600 ? 'large' : intent.length > 180 ? 'medium' : intent.length > 0 ? 'small' : 'unknown');
+  const unknowns = Number.isFinite(i.unknowns) ? i.unknowns : 0;
+  const novel = !!i.novel;
+  const highStakes = !!i.highStakes;
+  const irreversible = !!i.irreversible;
+  const brownfield = !!(i.brownfield || i.repoDir || i.projectDir || i.docs);
+  const signals = { scope, unknowns, novel, highStakes, irreversible, brownfield };
+
+  let band;
+  let defaultedToFull = false;
+  let rationale;
+
+  if (highStakes || irreversible) {
+    // NEVER silently downgrade rigor on a high-stakes/irreversible intake.
+    band = COMPLEXITY_BANDS.FULL;
+    rationale =
+      `High stakes${irreversible ? '/irreversibility' : ''} ⇒ FULL: the full 3-stage + Shark-Tank ` +
+      `pipeline is kept. Rigor is never downgraded when the outcome is high-impact or hard to undo.`;
+  } else if (novel && unknowns >= 3) {
+    // Genuinely uncertain: over-planning is the failure mode — probe first.
+    band = COMPLEXITY_BANDS.SPIKE_FIRST;
+    rationale =
+      `Novel work with ${unknowns} open unknowns ⇒ SPIKE-FIRST: run a probe/experiment to retire the ` +
+      `unknowns BEFORE planning, so the plan is grounded rather than over-committed to an unvalidated path.`;
+  } else if (scope === 'small' && !novel && !brownfield && unknowns <= 1) {
+    // Small, clear, low-novelty, low-stakes ⇒ a single-pass plan is enough.
+    band = COMPLEXITY_BANDS.LITE;
+    rationale =
+      `Small, clear, low-novelty, low-stakes intake with ${unknowns} unknown(s) ⇒ LITE: a single-pass ` +
+      `plan with minimal/no Shark rounds. The North Star is still locked and drift-checked — only the ceremony shrinks.`;
+  } else {
+    band = COMPLEXITY_BANDS.FULL;
+    defaultedToFull = true;
+    rationale =
+      `No clear case for a lighter path (scope=${scope}, unknowns=${unknowns}` +
+      `${novel ? ', novel' : ''}${brownfield ? ', brownfield' : ''}) ⇒ FULL by default — when uncertain, keep full rigor.`;
+  }
+
+  return {
+    band,
+    depth: band,
+    rationale,
+    defaultedToFull,
+    signals,
+    // Right-sizing is the USER's call — HALT with the recommendation to confirm.
+    halt: haltForHuman(
+      `Complexity triage recommends ${band.toUpperCase()} — ${rationale} ` +
+        `Right-sizing is your judgment; confirm the depth (the North Star is locked + drift-checked in EVERY mode).`,
+      'confirm-complexity-band',
+    ),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Tier selection — scale the ingest to the input (the inclusion test, §5).
 // ---------------------------------------------------------------------------
 

@@ -141,6 +141,17 @@ data -> directly-read authoritative source -> theory/argument.
    failed attempt and record the ref so the tree is left clean and recoverable.
 4. **Ambiguity / new-requirement / plan-deviation** — any
    `answerable-from-docs: no` (§4.7), or a wave diff with no traceable plan basis.
+   - **`PLAN-AMENDMENT-PROPOSAL` (sub-type).** When a build-time discovery shows
+     the *frozen plan itself* is wrong/incomplete for the current wave (an
+     assumption falsified, an API not behaving as the plan assumed) — distinct
+     from mere ambiguity above — a review/execute agent may attach a concrete
+     proposed resolution: a **proposed diff** to the plan doc **plus a rationale**.
+     This is **still a HALT** — no silent re-planning. Foreman records the proposal
+     in the checkpoint `pending_action` for one-click human approval; on approval +
+     resume the bounded amendment is applied (or recorded as applied) and the wave
+     continues. The human stays in the loop and must approve before any plan change
+     takes effect; the §4.7 ambiguity gate and every §5 guard are unchanged. F3
+     only attaches a resolution to a halt that would otherwise be bare.
 5. **Unrecoverable error** — can't verify a load-bearing claim; repo in bad
    state; an irreversible action's gates didn't both verify; invalid/torn
    checkpoint on resume (§8).
@@ -260,8 +271,6 @@ drive only the model steps via the `agent()` seam.
    scripted driver: `node <skill>/bin/run-project.mjs <projectDir>` (add `--git`
    for commit-on-GO, `--max-waves`/`--max-wallclock-sec` for a budget cap,
    `--resume` to continue from a checkpoint).
-3. **Drive it with live sub-agents** by passing `makeAgentDriver({agent})` to
-   `runProject`, with `agent()` bound to your model substrate. The reference
-   binding to a headless `claude -p` child (subscription tokens) is
-   `C:\dev\foreman-targets\_calib-run.mjs`; live progress streams to
-   `_calib-status.log`.
+3. **Drive it with live sub-agents** using the robust wrapper script:
+   `powershell -File <skill>/bin/go.ps1 -Project <projectDir> [-Resume]`
+   The script automatically handles stale locks and executes through the backend registry (supporting `claude` or `gemini-cli`). To use Gemini, ensure you explicitly set `$env:TRIO_DRIVER="gemini-cli"` and `$env:GEMINI_MODEL="gemini-3.1-pro"` (or your current session's active model) before invoking `go.ps1`. The wrapper also requires `$env:CRUCIBLE_AGENT_LIVE="1"` to allow live billable agents.

@@ -34,6 +34,11 @@ if (-not (Test-Path $engine)) { throw "engine not found: $engine" }
 # not metered API billing. Scoped to this process; your shell is unaffected.
 $env:ANTHROPIC_API_KEY = $null
 
+# MUST enable live agents to prevent 'live agent seam is disabled' halts
+$env:CRUCIBLE_AGENT_LIVE = "1"
+
+
+
 $gitArgs = @()
 $WorkBranch = $null
 $cfgPath = Join-Path $proj 'foreman.config.json'

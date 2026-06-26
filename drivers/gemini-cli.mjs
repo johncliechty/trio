@@ -194,9 +194,12 @@ export function defaultRunGeminiCli(fullPrompt, label, {
   return new Promise((resolve) => {
     const args = buildGeminiCliArgs({ model: mdl });
     args.push('-p', fullPrompt);
-    const child = spawn('agy.exe', args, { cwd: target, env: childEnv, windowsHide: true });
+    const cmdName = process.platform === 'win32' ? 'agy.exe' : 'agy';
+    const child = spawn(cmdName, args, { cwd: target, env: childEnv, detached: true, windowsHide: true });
+    
+    if (child.stdin) child.stdin.end();
       
-    let buf = '', stderr = '', settled = false, timedOut = false;
+    let out = '', stderr = '', settled = false, timedOut = false;
     const finish = (payload) => { if (settled) return; settled = true; clearTimeout(timer); resolve(payload); };
     const timer = timeoutMs > 0 ? setTimeout(() => {
       timedOut = true;
@@ -206,16 +209,15 @@ export function defaultRunGeminiCli(fullPrompt, label, {
     }, timeoutMs) : null;
     if (timer && typeof timer.unref === 'function') timer.unref();
 
-    child.stdin.end();
-
-    child.stdout.on('data', (d) => { buf += d.toString(); });
+    child.stdout.on('data', (d) => { out += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
+    
     child.on('error', (err) => {
       finish({ text: '', rec: { label, cli_status: null, ok: false, status: 'transport-error', error: String(err?.message ?? err), requested_model: mdl, model_served: null, model_attested: false, cost_usd: null } });
     });
     child.on('close', (code) => {
       if (timedOut) return; 
-      const { text, rec } = parseGeminiCliFrames(buf, { label, cli_status: code });
+      const { text, rec } = parseGeminiCliFrames(out, { label, cli_status: code });
       rec.requested_model = mdl;
       if (!rec.ok) log(`!! ${label}: agy exit ${code}, status=${rec.status}. stderr=${stderr.slice(0, 300)}`);
       finish({ text, rec });

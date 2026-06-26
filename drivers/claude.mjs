@@ -24,7 +24,7 @@ import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { attestStamp } from './attest.mjs';
 
 const BASE_ARGS = [
-  '-p', '--output-format', 'stream-json', '--verbose',
+  '-p', ' ', '--output-format', 'stream-json', '--verbose',
   '--permission-mode', 'acceptEdits',
 ];
 const DEFAULT_ALLOWED_TOOLS = 'Bash,Edit,Write,Read,Glob,Grep';
@@ -107,7 +107,12 @@ export function defaultRunClaude(fullPrompt, label, {
     );
   }
   return new Promise((resolve) => {
-    const child = spawn('claude', [...BASE_ARGS, '--allowedTools', allowedTools], { cwd: target });
+    const args = [...BASE_ARGS, '--allowedTools', allowedTools]; 
+    if (env.CLAUDE_MODEL) { args.push('-m', env.CLAUDE_MODEL); } 
+    
+    const isWin = process.platform === 'win32';
+    const child = spawn('claude', args, { cwd: target, env, shell: isWin, windowsHide: true });
+    
     let out = '', stderr = '';
     child.stdout.on('data', (d) => { out += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
@@ -116,6 +121,7 @@ export function defaultRunClaude(fullPrompt, label, {
       if (!_finalEnv) log(`!! ${label}: no result envelope. stderr=${stderr.slice(0, 300)}`);
       resolve({ text, rec });
     });
+    child.stdin.on('error', (err) => { log(`!! ${label}: stdin EPIPE - child likely exited early. err=${err.message}`); });
     child.stdin.write(fullPrompt);
     child.stdin.end();
   });
@@ -203,3 +209,4 @@ export const claudeDriver = {
 };
 
 export default claudeDriver;
+

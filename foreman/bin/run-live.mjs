@@ -13,6 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 
 import { classifyExit, makeTelemetryRecord } from './transport.mjs';
 import { spawnGuarded, makeChildRegistry, acquireLock } from './proc-guard.mjs';
@@ -34,7 +35,7 @@ const CALL_TIMEOUT_MIN = flag('--call-timeout-min', '20');
 const CALL_TIMEOUT_MS = Number(CALL_TIMEOUT_MIN) > 0 ? Number(CALL_TIMEOUT_MIN) * 60000 : null;
 const LOCK_FILE = flag('--lock', path.join(PROJECT, '.foreman', 'run.lock'));
 
-const CLAUDE_ARGS = ['-p', '--output-format', 'stream-json', '--verbose',
+const CLAUDE_ARGS = ['-p', ' ', '--output-format', 'stream-json', '--verbose',
   '--permission-mode', 'acceptEdits', '--allowedTools', ALLOWED,
   // The orchestrator owns ALL git (commit-on-GO, branch, reconcile). Secondary guard
   // (the prompt is the primary one) using the documented space-form pattern.
@@ -74,8 +75,10 @@ function runClaude(fullPrompt, label) {
     // Spawn under the timeout + kill-on-exit guard (proc-guard). `done` resolves
     // with the typed-exit inputs; we attach our own stream-json listeners to the
     // returned child for the served-model/tool/usage telemetry.
+    const isWin = process.platform === 'win32';
     const { child, done } = spawnGuarded({
       command: 'claude', args: CLAUDE_ARGS, cwd: PROJECT, timeoutMs: CALL_TIMEOUT_MS, registry,
+      spawnImpl: (cmd, args, opts) => spawn(cmd, args, { ...opts, shell: isWin, windowsHide: true })
     });
     let buf = '', finalEnv = null, tools = 0, lastText = '', servedModel = null, stderr = '';
     const tick = setInterval(() => emit(`│ ${label} … working — ${secs()}s, ${tools} tool call(s) so far`), 20000);
@@ -109,6 +112,7 @@ function runClaude(fullPrompt, label) {
         }
       });
       child.stderr.on('data', (d) => { stderr += d.toString(); });
+      child.stdin.on('error', (err) => { emit(`!! ${label}: stdin EPIPE - child likely exited early. err=${err.message}`); });
       child.stdin.write(fullPrompt);
       child.stdin.end();
     }
@@ -132,6 +136,14 @@ function runClaude(fullPrompt, label) {
         servedModel,
       });
       calls.push(rec);
+      // SPIKE(foreman-parallel): passive per-call phase-timing sink for phase-report.mjs.
+      // Append-only, off the hot path's critical work; the run never crashes on logging.
+      try {
+        fs.mkdirSync(path.join(PROJECT, '.foreman'), { recursive: true });
+        fs.appendFileSync(path.join(PROJECT, '.foreman', 'phase-timings.jsonl'),
+          JSON.stringify({ kind: 'call', label: rec.label, duration_ms: rec.duration_ms,
+            output_tokens: rec.output_tokens, cost_usd: rec.cost_usd, ts: Date.now() }) + '\n');
+      } catch { /* never crash the run on logging */ }
       emit(`└ ${label} done — class ${rec.exit_class}, code ${code ?? signal ?? '?'}, ok ${rec.ok}, ${tools} tools, ` +
         `out ${rec.output_tokens}tok, ~$${(rec.cost_usd ?? 0).toFixed(4)} est (subscription equiv, not an API charge), ` +
         `${rec.duration_ms}ms` + (rec.permission_denials ? `, denials ${rec.permission_denials}` : ''));
@@ -206,7 +218,7 @@ let result, threw = null;
 try {
   result = await runProject({
     projectDir: PROJECT,
-    driver: await makeForemanDriver({ agent }),
+    driver: await makeForemanDriver(process.env.TRIO_DRIVER ? { log: (s) => emit(s) } : { agent }),
     reviewerCount: REVIEWERS,
     fixIterCap: CAP,
     budgetConfig,
@@ -240,3 +252,4 @@ console.log(JSON.stringify({
   agent_calls: calls.length, totals: tot,
 }, null, 2));
 console.log('RUN_JSON_END');
+

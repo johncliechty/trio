@@ -554,6 +554,7 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
   // leaking a skip-tests signal, so we strip it before spawning.
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
+  const _gateT0 = Date.now(); // SPIKE(foreman-parallel): gate wall-clock
   const res = spawnSync(testCommand, {
     cwd: projectDir,
     shell: true,
@@ -561,6 +562,7 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
     maxBuffer: 64 * 1024 * 1024,
     env,
   });
+  const _gateMs = Date.now() - _gateT0;
   const stdout = res.stdout || '';
   const stderr = res.stderr || '';
   const merged = stdout + '\n' + stderr;
@@ -651,6 +653,7 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
     cwd: projectDir,
     exit_code: exitCode,
     green,
+    gate_ms: _gateMs,                  // SPIKE(foreman-parallel): gate wall-clock
     vacuous_reason,                    // R2-3: non-null ⇒ exit-0-but-not-real-GREEN
     tap,
     stdout,
@@ -660,6 +663,15 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
   const file = path.join(foremanDir, `wave-${wave?.n ?? 0}-gate.json`);
   fs.writeFileSync(file, JSON.stringify(artifact, null, 2) + '\n');
   artifact.artifact_path = file;
+  // SPIKE(foreman-parallel): passive phase-timing sink. The gate is NOT an agent()
+  // call, so it has no per-call telemetry record; record its wall-clock here so
+  // phase-report.mjs can answer "gate vs review". Append-only; never crash the gate.
+  try {
+    fs.appendFileSync(path.join(foremanDir, 'phase-timings.jsonl'),
+      JSON.stringify({ kind: 'gate', label: `gate:w${wave?.n ?? 0}.${iteration}`,
+        phase: 'gate', wave: wave?.n ?? null, iteration, duration_ms: _gateMs,
+        output_tokens: 0, exit_code: exitCode, green, ts: Date.now() }) + '\n');
+  } catch { /* never crash the gate on logging */ }
   return artifact;
 }
 
@@ -712,6 +724,12 @@ export function judge(gate, findings) {
   }
   return { go: true, reason: 'gate GREEN and no verified blocking finding', blocking: [] };
 }
+
+// SPIKE(foreman-parallel): A/B toggle for CONCURRENT read-only reviewers (default OFF).
+// The reviewers are read-only and the finding-merge (collectFindings) keys by stable
+// id, so concurrency is order-independent by construction. Flag OFF ⇒ byte-identical
+// to the historical sequential path. Used only to MEASURE the latency-tail win.
+function reviewConcurrencyOn() { return process.env.FOREMAN_CONCURRENT_REVIEW !== '0'; }
 
 // ---------------------------------------------------------------------------
 // The one-wave loop.
@@ -856,18 +874,72 @@ export async function runWave(o) {
         `Revert the test change, or cite the plan line that authorizes it, then re-invoke wave ${wave.n}` });
     }
 
-    // ----- REVIEW: REVIEWER_COUNT independent reviewers, SEQUENTIAL (§3) -----
-    const reviews = [];
-    for (let r = 0; r < reviewerCount; r++) {
-      reviews.push(await driver.review({ ...ctx, reviewerIndex: r }, lastGate));
+    // ----- REVIEW: REVIEWER_COUNT independent reviewers (§3) -----
+    // Default SEQUENTIAL. SPIKE(foreman-parallel) A/B: with FOREMAN_CONCURRENT_REVIEW=1
+    // the read-only reviewers run CONCURRENTLY via Promise.allSettled — order-independent
+    // (collectFindings keys by stable id). A reviewer whose promise REJECTS is mapped to
+    // an abstain (answerable:'no') so a degraded run HALTs at the §4.7 ambiguity gate
+    // rather than silently passing on one reviewer (never Promise.all, which would drop
+    // a surviving reviewer's findings). Flag OFF ⇒ byte-identical to the serial path.
+    let reviews;
+    if (reviewConcurrencyOn()) {
+      const settled = await Promise.allSettled(
+        Array.from({ length: reviewerCount }, (_, r) =>
+          driver.review({ ...ctx, reviewerIndex: r }, lastGate)));
+      reviews = settled.map((s, r) => s.status === 'fulfilled' ? s.value : {
+        reviewer: `reviewer-${r}`, answerable: 'no',
+        note: `reviewer ${r} call rejected (${s.reason?.message || s.reason}) — cannot verify findings; HALT for human review`,
+        findings: [],
+      });
+    } else {
+      reviews = [];
+      for (let r = 0; r < reviewerCount; r++) {
+        reviews.push(await driver.review({ ...ctx, reviewerIndex: r }, lastGate));
+      }
     }
-    // Ambiguity gate (§4.7): any reviewer answering "no" is a HALT.
+    // Ambiguity gate (§4.7): any reviewer answering "no" is a HALT. UNCHANGED —
+    // this remains the bare hard-halt for "the docs don't answer this" (mere
+    // ambiguity), and it is checked FIRST so F3 can never weaken it.
     const ambiguous = reviews.find((rv) => rv && rv.answerable === 'no');
     if (ambiguous) {
       const reason = `ambiguity HALT: a reviewer could not answer from the frozen docs`;
       steps.push(`✗ ${reason}`);
       return finishHalt({ reason, recommend: ambiguous.note ||
         `resolve the ambiguity in the plan and re-invoke wave ${wave.n}` });
+    }
+
+    // ----- §6 PLAN-AMENDMENT-PROPOSAL HALT (F3) -----
+    // A build-time discovery that the FROZEN plan is wrong/incomplete for THIS wave
+    // (an assumption falsified, an API not behaving as the plan assumed) is DISTINCT
+    // from mere ambiguity above: the docs WERE answerable, but reality contradicts
+    // them. Today that would be a bare hard-halt. F3 lets a review/execute agent
+    // ATTACH a concrete proposed resolution — a PROPOSED DIFF to the plan doc + a
+    // rationale — so the human can approve a BOUNDED amendment in one click instead
+    // of doing a full manual round-trip.
+    //
+    // ANTI-DRIFT (critical): this is STILL a HALT. There is NO silent re-planning.
+    // The proposal is recorded in the checkpoint `pending_action`; the human stays
+    // in the loop and must approve before any plan change takes effect. F3 only
+    // attaches a resolution to a halt that would otherwise be bare — every §5 guard
+    // and the ambiguity gate above are unchanged. Requiring BOTH a non-empty diff
+    // and a rationale keeps a bare blocker from masquerading as a proposal.
+    const amendmentReview = reviews.find((rv) => rv && rv.plan_amendment &&
+      typeof rv.plan_amendment.proposed_diff === 'string' && rv.plan_amendment.proposed_diff.trim() &&
+      typeof rv.plan_amendment.rationale === 'string' && rv.plan_amendment.rationale.trim());
+    if (amendmentReview) {
+      const pa = amendmentReview.plan_amendment;
+      const reason = `PLAN-AMENDMENT-PROPOSAL HALT: the frozen plan is wrong/incomplete for wave ${wave.n}`;
+      steps.push(`✗ ${reason}`);
+      return finishHalt({
+        subType: 'PLAN-AMENDMENT-PROPOSAL',
+        amendment: { proposed_diff: pa.proposed_diff, rationale: pa.rationale, target: pa.target ?? planPath },
+        reason,
+        recommend:
+          `PLAN-AMENDMENT-PROPOSAL for wave ${wave.n}. Rationale: ${pa.rationale.trim()} ` +
+          `Proposed diff to ${pa.target ?? planPath}:\n${pa.proposed_diff.trim()}\n` +
+          `This is a HALT (no silent re-planning): approve to apply the bounded amendment and resume wave ${wave.n}, ` +
+          `or reject and resolve the plan manually. On approval + --resume the amendment is applied (or recorded as applied) and the wave continues.`,
+      });
     }
     findings = collectFindings(reviews);
     const openBlockers = findings.filter((f) =>
@@ -997,7 +1069,7 @@ export async function runWave(o) {
       findings, checkpoint: cp, checkpointPath, dashboard: dash, lastCommit: lastCommit ?? null };
   }
 
-  function finishHalt({ reason, recommend, stash = false }) {
+  function finishHalt({ reason, recommend, stash = false, subType = null, amendment = null }) {
     // §6.3 non-convergence ONLY: stash the failed attempt so the tree is left
     // clean + recoverable, recording the ref. Other halts leave the tree as-is for
     // the human to inspect (the checkpoint is `halted` and is never auto-resumed).
@@ -1022,6 +1094,7 @@ export async function runWave(o) {
     const dash = dashboard(`HALT: ${reason}`);
     log(dash);
     return { status: 'HALT', verdict: 'HALT', haltReason: reason, recommend: recommend2,
+      haltSubType: subType, amendment,
       iterations: iteration, gate: lastGate, findings, checkpoint: cp, checkpointPath, dashboard: dash, stashRef: stashRef ?? null };
   }
 

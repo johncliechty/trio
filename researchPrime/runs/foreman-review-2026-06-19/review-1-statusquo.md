@@ -1,0 +1,15 @@
+# REVIEW 1 — status-quo defender (adversarial)
+
+- Attack 1 SURVIVES: disjoint-write-set gate NOT pre-checkable. Write-set is an OUTPUT of execution, not an input. Condition (1) is circular -> only a POST-HOC collision detector, not a precondition gate. F-3 downgraded from "mechanically-checkable boundary" to "post-hoc collision detector."
+- Attack 2 SURVIVES (strong): plan-declared-independence under-declares SEMANTIC coupling. This codebase threads shared record fields (grass_origin/pending_paste normalization), shared seed builders (_build_seed_for_plan), shared fixtures (fake_claude.py) through ~4 files per wave. Two agents can write DISJOINT files and still conflict on a shared interface contract (one adds grass_origin="", other assumes None). File-diff checker is blind. The contract Foreman protects is DECISION-CONSISTENCY = semantic, not file-scoped. -> Branch 1 badly weakened.
+- Attack 3 SURVIVES: relaxing an OBSERVED structural safety invariant on CORROBORATED-by-opinion-only (0 OBSERVED) upside INVERTS the evidence ladder. Best-of-N saturates ~k=10 (capped upside).
+- Attack 4 WEAKENED: concurrent reviewers is the LEAST-bad branch but "one-line/safest" oversells: (1) 429 contention on ONE Pro/Max subscription can make parallel slower; (2) nondeterministic finding-tally ordering can break the >=2-agree identity logic -> flaky convergence/non-reproducible HALTs; (3) repro/debugging of flaky parallel review; (4) needs concurrency control + deterministic tally + backoff + stable identity fn = not one line.
+- Attack 5 SURVIVES: worktrees.py isolates ONE session per worktree, has reap_orphans but NO merge-back machinery. Adding worktree-per-unit + merge + write-set checker = a distributed-concurrency subsystem, net regression vs stdlib-only/simplicity identity.
+
+## New findings
+- N-1 (PARTIAL — note self-refutation): claims Anthropic+Cognition share correlated vendor incentive (sell more invocations). BUT Cognition's essay argues AGAINST multi-agents = against more invocations, so the incentive bias does NOT cleanly apply to Cognition. Keep as a mild caution, not a clean origin-collapse.
+- N-2 (STRONG): the rule is a SCHELLING FENCE. "Don't parallelize code-writing" is valuable BECAUSE bright-line/unconditional. Every "conditional/optional/where-strong" relaxation replaces a bright line with a judgment call made by the same fallible planning step that under-declares coupling. Enforceability of a simple rule is itself a safety property.
+- N-3: parallel fan-out STRESSES the single trusted gate most (more load + more diverse failure modes hitting it at once). Synthesis treats the gate as a fixed asset.
+
+## Strongest status-quo argument
+The contract Foreman protects is DECISION-CONSISTENCY, which is semantic not file-scoped, so no file-level disjoint-write-set gate can ever enforce it. One sequential builder making all the implicit choices is the actual guarantee. Corruption from parallel coders is SILENT (disjoint files, conflicting contracts, green diffs).

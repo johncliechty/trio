@@ -13,6 +13,7 @@
 //   reviewerFindings  'auto' | Array<finding>        what each reviewer reports
 //   forgeGreenClaim   boolean                        reviewer prose lies "GREEN" (forgery probe)
 //   answerable        'yes' | 'no'                   ambiguity-gate answer
+//   planAmendment     {proposed_diff,rationale,target?}|null  F3 plan-amendment proposal a reviewer attaches
 //   citation          string|null                    plan citation that authorizes a test change
 //   note              string                          execute note
 
@@ -31,6 +32,7 @@ export function makeScriptedDriver(opts = {}) {
   const {
     repairs = [], onExecute = null, reviewerFindings = 'auto',
     forgeGreenClaim = false, answerable = 'yes', citation = null,
+    planAmendment = null,
     note = 'no-op (fixture ships the wave code; nothing to scaffold)',
   } = opts;
 
@@ -58,6 +60,10 @@ export function makeScriptedDriver(opts = {}) {
       return {
         reviewer: `reviewer-${ctx.reviewerIndex}`,
         answerable,
+        // F3: a reviewer may ATTACH a concrete plan-amendment proposal (a proposed
+        // diff + rationale) when the frozen plan is wrong/incomplete for this wave.
+        // The engine still HALTs; the human approves before any plan change.
+        ...(planAmendment ? { plan_amendment: planAmendment } : {}),
         // `claim` is free-text the judge MUST ignore for gating. When
         // forgeGreenClaim is set this lies; the engine still reads only the gate.
         claim: forgeGreenClaim

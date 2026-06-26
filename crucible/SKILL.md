@@ -57,10 +57,19 @@ drifting** from the project's locked objective.
 
 ## The pipeline — three you-approve stages
 
-1. **Stage 0 — Intake & Framing** → 🚦 the user **locks the North Star**. Greenfield
-   Oranges framing, or a tiered brownfield ingest (T1 inventory/dedupe → T2
-   reproduce-first + coverage → T3 delegate deep archaeology to researchPrime), with
-   Confirmed/Inferred/Gap labels that gate. Drift detection begins **after** the lock.
+1. **Stage 0 — Intake & Framing** → 🚦 the user **locks the North Star**. It opens with
+   a **complexity triage** (`assessComplexity`): cheap intake signals (scope, novelty,
+   stakes/irreversibility, unknowns) recommend a pipeline depth — **LITE** (single-pass,
+   minimal/no Shark rounds for small/clear work), **FULL** (the full 3-stage + Shark-Tank
+   machinery — the default), or **SPIKE-FIRST** (probe before planning when genuinely
+   uncertain). Right-sizing is **your** judgment, so it **HALTs for you to confirm** and
+   **defaults to FULL** when uncertain or when stakes are high — rigor is never silently
+   downgraded. The triage only right-sizes *ceremony*: the North-Star lock, post-lock drift
+   detection, the inclusion test, and full Shark-Tank rigor (when FULL) are unchanged in
+   every band. Then greenfield Oranges framing, or a tiered brownfield ingest (T1
+   inventory/dedupe → T2 reproduce-first + coverage → T3 delegate deep archaeology to
+   researchPrime), with Confirmed/Inferred/Gap labels that gate. Drift detection begins
+   **after** the lock.
 2. **Stage 1 — Master Plan** → 🚦 the user **approves**. Oranges brainstorm
    (assumption-map → premortem → ideate), batch triage, a phased plan, then the
    Shark-Tank loop to convergence.

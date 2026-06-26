@@ -387,7 +387,7 @@ function reachableFromTests(root, foremanDir) {
  * could prove a specific changed *test* actually ran is Phase-3 hardening.
  */
 function checkVacuousGreen(root, foremanDir, changedFiles) {
-  const sources = changedFiles.filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f));
+  const sources = changedFiles.filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f) && !f.endsWith('.log'));
   const reach = reachableFromTests(root, foremanDir);
   // Fallback for DYNAMIC loads: a test may exercise a source via importlib /
   // `spec_from_file_location("x.py")` / runpy, which static import-reachability

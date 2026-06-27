@@ -79,7 +79,7 @@ const GIT_TIMEOUT_MS = 120000;
 function git(repoDir, args, { allowFail = false, raw = false } = {}) {
   const res = spawnSync('git', args, {
     cwd: repoDir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
-    timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL',
+    timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL', windowsHide: true,
   });
   if (res.error) {
     const timedOut = res.error.code === 'ETIMEDOUT' || res.signal === 'SIGKILL';

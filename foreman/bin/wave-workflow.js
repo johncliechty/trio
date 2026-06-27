@@ -74,8 +74,8 @@ function executePrompt(ctx) {
     `You are the EXECUTE agent for Foreman wave ${ctx.wave.n} ("${ctx.wave.title}").`,
     `Project: ${ctx.projectDir}. Implement ONLY this wave's work as specified in the`,
     `frozen plan. Do not refactor outside the plan; do not weaken or delete tests.`,
-    `Do NOT run any git commands or commit/stage anything — the orchestrator owns ALL`,
-    `version control; just edit files (and you may run the project's test command).`,
+    `Do NOT run any git commands, terminal commands, or tests yourself. The orchestrator`,
+    `owns all testing and version control; strictly just edit the source files.`,
     `If the wave is not answerable from the frozen docs, say so explicitly.`,
   ].join(' ');
 }
@@ -102,7 +102,7 @@ function fixPrompt(ctx, gate, findings) {
     `Close these findings without weakening tests: ${JSON.stringify(findings.map((f) => f.id))}.`,
     `The orchestrator gate is at ${gate.artifact_path}. Make the minimal change that`,
     `turns the gate GREEN; the orchestrator — not you — re-runs the gate to verify.`,
-    `Do NOT run any git commands or commit/stage anything — the orchestrator owns version control.`,
+    `Do NOT run any git commands, terminal commands, or tests yourself. The orchestrator owns all testing and version control.`,
   ].join(' ');
 }
 

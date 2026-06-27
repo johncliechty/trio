@@ -19,6 +19,42 @@ import { geminiCliDriver } from './gemini-cli.mjs';
 import { geminiDriver } from './gemini.mjs';
 import { openaiDriver } from './openai.mjs';
 import { grokDriver } from './grok.mjs';
+import { defaultRunGemini, extractJson } from '../foreman/bin/drivers/driver-gemini.mjs';
+
+export const geminiCliNativeDriver = {
+  name: 'gemini-cli-native',
+  subAgentCapable: true,
+  structuredOutput: 'cli-subagent (prompt-suffix)',
+  async runAgent(opts = {}) {
+    const { prompt, schema, label, log = () => {} } = opts;
+    const run = opts.runGemini || ((p, l) => defaultRunGemini(p, l, opts));
+    
+    const schemaSuffix = schema
+      ? `\n\nRespond with ONLY a single raw JSON object (no markdown fences, no prose) ` +
+        `that conforms to this JSON Schema:\n${JSON.stringify(schema)}`
+      : '';
+      
+    const { text } = await run(prompt + schemaSuffix, label);
+    if (!schema) return text;
+    
+    let obj = extractJson(text);
+    if (!obj) {
+      log(`   !! ${label} reply was not valid JSON — retrying once (strict reprompt)`);
+      const strict = `${prompt}\n\nYour previous reply was NOT valid JSON. Respond with ONLY a single raw JSON ` +
+        `object conforming to this JSON Schema — no prose, no fences:\n${JSON.stringify(schema)}`;
+      obj = extractJson((await run(strict, `${label}#retry`)).text);
+    }
+    if (!obj) {
+      log(`   !! ${label} still unparseable — ABSTAIN (answerable:no) → engine HALTs for human review`);
+      return {
+        answerable: 'no',
+        note: `reviewer ${label} response was not parseable JSON after one retry — cannot verify findings; HALT for human review`,
+        findings: []
+      };
+    }
+    return obj;
+  }
+};
 
 const DEFAULT_DRIVER = process.env.ANTIGRAVITY_AGENT ? 'gemini-cli' : 'claude';
 
@@ -47,6 +83,7 @@ registerDriver(geminiCliDriver);
 registerDriver(geminiDriver);
 registerDriver(openaiDriver);
 registerDriver(grokDriver);
+registerDriver(geminiCliNativeDriver);
 
 /** The backend names currently registered (default `claude` always present). */
 export function listDrivers() {

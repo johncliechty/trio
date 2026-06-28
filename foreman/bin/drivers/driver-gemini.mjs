@@ -93,8 +93,7 @@ export function defaultRunGemini(fullPrompt, label, {
       args.push('-m', mdl);
     }
     
-    const isWin = process.platform === 'win32';
-    const child = spawn('gemini', args, { cwd: target, env, shell: isWin, windowsHide: true });
+    const child = spawn('agy', args, { cwd: target, env, shell: false, windowsHide: true });
     
     let out = '', stderr = '';
     child.stdout.on('data', (d) => { out += d.toString(); });

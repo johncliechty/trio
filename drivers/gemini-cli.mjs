@@ -197,17 +197,38 @@ export function defaultRunGeminiCli(fullPrompt, label, {
     const cmdName = process.platform === 'win32' ? 'agy.exe' : 'agy';
     const child = spawn(cmdName, args, { cwd: target, env: childEnv, detached: true, windowsHide: true });
     
+    const killChild = () => {
+      try {
+        if (process.platform === 'win32') {
+          import('node:child_process').then(cp => cp.spawnSync('taskkill', ['/pid', child.pid, '/t', '/f']));
+        } else {
+          child.kill('SIGKILL');
+        }
+      } catch {}
+    };
+    const onExit = () => killChild();
+    const onSigInt = () => { killChild(); process.exit(130); };
+    process.on('exit', onExit);
+    process.on('SIGINT', onSigInt);
+
     if (child.stdin) {
       child.stdin.write(fullPrompt);
       child.stdin.end();
     }
       
     let out = '', stderr = '', settled = false, timedOut = false;
-    const finish = (payload) => { if (settled) return; settled = true; clearTimeout(timer); resolve(payload); };
+    const finish = (payload) => { 
+      if (settled) return; 
+      settled = true; 
+      clearTimeout(timer); 
+      process.removeListener('exit', onExit);
+      process.removeListener('SIGINT', onSigInt);
+      resolve(payload); 
+    };
     const timer = timeoutMs > 0 ? setTimeout(() => {
       timedOut = true;
       log(`!! ${label}: agy exceeded ${timeoutMs}ms - killing child`);
-      try { child.kill('SIGKILL'); } catch { }
+      killChild();
       finish({ text: '', rec: { label, cli_status: null, ok: false, status: 'timeout', requested_model: mdl, model_served: null, model_attested: false, cost_usd: null } });
     }, timeoutMs) : null;
     if (timer && typeof timer.unref === 'function') timer.unref();

@@ -398,7 +398,7 @@ export function makeGitContext({ repoDir, workBranch = DEFAULT_WORK_BRANCH, log 
       assertRepoBoundary(repoTop, rels);
       // Explicit per-file staging (handles add/modify/delete for tracked paths).
       for (const rel of rels) {
-        const a = git(repoDir, ['add', '--', rel], { allowFail: true });
+        const a = git(repoDir, ['add', '--', path.resolve(repoTop, rel)], { allowFail: true });
         if (!a.ok) {
           // A transient path (created then removed mid-wave) can linger in the
           // gate-time changed set; `git add` then fails with "pathspec did not

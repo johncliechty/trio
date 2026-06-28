@@ -389,12 +389,6 @@ function reachableFromTests(root, foremanDir) {
 function checkVacuousGreen(root, foremanDir, changedFiles) {
   const sources = changedFiles.filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f) && !f.endsWith('.log'));
   const reach = reachableFromTests(root, foremanDir);
-  // Fallback for DYNAMIC loads: a test may exercise a source via importlib /
-  // `spec_from_file_location("x.py")` / runpy, which static import-reachability
-  // cannot follow. Treat a changed source as exercised if some test file mentions
-  // its basename as a literal (e.g. "morning_briefing.py"). Coverage PROXY only —
-  // this can NEVER cause a false GREEN (the gate is the real test run); it only
-  // avoids false-positive HALTs on genuinely-tested-but-dynamically-loaded code.
   let testText = null;
   const exercisedByName = (f) => {
     if (testText === null) {
@@ -403,7 +397,8 @@ function checkVacuousGreen(root, foremanDir, changedFiles) {
         .join('\n');
     }
     const base = path.basename(f);
-    return base.length > 3 && testText.includes(base);
+    const has = base.length > 3 && testText.includes(base);
+    return has;
   };
   const exercised = sources.some((f) => reach.has(f) || exercisedByName(f));
   if (exercised) return null;
@@ -561,6 +556,7 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
     windowsHide: true,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
+    timeout: 120000,
     env,
   });
   const _gateMs = Date.now() - _gateT0;

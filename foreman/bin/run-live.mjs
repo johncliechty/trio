@@ -77,8 +77,8 @@ function runClaude(fullPrompt, label) {
     // returned child for the served-model/tool/usage telemetry.
     const isWin = process.platform === 'win32';
     const { child, done } = spawnGuarded({
-      command: 'claude', args: CLAUDE_ARGS, cwd: PROJECT, timeoutMs: CALL_TIMEOUT_MS, registry,
-      spawnImpl: (cmd, args, opts) => spawn(cmd, args, { ...opts, shell: isWin, windowsHide: true })
+      command: isWin ? 'claude.cmd' : 'claude', args: CLAUDE_ARGS, cwd: PROJECT, timeoutMs: CALL_TIMEOUT_MS, registry,
+      spawnImpl: (cmd, args, opts) => spawn(cmd, args, { ...opts, shell: false, windowsHide: true })
     });
     let buf = '', finalEnv = null, tools = 0, lastText = '', servedModel = null, stderr = '';
     const tick = setInterval(() => emit(`│ ${label} … working — ${secs()}s, ${tools} tool call(s) so far`), 20000);

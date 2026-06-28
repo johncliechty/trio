@@ -111,12 +111,29 @@ export function defaultRunClaude(fullPrompt, label, {
     if (env.CLAUDE_MODEL) { args.push('-m', env.CLAUDE_MODEL); } 
     
     const isWin = process.platform === 'win32';
-    const child = spawn('claude', args, { cwd: target, env, shell: isWin, windowsHide: true });
+    const cmdName = isWin ? 'claude.cmd' : 'claude';
+    const child = spawn(cmdName, args, { cwd: target, env, shell: false, windowsHide: true });
     
+    const killChild = () => {
+      try {
+        if (process.platform === 'win32') {
+          import('node:child_process').then(cp => cp.spawnSync('taskkill', ['/pid', child.pid, '/t', '/f']));
+        } else {
+          child.kill('SIGKILL');
+        }
+      } catch {}
+    };
+    const onExit = () => killChild();
+    const onSigInt = () => { killChild(); process.exit(130); };
+    process.on('exit', onExit);
+    process.on('SIGINT', onSigInt);
+
     let out = '', stderr = '';
     child.stdout.on('data', (d) => { out += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
     child.on('close', (code) => {
+      process.removeListener('exit', onExit);
+      process.removeListener('SIGINT', onSigInt);
       const { text, rec, _finalEnv } = parseClaudeFrames(out, { label, cli_status: code });
       if (!_finalEnv) log(`!! ${label}: no result envelope. stderr=${stderr.slice(0, 300)}`);
       resolve({ text, rec });

@@ -8,7 +8,7 @@ description: >-
   blocker set. STATUS (2026-06-02): the full engine — contract + parsers, the
   one-wave EXECUTE/GATE/REVIEW/JUDGE/FIX loop, multi-wave auto-advance, budget
   pre-flight + resume, git hygiene, and Node + Python/pytest gates — is BUILT and
-  adversarially verified through Phase 3d (66/66 unit tests). The ground-truth
+  adversarially verified through Phase 3d (106/106 unit tests). The ground-truth
   test gate is run by the orchestrator (a Node process), never by a sub-agent.
   Remaining: the empirical live agent()-driven calibration on the Pro/Max
   subscription.
@@ -27,7 +27,7 @@ on a defined blocker set**.
 > Phase 3d.** The invocation contract + parsers (Phase 0), the one-wave
 > EXECUTE/GATE/REVIEW/JUDGE/FIX engine (Phase 1), multi-wave auto-advance
 > (Phase 2), budget pre-flight + intra-wave/git resume (Phase 3a-c), and Node +
-> Python/pytest gate support (Phase 3d) are all implemented in `bin/` — 66/66
+> Python/pytest gate support (Phase 3d) are all implemented in `bin/` — 106/106
 > unit tests, each phase re-verified by an independent adversarial review. The
 > model-driven {execute, review, fix} steps run as real sub-agents through an
 > injected `agent()` seam; the ground-truth gate is run by the orchestrator
@@ -257,7 +257,7 @@ the test command and write a gate artifact sub-agents cannot forge. So the
 orchestrator + gate + state live in this Node engine; the Workflow tool / sub-agents
 drive only the model steps via the `agent()` seam.
 
-**Tests & fixtures:** `test/*.test.mjs` (66 passing), `fixtures/canonical-project/`
+**Tests & fixtures:** `test/*.test.mjs` (106 passing), `fixtures/canonical-project/`
 (Node, ships red), `fixtures/py-canonical/` (pytest, ships red), and the
 `test/neg-*` HALT cases.
 

@@ -47,8 +47,8 @@ test('Wave 4: provenanceStamp carries the SR-5 `pack` field + the named entailme
   assert.equal(prov.pack, 'investment-memo');
   assert.equal(prov.pack_kind, 'doc');
   assert.equal(prov.pack_version, '1.0.0');
-  assert.equal(prov.entailment_judge_model, 'claude-opus-4-8');
-  assert.equal(prov.rubric_judge_model, 'claude-opus-4-8');
+  assert.equal(prov.entailment_judge_model, 'claude-fable-5');
+  assert.equal(prov.rubric_judge_model, 'claude-fable-5');
 });
 
 test('Wave 4: Layer 1 GREEN — a well-formed memo passes (exit 0), deterministically twice (model-free)', () => {

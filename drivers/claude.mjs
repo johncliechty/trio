@@ -90,6 +90,22 @@ export function parseClaudeFrames(stdout, { label = '(unlabeled)', cli_status = 
 }
 
 /**
+ * Resolve the designated Claude model for this call — the per-role ladder, mirroring
+ * `resolveGeminiModel` (gemini-cli.mjs): explicit `model` wins, then a per-role env
+ * (`CLAUDE_MODEL_<ROLE>`, role taken from `role` else the label's prefix before
+ * ':' / '#' / '.'), then the global `CLAUDE_MODEL`, else null (the CLI session
+ * default — the pre-existing behavior, so unset env changes nothing).
+ * This is what makes `CLAUDE_MODEL_EXECUTE=claude-fable-5` (etc.) reachable on every
+ * path that flows through this driver.
+ */
+export function resolveClaudeModel({ model, role, label, env = process.env } = {}) {
+  if (model) return model;
+  const key = String(role || '').trim() || String(label || '').split(/[:#.\s]/)[0];
+  const roleKey = key ? `CLAUDE_MODEL_${key.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}` : null;
+  return (roleKey && env[roleKey]) || env.CLAUDE_MODEL || null;
+}
+
+/**
  * Live transport: spawn `claude -p` and resolve `{ text, rec }` once the stream's
  * result envelope arrives. ENV-GATED — throws unless CRUCIBLE_AGENT_LIVE=1 so it
  * can never fire by accident (tests inject a stub instead).
@@ -98,6 +114,8 @@ export function defaultRunClaude(fullPrompt, label, {
   env = process.env,
   target = process.cwd(),
   allowedTools = DEFAULT_ALLOWED_TOOLS,
+  model = null,
+  role = null,
   log = () => {},
 } = {}) {
   if (env.CRUCIBLE_AGENT_LIVE !== '1') {
@@ -107,8 +125,9 @@ export function defaultRunClaude(fullPrompt, label, {
     );
   }
   return new Promise((resolve) => {
-    const args = [...BASE_ARGS, '--allowedTools', allowedTools]; 
-    if (env.CLAUDE_MODEL) { args.push('-m', env.CLAUDE_MODEL); } 
+    const args = [...BASE_ARGS, '--allowedTools', allowedTools];
+    const mdl = resolveClaudeModel({ model, role, label, env });
+    if (mdl) { args.push('-m', mdl); }
     
     const isWin = process.platform === 'win32';
     const cmdName = isWin ? 'claude.cmd' : 'claude';
@@ -162,15 +181,19 @@ export function makeAgentSeam({
   allowedTools = DEFAULT_ALLOWED_TOOLS,
   log = () => {},
 } = {}) {
-  const run = runClaude || ((prompt, label) => defaultRunClaude(prompt, label, { env, target, allowedTools, log }));
+  // Per-call opts (model/role) thread through as a third arg so the per-role model
+  // ladder is reachable; injected `runClaude` stubs keep their 2-arg shape unharmed.
+  const run = runClaude || ((prompt, label, callOpts = {}) =>
+    defaultRunClaude(prompt, label, { env, target, allowedTools, log, ...callOpts }));
 
   async function agent(prompt, opts = {}) {
     const label = opts.label || '(unlabeled)';
+    const callOpts = { model: opts.model, role: opts.role };
     const schemaSuffix = opts.schema
       ? `\n\nRespond with ONLY a single raw JSON object (no markdown fences, no prose) ` +
         `that conforms to this JSON Schema:\n${JSON.stringify(opts.schema)}`
       : '';
-    const { text } = await run(prompt + schemaSuffix, label);
+    const { text } = await run(prompt + schemaSuffix, label, callOpts);
     if (!opts.schema) return text;
 
     let obj = extractJson(text);
@@ -179,7 +202,7 @@ export function makeAgentSeam({
       const strict = `${prompt}\n\nYour previous reply was NOT valid JSON and could not be parsed. ` +
         `Respond with ONLY a single raw JSON object that conforms to this JSON Schema — ` +
         `no prose, no markdown fences, nothing else:\n${JSON.stringify(opts.schema)}`;
-      obj = extractJson((await run(strict, `${label}#retry`)).text);
+      obj = extractJson((await run(strict, `${label}#retry`, callOpts)).text);
     }
     if (!obj) {
       log(`   !! ${label} still unparseable after retry — ABSTAIN (answerable:no) -> engine HALTs for human review`);
@@ -217,11 +240,12 @@ export const claudeDriver = {
   // backends, which use native JSON-mode / function-calling.
   structuredOutput: 'cli-subagent (prompt-suffix)',
   async runAgent(opts = {}) {
-    const { prompt, schema, label } = opts;
+    const { prompt, schema, label, model, role } = opts;
     // makeAgentSeam reads runClaude/env/target/allowedTools/log from the same opts
     // bag; an absent runClaude falls back to the env-gated live transport.
+    // model/role thread through to the per-role ladder (resolveClaudeModel).
     const { agent } = makeAgentSeam(opts);
-    return agent(prompt, { schema, label });
+    return agent(prompt, { schema, label, model, role });
   },
 };
 

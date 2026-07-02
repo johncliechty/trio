@@ -273,4 +273,15 @@ drive only the model steps via the `agent()` seam.
    `--resume` to continue from a checkpoint).
 3. **Drive it with live sub-agents** using the robust wrapper script:
    `powershell -File <skill>/bin/go.ps1 -Project <projectDir> [-Resume]`
-   The script automatically handles stale locks and executes through the backend registry (supporting `claude` or `gemini-cli`). To use Gemini, ensure you explicitly set `$env:TRIO_DRIVER="gemini-cli"` and `$env:GEMINI_MODEL="gemini-3.1-pro"` (or your current session's active model) before invoking `go.ps1`. The wrapper also requires `$env:CRUCIBLE_AGENT_LIVE="1"` to allow live billable agents.
+   The script automatically handles stale locks and executes through the backend registry (supporting `claude` or `gemini-cli`). To use Gemini for the WHOLE run, set `$env:TRIO_DRIVER="gemini-cli"` and `$env:GEMINI_MODEL="gemini-3.1-pro"` (or your current session's active model) before invoking `go.ps1`. The wrapper also requires `$env:CRUCIBLE_AGENT_LIVE="1"` to allow live billable agents.
+4. **Per-role model routing (the standing 5:1 doctrine — Claude codes, Gemini reviews).**
+   Add a `"models"` block to the project's `foreman.config.json`:
+   ```json
+   { "models": { "execute": "claude:claude-fable-5", "fix": "claude:claude-fable-5", "review": "gemini-cli:gemini-3.1-pro" } }
+   ```
+   `run-live.mjs` exports each entry as per-role env (`CLAUDE_MODEL_<ROLE>` for claude;
+   `TRIO_DRIVER_<ROLE>` + `TRIO_MODEL_<ROLE>` for another backend) and both driver
+   ladders resolve them (`resolveClaudeModel` / `resolveGeminiModel`; explicit env
+   always wins over config). The run header logs the resolved routing
+   (`model routing: execute=… · review=… · fix=…`) and every call's served model is
+   attested per SR-5 — check both when verifying a routing change.

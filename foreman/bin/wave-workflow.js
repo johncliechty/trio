@@ -114,14 +114,18 @@ function fixPrompt(ctx, gate, findings) {
 export function makeAgentDriver({ agent }) {
   if (typeof agent !== 'function') throw new TypeError('makeAgentDriver requires an agent() function');
   return {
+    // Each call carries its `role` so per-role model routing (CLAUDE_MODEL_<ROLE> /
+    // TRIO_MODEL_<ROLE>, resolved inside the drivers) is reachable on the build path:
+    // execute/fix pin to the strongest coder, review can fan out to another family.
     async execute(ctx) {
-      const out = await agent(executePrompt(ctx), { label: `execute:w${ctx.wave.n}` });
+      const out = await agent(executePrompt(ctx), { label: `execute:w${ctx.wave.n}`, role: 'execute' });
       return { note: 'agent execute complete', raw: out };
     },
     async review(ctx, gate) {
       const out = await agent(reviewPrompt(ctx, gate), {
         label: `review:w${ctx.wave.n}#${ctx.reviewerIndex}`,
         schema: REVIEW_SCHEMA,
+        role: 'review',
       });
       return {
         reviewer: `reviewer-${ctx.reviewerIndex}`,
@@ -136,7 +140,7 @@ export function makeAgentDriver({ agent }) {
       };
     },
     async fix(ctx, gate, findings) {
-      const out = await agent(fixPrompt(ctx, gate, findings), { label: `fix:w${ctx.wave.n}.${ctx.iteration}` });
+      const out = await agent(fixPrompt(ctx, gate, findings), { label: `fix:w${ctx.wave.n}.${ctx.iteration}`, role: 'fix' });
       return { note: 'agent fix complete', raw: out };
     },
   };

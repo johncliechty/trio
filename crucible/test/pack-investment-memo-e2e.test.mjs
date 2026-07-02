@@ -45,8 +45,8 @@ test('Wave 4: the real investment-memo PASSES Layers 1/2/3 end-to-end (battery-g
   assert.equal(r.layer3.verdict, 'PASS');
   // SR-5: the result carries the governing pack + its named judge models.
   assert.equal(r.provenance.pack, 'investment-memo');
-  assert.equal(r.provenance.entailment_judge_model, 'claude-opus-4-8');
-  assert.equal(r.provenance.rubric_judge_model, 'claude-opus-4-8');
+  assert.equal(r.provenance.entailment_judge_model, 'claude-fable-5');
+  assert.equal(r.provenance.rubric_judge_model, 'claude-fable-5');
 });
 
 test('Wave 4: the COMMITTED labeled N+N+N battery re-runs GREEN — measured rates meet the committed minima', async () => {
@@ -93,7 +93,7 @@ test('Wave 4 (Given/When/Then): the CLEAN memo\'s own claims are evidence-faithf
   });
   assert.equal(r.pass, true);
   assert.equal(r.flagged.length, 0);
-  assert.equal(r.model, 'claude-opus-4-8', 'attests the entailment-judge model the pack names');
+  assert.equal(r.model, 'claude-fable-5', 'attests the entailment-judge model the pack names');
 });
 
 test('Wave 4: every audited PRIMARY source carries the pack-required as-of + jurisdiction fields', () => {

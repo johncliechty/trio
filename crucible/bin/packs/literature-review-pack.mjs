@@ -11,7 +11,8 @@
 // but NOT executed until Wave 2 (lit-review end-to-end).
 //
 // Model tier (SR-7): the entailment-judge and rubric-judge are STANDARD-tier Judge roles,
-// so both name `claude-opus-4-8` (the served tier is attested per SR-5 at run time).
+// so both name `claude-fable-5` — the current frontier tier (2026-07 refresh; the served
+// tier is attested per SR-5 at run time).
 
 export const literatureReviewPack = {
   id: 'literature-review',
@@ -32,7 +33,7 @@ export const literatureReviewPack = {
 
   // Layer 2 — evidence standard: primary sources only, with the named (attested) judge.
   evidence_standard: {
-    entailment_judge_model: 'claude-opus-4-8',
+    entailment_judge_model: 'claude-fable-5',
     primary_source_kinds: [
       'peer-reviewed-primary-study',
       'registered-trial-report',
@@ -43,7 +44,7 @@ export const literatureReviewPack = {
 
   // Layer 3 — frozen, evidence-anchored rubric (RULERS-style), 5 criteria (within 3-7).
   rubric: {
-    rubric_judge_model: 'claude-opus-4-8',
+    rubric_judge_model: 'claude-fable-5',
     criteria: [
       { id: 'c1', statement: 'The search strategy is reproducible (databases, dates, and full query strings are stated).', pass_threshold: 0.6 },
       { id: 'c2', statement: 'Every quantitative or causal claim is anchored to a cited primary source that entails it.', pass_threshold: 0.6 },

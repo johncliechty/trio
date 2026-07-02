@@ -17,6 +17,7 @@ import { spawn } from 'node:child_process';
 
 import { classifyExit, makeTelemetryRecord } from './transport.mjs';
 import { spawnGuarded, makeChildRegistry, acquireLock } from './proc-guard.mjs';
+import { resolveClaudeModel } from '../../drivers/claude.mjs';
 
 const argv = process.argv.slice(2);
 function flag(name, def) { const i = argv.indexOf(name); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def; }
@@ -40,6 +41,28 @@ const CLAUDE_ARGS = ['-p', ' ', '--output-format', 'stream-json', '--verbose',
   // The orchestrator owns ALL git (commit-on-GO, branch, reconcile). Secondary guard
   // (the prompt is the primary one) using the documented space-form pattern.
   '--disallowedTools', 'Bash(git *)'];
+
+// Declarative per-role model routing from the project's foreman.config.json "models"
+// block, e.g. {"models":{"execute":"claude:claude-fable-5","fix":"claude:claude-fable-5",
+// "review":"gemini-cli:gemini-3.1-pro"}}. Each entry is exported as per-role env —
+// CLAUDE_MODEL_<ROLE> for claude, TRIO_DRIVER_<ROLE>+TRIO_MODEL_<ROLE> for another
+// backend — which both the bespoke transport below and the registry drivers resolve.
+// Pre-set env always wins (config never overrides an explicit operator choice).
+try {
+  const cfg = JSON.parse(fs.readFileSync(path.join(PROJECT, 'foreman.config.json'), 'utf8'));
+  for (const [role, spec] of Object.entries(cfg.models || {})) {
+    const s = String(spec); const i = s.indexOf(':');
+    const drv = i > 0 ? s.slice(0, i) : 'claude';
+    const model = i > 0 ? s.slice(i + 1) : s;
+    const R = role.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    if (drv === 'claude') {
+      if (!process.env[`CLAUDE_MODEL_${R}`]) process.env[`CLAUDE_MODEL_${R}`] = model;
+    } else {
+      if (!process.env[`TRIO_DRIVER_${R}`]) process.env[`TRIO_DRIVER_${R}`] = drv;
+      if (!process.env[`TRIO_MODEL_${R}`]) process.env[`TRIO_MODEL_${R}`] = model;
+    }
+  }
+} catch { /* no config or no models block — env-only routing */ }
 
 function emit(line) {
   const stamp = new Date().toISOString().slice(11, 19);
@@ -76,8 +99,13 @@ function runClaude(fullPrompt, label) {
     // with the typed-exit inputs; we attach our own stream-json listeners to the
     // returned child for the served-model/tool/usage telemetry.
     const isWin = process.platform === 'win32';
+    // Per-role model pin: role derives from the label prefix (execute:/review:/fix:),
+    // resolved through the driver ladder (CLAUDE_MODEL_<ROLE> → CLAUDE_MODEL → session
+    // default). No env set ⇒ args are unchanged (the pre-existing behavior).
+    const mdl = resolveClaudeModel({ label, env: process.env });
+    const args = mdl ? [...CLAUDE_ARGS, '-m', mdl] : CLAUDE_ARGS;
     const { child, done } = spawnGuarded({
-      command: isWin ? 'claude.cmd' : 'claude', args: CLAUDE_ARGS, cwd: PROJECT, timeoutMs: CALL_TIMEOUT_MS, registry,
+      command: isWin ? 'claude.exe' : 'claude', args, cwd: PROJECT, timeoutMs: CALL_TIMEOUT_MS, registry,
       spawnImpl: (cmd, args, opts) => spawn(cmd, args, { ...opts, shell: false, windowsHide: true })
     });
     let buf = '', finalEnv = null, tools = 0, lastText = '', servedModel = null, stderr = '';
@@ -156,6 +184,18 @@ function runClaude(fullPrompt, label) {
 // C1: retry-then-abstain on a malformed schema (review) reply.
 async function agent(prompt, opts = {}) {
   const label = opts.label || '(unlabeled)';
+  // Per-role backend dispatch (the 5:1 seam): a TRIO_DRIVER_<ROLE> env (typically set
+  // from foreman.config.json's "models" block above) routes THIS role to another
+  // registry backend — e.g. review → gemini-cli while execute/fix stay on the bespoke
+  // claude transport below. The registry driver owns its own schema/retry/abstain.
+  const role = String(opts.role || label).split(/[:#.\s]/)[0].toLowerCase();
+  const roleDriver = process.env[`TRIO_DRIVER_${role.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`];
+  if (roleDriver && roleDriver !== 'claude') {
+    return runAgent({
+      prompt, schema: opts.schema, label, role, driver: roleDriver,
+      freshContext: true, target: PROJECT, log: (s) => emit(s),
+    });
+  }
   const schemaSuffix = opts.schema
     ? `\n\nRespond with ONLY a single raw JSON object (no markdown fences, no prose) ` +
       `that conforms to this JSON Schema:\n${JSON.stringify(opts.schema)}`
@@ -186,13 +226,20 @@ const { runProject } = await import(new URL('./project-engine.mjs', import.meta.
 // above is injected unchanged, so the live `claude -p` path stays byte-for-byte
 // equivalent; the registry is the seam through which a future TRIO_DRIVER selection
 // would swap the backend.
-const { makeForemanDriver } = await import('../../drivers/index.mjs');
+const { makeForemanDriver, runAgent } = await import('../../drivers/index.mjs');
 
 try { fs.writeFileSync(STATUS_FILE, ''); } catch { /* fresh log */ }
 emit(`=== FOREMAN LIVE RUN ===`);
 emit(`project: ${PROJECT}`);
 emit(`reviewers=${REVIEWERS} fixIterCap=${CAP} maxWaves=${MAX_WAVES ?? '∞'} maxWallClock=${MAX_WALL_MIN ?? '∞'}min git=${USE_GIT} branch=${BRANCH ?? 'foreman/run'}`);
 emit(`binding: headless \`claude -p … --permission-mode acceptEdits --allowedTools ${ALLOWED}\` (cwd=project); ground truth = orchestrator gate`);
+emit(`model routing: ${['execute', 'review', 'fix'].map((r) => {
+  const R = r.toUpperCase();
+  const d = process.env[`TRIO_DRIVER_${R}`];
+  const m = d ? (process.env[`TRIO_MODEL_${R}`] || 'driver-default')
+    : (process.env[`CLAUDE_MODEL_${R}`] || process.env.CLAUDE_MODEL || 'session-default');
+  return `${r}=${d || 'claude'}:${m}`;
+}).join(' · ')}`);
 
 // Wave 7: acquire the single-run lock. A lock held by a LIVE pid refuses a
 // concurrent run; a lock left by a crashed/killed run (dead pid) is stale and is

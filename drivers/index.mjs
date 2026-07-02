@@ -141,6 +141,36 @@ export async function runAgent(opts = {}) {
 }
 
 /**
+ * Build a role-routed `agent(prompt, opts)` — the single missing primitive for mixed
+ * per-role model routing (2026-07): dispatch each call to a backend+model chosen by
+ * its role (from `opts.role`, else the label prefix before ':' / '#' / '.').
+ *
+ *   makeRoleRoutedAgent({ routes: {
+ *     synthesizer: { driver: 'claude',     model: 'claude-fable-5' },
+ *     judge:       { driver: 'claude',     model: 'claude-fable-5' },
+ *     review:      { driver: 'gemini-cli', model: 'gemini-3.1-pro' },
+ *     default:     { driver: 'claude' },
+ *   }})
+ *
+ * Unrouted roles fall to `routes.default`, else the registry default. Extra opts
+ * (env/target/log/runClaude stubs) thread through to the backend's runAgent.
+ * @param {object} [o]
+ * @param {Object<string,{driver?:string,model?:string}>} [o.routes]
+ * @returns {(prompt:string, opts?:object)=>Promise<any>}
+ */
+export function makeRoleRoutedAgent({ routes = {}, ...baseOpts } = {}) {
+  return (prompt, o = {}) => {
+    const role = String(o.role || o.label || '').split(/[:#.\s]/)[0].toLowerCase();
+    const route = routes[role] || routes.default || {};
+    const backend = getDriver(route.driver || null);
+    return backend.runAgent({
+      ...baseOpts, prompt, schema: o.schema, label: o.label,
+      role: o.role ?? role ?? null, model: o.model ?? route.model ?? null, freshContext: true,
+    });
+  };
+}
+
+/**
  * Build Foreman's `{ execute, review, fix }` driver routed through the registry —
  * i.e. the foreman driver seam on top of the selected backend (default `claude`).
  * Foreman's `makeAgentDriver` already wraps an injected `agent()`; this is the

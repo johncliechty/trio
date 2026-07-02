@@ -14,7 +14,8 @@
 // config file + fixtures are new (see pack-investment-memo-e2e.test.mjs's inclusion-test).
 //
 // Model tier (SR-7): the entailment-judge and rubric-judge are STANDARD-tier Judge roles,
-// so both name `claude-opus-4-8` (the served tier is attested per SR-5 at run time).
+// so both name `claude-fable-5` — the current frontier tier (2026-07 refresh; the served
+// tier is attested per SR-5 at run time).
 
 export const investmentMemoPack = {
   id: 'investment-memo',
@@ -41,7 +42,7 @@ export const investmentMemoPack = {
   // marketing deck). `required_source_fields` is pure pack-config the fixtures honor — the
   // gate engine is unchanged (the inclusion test forbids a memo-specific engine fork).
   evidence_standard: {
-    entailment_judge_model: 'claude-opus-4-8',
+    entailment_judge_model: 'claude-fable-5',
     primary_source_kinds: [
       'audited-financial-statement',
       'regulatory-filing',
@@ -53,7 +54,7 @@ export const investmentMemoPack = {
 
   // Layer 3 — frozen, evidence-anchored rubric (RULERS-style), 5 criteria (within 3-7).
   rubric: {
-    rubric_judge_model: 'claude-opus-4-8',
+    rubric_judge_model: 'claude-fable-5',
     criteria: [
       { id: 'c1', statement: 'The investment thesis is explicit and falsifiable (states what must be true for the investment to win).', pass_threshold: 0.6 },
       { id: 'c2', statement: 'Every quantitative or financial claim is anchored to a cited audited primary source (with as-of date and jurisdiction) that entails it.', pass_threshold: 0.6 },

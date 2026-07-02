@@ -43,8 +43,14 @@ export const MODEL_REGISTRY = [
   { family: 'grok', model: 'grok', reasoning_rank: 1, judge_rank: 1, detect: ['grok'], envKeys: ['XAI_API_KEY', 'GROK_API_KEY'] },
 ];
 
-/** Claude — the always-reachable substrate (Default mode runs on this alone). */
-export const CLAUDE_SUBSTRATE = { family: 'claude', model: 'claude-extended-thinking', reasoning_rank: 0, judge_rank: 0, via: 'substrate' };
+/**
+ * Claude — the always-reachable substrate (Default mode runs on this alone).
+ * 2026-07 doctrine change (John): the Synthesizer — the persistent steering brain —
+ * PINS to frontier Claude (claude-fable-5), so Claude's `reasoning_rank` now tops the
+ * registry. Cross-family independence stays where it belongs: the lock JUDGE remains
+ * family-diverse (Claude-authored ⇒ Gemini first), i.e. Gemini verifies, Claude steers.
+ */
+export const CLAUDE_SUBSTRATE = { family: 'claude', model: 'claude-fable-5', reasoning_rank: 4, judge_rank: 0, via: 'substrate' };
 
 // ---------------------------------------------------------------------------
 // Try-and-observe capability binding.
@@ -118,24 +124,24 @@ export function makeCrossModelProbe(reachable = [], authorFamily = 'claude') {
 }
 
 /**
- * Select the Synthesizer's model by REASONING strength (§10: Gemini Deep Think →
- * o-series → Claude extended-thinking). Enhanced only when a non-Claude reasoning
- * model is reachable; otherwise Claude extended-thinking (Default). Same shape as
- * `selectJudgeModel` so it stamps identically.
+ * Select the Synthesizer's model by REASONING strength across ALL reachable families
+ * (Claude included — the 2026-07 doctrine pins the steering role to frontier Claude,
+ * which now carries the top `reasoning_rank`). A non-Claude selection would stamp
+ * `enhanced`/cross-model; the Claude selection stamps `default` (cross_model:false),
+ * keeping provenance honest either way. Same shape as `selectJudgeModel`.
  *
  * @param {object} [o]
  * @param {Array}  [o.reachable=[]]   detectReachableModels() output
  * @returns {{model:string,family:string,mode:string,reachable:boolean}}
  */
 export function selectSynthesizerModel({ reachable = [] } = {}) {
-  const candidates = reachable
-    .filter((m) => m.family !== 'claude')
+  const ranked = [...reachable]
     .sort((a, b) => (b.reasoning_rank ?? 0) - (a.reasoning_rank ?? 0));
-  if (candidates.length) {
-    const top = candidates[0];
+  const top = ranked[0];
+  if (top && top.family !== 'claude') {
     return { model: top.model, family: top.family, mode: 'enhanced', reachable: true };
   }
-  // Default: Claude extended-thinking does the reasoning (fully functional, §10).
+  // Frontier Claude does the reasoning (fully functional; the pinned steering seat).
   return { model: CLAUDE_SUBSTRATE.model, family: 'claude', mode: 'default', reachable: false };
 }
 

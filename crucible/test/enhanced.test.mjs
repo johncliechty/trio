@@ -79,33 +79,47 @@ test('makeCrossModelProbe: a non-Claude author can be judged by Claude (still cr
 
 // --- reasoning-strength Synthesizer selection ------------------------------
 
-test('selectSynthesizerModel: strongest reasoning model wins; else Claude extended-thinking', () => {
+test('selectSynthesizerModel: frontier Claude tops the reasoning ranks — the Synthesizer PINS to it (2026-07 doctrine)', () => {
+  // Even with Gemini + GPT reachable, Claude's substrate rank now wins the steering seat;
+  // cross-family independence lives in the Judge, not the Synthesizer.
   const both = detectReachableModels({ env: {}, probeCli: probeFor('gemini', 'codex') });
-  assert.deepEqual(selectSynthesizerModel({ reachable: both }), { model: 'gemini-deep-think', family: 'gemini', mode: 'enhanced', reachable: true });
+  const pinned = selectSynthesizerModel({ reachable: both });
+  assert.equal(pinned.family, 'claude');
+  assert.equal(pinned.model, CLAUDE_SUBSTRATE.model);
+  assert.equal(pinned.mode, 'default');
+  assert.equal(pinned.reachable, false);
 
   const none = detectReachableModels({ env: {}, probeCli: probeNone });
   const sel = selectSynthesizerModel({ reachable: none });
   assert.equal(sel.family, 'claude');
+  assert.equal(sel.model, CLAUDE_SUBSTRATE.model);
   assert.equal(sel.mode, 'default');
   assert.equal(sel.reachable, false);
+
+  // The rank mechanism still functions: a (hypothetical) family ranked above Claude
+  // would be selected and stamped enhanced/cross-model — the pin is a ranking, not a hardcode.
+  const hyper = [...none, { family: 'gemini', model: 'gemini-hyper', reasoning_rank: CLAUDE_SUBSTRATE.reasoning_rank + 1, judge_rank: 3, via: 'cli' }];
+  assert.deepEqual(selectSynthesizerModel({ reachable: hyper }), { model: 'gemini-hyper', family: 'gemini', mode: 'enhanced', reachable: true });
 });
 
 // --- provisioning: present-vs-absent, stamped ------------------------------
 
-test('provisionRoles (Enhanced): Gemini reachable ⇒ family-diverse Judge + reasoning Synthesizer, both stamped cross-model', () => {
+test('provisionRoles (Enhanced): Gemini reachable ⇒ family-diverse Judge (cross-model) + PINNED Claude Synthesizer', () => {
   const reachable = detectReachableModels({ env: {}, probeCli: probeFor('gemini') });
   const p = provisionRoles({ reachable, authorFamily: 'claude' });
 
-  assert.equal(p.mode, 'enhanced');
+  assert.equal(p.mode, 'enhanced', 'the Judge cross-model bind alone makes the run Enhanced');
   // Judge — the §10 G/W/T: Gemini (different family) is selected and stamped.
   assert.equal(p.judge.selection.family, 'gemini');
   assert.equal(p.judge.stamp.role, JUDGE_ROLE);
   assert.equal(p.judge.stamp.cross_model, true);
   assert.equal(p.judge.stamp.model, 'gemini-deep-think');
-  // Synthesizer — strongest reasoning model, stamped.
-  assert.equal(p.synthesizer.selection.family, 'gemini');
+  // Synthesizer — pinned to frontier Claude (2026-07 doctrine: Claude steers, Gemini verifies),
+  // honestly stamped not-cross-model.
+  assert.equal(p.synthesizer.selection.family, 'claude');
+  assert.equal(p.synthesizer.selection.model, CLAUDE_SUBSTRATE.model);
   assert.equal(p.synthesizer.stamp.role, SYNTHESIZER_ROLE);
-  assert.equal(p.synthesizer.stamp.cross_model, true);
+  assert.equal(p.synthesizer.stamp.cross_model, false);
 });
 
 test('provisionRoles (Default degrade): none reachable ⇒ same-model persona + Claude Synthesizer, stamped not-cross-model', () => {

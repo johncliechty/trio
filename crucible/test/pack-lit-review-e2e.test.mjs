@@ -46,8 +46,8 @@ test('Wave 2: the clean lit-review PASSES Layers 1/2/3 end-to-end (battery-gated
   assert.equal(r.layer3.verdict, 'PASS');
   // SR-5: the result carries the governing pack + its named judge models.
   assert.equal(r.provenance.pack, 'literature-review');
-  assert.equal(r.provenance.entailment_judge_model, 'claude-opus-4-8');
-  assert.equal(r.provenance.rubric_judge_model, 'claude-opus-4-8');
+  assert.equal(r.provenance.entailment_judge_model, 'claude-fable-5');
+  assert.equal(r.provenance.rubric_judge_model, 'claude-fable-5');
 });
 
 test('Wave 2: the COMMITTED labeled N+N+N battery re-runs GREEN — measured rates meet the committed minima', async () => {
@@ -94,7 +94,7 @@ test('Wave 2 (Given/When/Then): the CLEAN deliverable\'s own claims are evidence
   });
   assert.equal(r.pass, true);
   assert.equal(r.flagged.length, 0);
-  assert.equal(r.model, 'claude-opus-4-8', 'attests the entailment-judge model the pack names');
+  assert.equal(r.model, 'claude-fable-5', 'attests the entailment-judge model the pack names');
 });
 
 test('Wave 2: the Layer-3 rubric scores the deliverable DETERMINISTICALLY twice (same rubric -> same verdict)', async () => {

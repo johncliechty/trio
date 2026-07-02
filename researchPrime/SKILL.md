@@ -86,3 +86,13 @@ Never flatter, never hallucinate a source, never count popularity as truth, neve
 ## Reserved / HALT-worthy
 
 The attested-lineage enum membership, the pre-registered thresholds (G / X% / C_min / N / K / M / T / N_min), and any change to the locked North Star / invariants are human calls — HALT for a human.
+## Usage journal (sleep-loop feed — append after every REAL run)
+
+At the end of any real (non-test) run of this skill, append ONE entry to
+`journal/` in this skill folder as `NNNN-<slug>.md` (next number; APPEND-ONLY —
+a correction is a new entry, never an edit). Keep it under ~15 lines, honest over
+polished, with the 7 canonical fields (see the Skill Foundry's
+`planning/portfolio-program/src/journal.mjs`): id, skill, situation, context,
+observation, outcome (worked | friction | failed | refused), provenance
+(genuine-execution | seeded — only genuine-execution corroborates).
+No journal entries → the sleep loop has nothing to learn from.

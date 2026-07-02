@@ -130,3 +130,14 @@ user is the final convergence authority**.
 3. **Hand off to Foreman.** Stage 2 gates the handoff on Foreman's real
    `node foreman/bin/locate-plan.mjs --json <dir>` (exit 0 required) — Crucible never
    hands Foreman a malformed doc-trio.
+
+## Usage journal (sleep-loop feed — append after every REAL run)
+
+At the end of any real (non-test) run of this skill, append ONE entry to
+`journal/` in this skill folder as `NNNN-<slug>.md` (next number; APPEND-ONLY —
+a correction is a new entry, never an edit). Keep it under ~15 lines, honest over
+polished, with the 7 canonical fields (see the Skill Foundry's
+`planning/portfolio-program/src/journal.mjs`): id, skill, situation, context,
+observation, outcome (worked | friction | failed | refused), provenance
+(genuine-execution | seeded — only genuine-execution corroborates).
+No journal entries → the sleep loop has nothing to learn from.

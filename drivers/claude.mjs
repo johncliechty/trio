@@ -138,7 +138,10 @@ export function defaultRunClaude(fullPrompt, label, {
     if (mdl) { args.push('--model', mdl); }
     
     const isWin = process.platform === 'win32';
-    const cmdName = isWin ? 'claude.cmd' : 'claude';
+    // claude.exe, NEVER claude.cmd: modern Node refuses to spawn a .cmd with
+    // shell:false (EINVAL) — the documented host fact run-live.mjs was already
+    // patched for; this seam hit it live 2026-07-02.
+    const cmdName = isWin ? 'claude.exe' : 'claude';
     const child = spawn(cmdName, args, { cwd: target, env, shell: false, windowsHide: true });
     
     const killChild = () => {

@@ -9,7 +9,27 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { resolveClaudeModel, makeAgentSeam } from '../claude.mjs';
-import { makeRoleRoutedAgent, registerDriver } from '../index.mjs';
+import { makeRoleRoutedAgent, registerDriver, runAgent } from '../index.mjs';
+
+test('runAgent honors TRIO_DRIVER_<ROLE> env when no explicit driver is passed (the GLOBAL 5:1 rule)', async () => {
+  const calls = [];
+  registerDriver({ name: 'stub-env-verify', runAgent: async (o) => { calls.push(o.role || o.label); return 'env-routed'; } });
+  registerDriver({ name: 'stub-explicit', runAgent: async () => 'explicit' });
+  const saved = process.env.TRIO_DRIVER_SHARK;
+  process.env.TRIO_DRIVER_SHARK = 'stub-env-verify';
+  try {
+    // role field present
+    assert.equal(await runAgent({ prompt: 'p', role: 'shark', label: 'shark:Skeptic:r1' }), 'env-routed');
+    // role derived from the label prefix
+    assert.equal(await runAgent({ prompt: 'p', label: 'shark:Analyst:r2' }), 'env-routed');
+    // explicit driver ALWAYS wins over the env
+    assert.equal(await runAgent({ prompt: 'p', role: 'shark', driver: 'stub-explicit' }), 'explicit');
+    assert.equal(calls.length, 2);
+  } finally {
+    if (saved === undefined) delete process.env.TRIO_DRIVER_SHARK;
+    else process.env.TRIO_DRIVER_SHARK = saved;
+  }
+});
 
 test('resolveClaudeModel: explicit model wins over every env rung', () => {
   const env = { CLAUDE_MODEL_EXECUTE: 'env-role', CLAUDE_MODEL: 'env-global' };

@@ -136,7 +136,21 @@ export function getDriver(name = null, env = process.env) {
  * @returns {Promise<any>} model text, or the schema-validated object
  */
 export async function runAgent(opts = {}) {
-  const driver = getDriver(opts.driver);
+  // 2026-07-02 (John's standing 5:1 doctrine, made GLOBAL): when no explicit
+  // driver is passed, a per-role env override — TRIO_DRIVER_<ROLE>, role from
+  // opts.role else the label prefix — routes THIS call's backend. This is how
+  // verification seats (shark/review/reviewer/debate) run on Gemini machine-wide
+  // via user env, while steering/coding seats stay on frontier Claude. An
+  // explicit opts.driver always wins; no env ⇒ exactly the historical behavior.
+  let name = opts.driver;
+  if (!name) {
+    const role = String(opts.role || opts.label || '').split(/[:#.\s]/)[0];
+    if (role) {
+      const key = `TRIO_DRIVER_${role.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+      name = process.env[key] || null;
+    }
+  }
+  const driver = getDriver(name);
   return driver.runAgent(opts);
 }
 

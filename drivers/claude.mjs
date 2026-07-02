@@ -116,6 +116,12 @@ export function defaultRunClaude(fullPrompt, label, {
   allowedTools = DEFAULT_ALLOWED_TOOLS,
   model = null,
   role = null,
+  // Per-call hard ceiling (2026-07-02 live finding: a stage1 revise call sat
+  // >35 min — this seam had NO timeout while run-live has a 20-min guard; now
+  // both do). On expiry the child is tree-killed and the call resolves as an
+  // HONEST failure (ok:false, timed_out) the caller's retry/abstain logic sees.
+  // Override via CLAUDE_CALL_TIMEOUT_MS; <=0 disables.
+  timeoutMs = (Number(env.CLAUDE_CALL_TIMEOUT_MS) || 20 * 60000),
   log = () => {},
 } = {}) {
   if (env.CRUCIBLE_AGENT_LIVE !== '1') {
@@ -150,13 +156,25 @@ export function defaultRunClaude(fullPrompt, label, {
     process.on('SIGINT', onSigInt);
 
     let out = '', stderr = '';
+    let timer = null;
+    let timedOut = false;
+    if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        log(`!! ${label}: per-call timeout (${Math.round(timeoutMs / 60000)}m) — tree-killing the hung child`);
+        killChild();
+      }, timeoutMs);
+      if (typeof timer.unref === 'function') timer.unref();
+    }
     child.stdout.on('data', (d) => { out += d.toString(); });
     child.stderr.on('data', (d) => { stderr += d.toString(); });
     child.on('close', (code) => {
+      if (timer) clearTimeout(timer);
       process.removeListener('exit', onExit);
       process.removeListener('SIGINT', onSigInt);
       const { text, rec, _finalEnv } = parseClaudeFrames(out, { label, cli_status: code });
-      if (!_finalEnv) log(`!! ${label}: no result envelope. stderr=${stderr.slice(0, 300)}`);
+      if (timedOut) rec.timed_out = true;
+      if (!_finalEnv) log(`!! ${label}: no result envelope${timedOut ? ' (per-call timeout kill)' : ''}. stderr=${stderr.slice(0, 300)}`);
       resolve({ text, rec });
     });
     child.stdin.on('error', (err) => { log(`!! ${label}: stdin EPIPE - child likely exited early. err=${err.message}`); });

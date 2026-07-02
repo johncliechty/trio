@@ -103,7 +103,8 @@ function runClaude(fullPrompt, label) {
     // resolved through the driver ladder (CLAUDE_MODEL_<ROLE> → CLAUDE_MODEL → session
     // default). No env set ⇒ args are unchanged (the pre-existing behavior).
     const mdl = resolveClaudeModel({ label, env: process.env });
-    const args = mdl ? [...CLAUDE_ARGS, '-m', mdl] : CLAUDE_ARGS;
+    // --model long form: this CLI build rejects -m (proven live 2026-07-02).
+    const args = mdl ? [...CLAUDE_ARGS, '--model', mdl] : CLAUDE_ARGS;
     const { child, done } = spawnGuarded({
       command: isWin ? 'claude.exe' : 'claude', args, cwd: PROJECT, timeoutMs: CALL_TIMEOUT_MS, registry,
       spawnImpl: (cmd, args, opts) => spawn(cmd, args, { ...opts, shell: false, windowsHide: true })

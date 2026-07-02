@@ -126,8 +126,10 @@ export function defaultRunClaude(fullPrompt, label, {
   }
   return new Promise((resolve) => {
     const args = [...BASE_ARGS, '--allowedTools', allowedTools];
+    // NOTE: the long-form --model flag — this CLI build rejects a short -m
+    // (proven live 2026-07-02: `error: unknown option '-m'`).
     const mdl = resolveClaudeModel({ model, role, label, env });
-    if (mdl) { args.push('-m', mdl); }
+    if (mdl) { args.push('--model', mdl); }
     
     const isWin = process.platform === 'win32';
     const cmdName = isWin ? 'claude.cmd' : 'claude';

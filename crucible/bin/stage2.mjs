@@ -380,6 +380,8 @@ export function approveImplementationPlan({ loop, approved = false, log = () => 
  * @param {string[]}[o.acceptanceCriteria=[]] the Judge's oracle
  * @param {boolean} [o.approved=false]        the user's Implementation-Plan approval
  * @param {number}  [o.roundCap=5]
+ * @param {?string} [o.depth=null]            the user-CONFIRMED Stage-0 triage depth
+ *                                            ('LITE' → default roundCap 2; explicit wins)
  * @param {?string} [o.artifactsDir=null]     Shark-Tank + gate artifacts dir
  * @param {Function}[o.log=()=>{}]
  * @returns {Promise<{waves:object[], plan:string, loop:object, approval:object,
@@ -397,11 +399,18 @@ export async function runStage2({
   research = null,
   acceptanceCriteria = [],
   approved = false,
-  roundCap = 5,
+  roundCap = undefined,
+  depth = null,
   artifactsDir = null,
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runStage2');
+  // 2026-07: consume the user-confirmed Stage-0 depth (see runStage1) — LITE
+  // shrinks the default safety ceiling; an explicitly passed roundCap wins.
+  if (roundCap === undefined) {
+    roundCap = String(depth || '').toUpperCase() === 'LITE' ? 2 : 5;
+    if (depth) log(`stage2: depth=${depth} → roundCap=${roundCap}`);
+  }
   if (!northStar) throw new HaltError('runStage2 requires a locked North Star', 'Stage 2 starts from the Stage-0 North-Star lock');
   if (!masterPlan) throw new HaltError('runStage2 requires the approved Master Plan', 'Stage 2 starts from the Stage-1 Master-Plan approval');
   if (!outputDir) throw new HaltError('runStage2 requires an outputDir', 'pass the handoff output directory');

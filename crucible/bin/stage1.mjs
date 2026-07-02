@@ -451,8 +451,11 @@ function revisePrompt({ northStar, draft, verdict, direction }) {
 async function reviseDraft({ agent, northStar, draft, verdict, direction, round, log }) {
   const out = (await agent(revisePrompt({ northStar, draft, verdict, direction }), { label: `stage1:revise:r${round}`, schema: REVISE_SCHEMA })) || {};
   const revised = typeof out.draft === 'string' && out.draft.trim() ? out.draft : draft;
-  log(`stage1 revise r${round}: draft revised (${(out.changelog || []).length} change(s))`);
-  return revised;
+  const changelog = Array.isArray(out.changelog) ? out.changelog : [];
+  log(`stage1 revise r${round}: draft revised (${changelog.length} change(s))`);
+  // 2026-07: the changelog is no longer discarded — the next round's Sharks get
+  // it (with the blocker register) so refutation focuses on new ground.
+  return { draft: revised, changelog };
 }
 
 /**
@@ -500,6 +503,7 @@ export async function runMasterPlanLoop({
 
   let currentDraft = draft;
   let priorBlockerIds = [];
+  let lastChangelog = null;   // the reviser's own changelog, fed to the next round's Sharks
   const rounds = [];
 
   for (let round = startRound; round < startRound + roundCap; round++) {
@@ -513,6 +517,7 @@ export async function runMasterPlanLoop({
     const verdict = await runSharkTank({
       agent, northStar, draft: currentDraft, round, priorBlockerIds,
       research: analystBrief, artifactsDir, log,
+      changelog: lastChangelog && lastChangelog.length ? lastChangelog.join('\n') : null,
     });
 
     // The Synthesizer reads the round and issues direction (steers, never decides).
@@ -522,7 +527,9 @@ export async function runMasterPlanLoop({
     if (!verdict.dry) {
       // BLOCKED — record the blockers (anti-oscillation), fix the draft, loop.
       priorBlockerIds = [...new Set([...priorBlockerIds, ...verdict.blockers.map((b) => b.id)])];
-      currentDraft = await reviseDraft({ agent, northStar, draft: currentDraft, verdict, direction, round, log });
+      const rev = await reviseDraft({ agent, northStar, draft: currentDraft, verdict, direction, round, log });
+      currentDraft = rev.draft;
+      lastChangelog = rev.changelog;
       continue;
     }
 
@@ -559,7 +566,9 @@ export async function runMasterPlanLoop({
     // run one more challenge round.
     log(`stage1 loop: dry round ${round} held (${gate.reasons.join('; ') || reconcile.reason}) — challenge round`);
     priorBlockerIds = [...new Set([...priorBlockerIds, ...verdict.blockers.map((b) => b.id)])];
-    currentDraft = await reviseDraft({ agent, northStar, draft: currentDraft, verdict, direction, round, log });
+    const rev = await reviseDraft({ agent, northStar, draft: currentDraft, verdict, direction, round, log });
+    currentDraft = rev.draft;
+    lastChangelog = rev.changelog;
   }
 
   // The cap is a safety ceiling, not a success condition — HALT to the user (§8).
@@ -627,6 +636,9 @@ export function approveMasterPlan({ loop, plan = null, approved = false, log = (
  * @param {string[]}[o.acceptanceCriteria=[]] the Judge's oracle
  * @param {boolean} [o.approved=false]        the user's Master-Plan approval
  * @param {number}  [o.roundCap=5]
+ * @param {?string} [o.depth=null]            the user-CONFIRMED Stage-0 triage depth
+ *                                            ('LITE' shrinks the default roundCap to 2;
+ *                                            an explicit roundCap always wins)
  * @param {?string} [o.grasscatcherPath=null] where parked ideas are appended
  * @param {?string} [o.artifactsDir=null]     Shark-Tank round artifacts dir
  * @param {Function}[o.log=()=>{}]
@@ -639,7 +651,8 @@ export async function runStage1({
   research = null,
   acceptanceCriteria = [],
   approved = false,
-  roundCap = 5,
+  roundCap = undefined,
+  depth = null,
   grasscatcherPath = null,
   artifactsDir = null,
   log = () => {},
@@ -647,6 +660,14 @@ export async function runStage1({
   requireAgent(agent, 'runStage1');
   if (!northStar) {
     throw new HaltError('runStage1 requires a locked North Star', 'Stage 1 starts from the Stage-0 North-Star lock');
+  }
+  // 2026-07: Stage-0's complexity triage finally has teeth. The depth arrives
+  // USER-CONFIRMED (assessComplexity HALTs for confirmation — the documented
+  // SKILL.md contract), so a LITE run shrinks the safety ceiling instead of
+  // always paying the FULL 5-round cap. An explicitly passed roundCap wins.
+  if (roundCap === undefined) {
+    roundCap = String(depth || '').toUpperCase() === 'LITE' ? 2 : 5;
+    if (depth) log(`stage1: depth=${depth} → roundCap=${roundCap}`);
   }
 
   // researchPrime ONCE up-front (idempotent; the Wave-5 cost-guard owns re-invocation).

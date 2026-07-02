@@ -128,6 +128,12 @@ export function makeReliableAgent({
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) {
     throw new TypeError('makeReliableAgent: maxAttempts must be a positive integer');
   }
+  // Idempotent wrapping (2026-07): several composition points wrap the SAME seam
+  // (round.mjs wraps, then makeSynthesizer/freshEyesColdPass wrap the wrapped
+  // agent again), compounding to maxAttempts² transport attempts + stacked
+  // backoff on one logical call. An already-reliable agent passes through
+  // unchanged — one retry layer per call chain, by construction.
+  if (agent._isReliableAgent) return agent;
 
   // Wave 2: resolve the breaker. Accept an already-built instance (has `beforeCall`),
   // a plain config object (build one), or a falsy value (no breaker — Wave-1 behavior).
@@ -214,7 +220,9 @@ export function makeReliableAgent({
     }
   }
 
-  return function reliableAgent(prompt, opts = {}) {
+  reliableAgent._isReliableAgent = true; // the idempotent-wrapping marker (see top)
+  return reliableAgent;
+  function reliableAgent(prompt, opts = {}) {
     // Round-aware idempotency key. An explicit call-sequence (opts.seq /
     // opts.callSeq / opts.idempotencyKey) makes the key STABLE across dispatches
     // (so duplicates of one logical call dedup); absent one, a fresh sequence keeps

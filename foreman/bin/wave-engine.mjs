@@ -549,6 +549,13 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
   // leaking a skip-tests signal, so we strip it before spawning.
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
+  // 2026-07: the gate timeout is CONFIGURABLE (FOREMAN_GATE_TIMEOUT_MS; default
+  // unchanged at 120s). The old hardcoded 120s KILLED any suite that takes
+  // longer, which read as a spurious RED the fix loop then chased — on a big
+  // target that is pure vacuous churn. A killed gate is still RED (never GREEN).
+  let gateTimeout = 120000;
+  const _t = Number(process.env.FOREMAN_GATE_TIMEOUT_MS);
+  if (Number.isFinite(_t) && _t > 0) gateTimeout = _t;
   const _gateT0 = Date.now(); // SPIKE(foreman-parallel): gate wall-clock
   const res = spawnSync(testCommand, {
     cwd: projectDir,
@@ -556,7 +563,7 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
     windowsHide: true,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
-    timeout: 120000,
+    timeout: gateTimeout,
     env,
   });
   const _gateMs = Date.now() - _gateT0;
@@ -878,11 +885,27 @@ export async function runWave(o) {
     // an abstain (answerable:'no') so a degraded run HALTs at the §4.7 ambiguity gate
     // rather than silently passing on one reviewer (never Promise.all, which would drop
     // a surviving reviewer's findings). Flag OFF ⇒ byte-identical to the serial path.
+    // ----- red-gate review skip (2026-07 efficiency; rigor-preserving) -----
+    // On a RED gate the verdict is already determined: judge() can never return
+    // GO (anti-forgery, above), and reviewer blocking power exists only against
+    // a GREEN gate (§5: blocking GREEN requires a failing repro). So reviewers
+    // on a red intermediate iteration decide nothing — the failing tests in the
+    // gate artifact ARE the fix guidance. Skip the fan-out EXCEPT on the last
+    // budgeted iteration (iteration >= fixIterCap ⇒ the next stop is a
+    // non-convergence HALT): that final pass keeps the §4.7 ambiguity gate and
+    // the §6/F3 PLAN-AMENDMENT channel attached to the halt the human is about
+    // to read. Every GO still passes gate + full ≥2-agree adversarial review +
+    // all §5 guards — unchanged. FOREMAN_REVIEW_ON_RED=1 restores the old
+    // review-every-iteration behavior (A/B + non-regression seam).
     let reviews;
-    if (reviewConcurrencyOn()) {
+    if (!lastGate.green && process.env.FOREMAN_REVIEW_ON_RED !== '1' && iteration < fixIterCap) {
+      reviews = [];
+      steps.push(`▸ review skipped (gate RED, iter ${iteration}/${fixIterCap} — verdict already determined)`);
+      log(`review: skipped — gate RED (reviewers can only block GREEN, §5); fix guidance = gate artifact`);
+    } else if (reviewConcurrencyOn()) {
       const settled = await Promise.allSettled(
         Array.from({ length: reviewerCount }, (_, r) =>
-          driver.review({ ...ctx, reviewerIndex: r }, lastGate)));
+          driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate)));
       reviews = settled.map((s, r) => s.status === 'fulfilled' ? s.value : {
         reviewer: `reviewer-${r}`, answerable: 'no',
         note: `reviewer ${r} call rejected (${s.reason?.message || s.reason}) — cannot verify findings; HALT for human review`,
@@ -891,7 +914,7 @@ export async function runWave(o) {
     } else {
       reviews = [];
       for (let r = 0; r < reviewerCount; r++) {
-        reviews.push(await driver.review({ ...ctx, reviewerIndex: r }, lastGate));
+        reviews.push(await driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate));
       }
     }
     // Ambiguity gate (§4.7): any reviewer answering "no" is a HALT. UNCHANGED —
@@ -941,7 +964,7 @@ export async function runWave(o) {
     findings = collectFindings(reviews);
     const openBlockers = findings.filter((f) =>
       (f.severity === 'BLOCKER' || f.severity === 'MAJOR') && f.status === 'open' && f.agreement >= 2);
-    log(`review: ${reviewerCount} reviewers · ${openBlockers.length} agreed BLOCKER/MAJOR`);
+    if (reviews.length) log(`review: ${reviews.length} reviewers · ${openBlockers.length} agreed BLOCKER/MAJOR`);
 
     // ----- JUDGE (reads only the gate artifact for pass/fail of record) -----
     const verdict = judge(lastGate, findings);

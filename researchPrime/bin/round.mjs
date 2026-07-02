@@ -278,10 +278,20 @@ export async function runDebateGate({ agent, conflicts = [], round = 1 } = {}) {
   if (typeof agent !== 'function') {
     throw new HaltError('runDebateGate requires an agent() function', 'pass the injected seam: { agent }');
   }
-  const resolutions = [];
-  for (const pair of conflicts) {
-    const out = await agent(debatePrompt(pair), { label: `debate:${pair.id}:r${round}`, role: 'debate' });
-    resolutions.push({ id: pair.id, resolution: out ?? null });
+  // 2026-07 efficiency: one debate per conflicting pair, all pairs CONCURRENT
+  // (Promise.all — same count, same order, same failure semantics as the old
+  // serial loop). RESEARCHPRIME_CONCURRENT_PANEL=0 restores serial.
+  let resolutions;
+  if (process.env.RESEARCHPRIME_CONCURRENT_PANEL === '0') {
+    resolutions = [];
+    for (const pair of conflicts) {
+      const out = await agent(debatePrompt(pair), { label: `debate:${pair.id}:r${round}`, role: 'debate' });
+      resolutions.push({ id: pair.id, resolution: out ?? null });
+    }
+  } else {
+    resolutions = await Promise.all(conflicts.map((pair) =>
+      agent(debatePrompt(pair), { label: `debate:${pair.id}:r${round}`, role: 'debate' })
+        .then((out) => ({ id: pair.id, resolution: out ?? null }))));
   }
   return { fired: conflicts.length > 0, count: conflicts.length, resolutions };
 }
@@ -443,21 +453,31 @@ function reviewerPrompt(role, { round, angle, focus }) {
 }
 
 async function runPanelRound({ agent, round, focus, onCall }) {
-  const reviews = [];
-  for (let i = 0; i < SHARK_ROLES.length; i++) {
-    const role = SHARK_ROLES[i];
-    const angle = angleForShark(round, i);
+  // 2026-07 efficiency: the fresh-context reviewers run CONCURRENTLY (Promise.all
+  // — identical failure semantics to the old serial loop: any rejection aborts
+  // the round; result order stays role order). Call count/onCall are unchanged,
+  // preserving measureSteering's matched-budget guarantee. Set
+  // RESEARCHPRIME_CONCURRENT_PANEL=0 to restore the serial path.
+  const jobs = SHARK_ROLES.map((role, i) => ({ role, angle: angleForShark(round, i) }));
+  const dispatch = ({ role, angle }) => {
     if (onCall) onCall();
-    const out = await agent(reviewerPrompt(role, { round, angle, focus }), {
+    return agent(reviewerPrompt(role, { round, angle, focus }), {
       label: `reviewer:${role.role}:r${round}`,
       role: 'reviewer',
       round,
       angle,
       focus: focus ?? null,
-    });
-    reviews.push({ reviewer: role.role, angle, findings: Array.isArray(out?.findings) ? out.findings : [] });
+    }).then((out) => ({
+      reviewer: role.role, angle,
+      findings: Array.isArray(out?.findings) ? out.findings : [],
+    }));
+  };
+  if (process.env.RESEARCHPRIME_CONCURRENT_PANEL === '0') {
+    const reviews = [];
+    for (const job of jobs) reviews.push(await dispatch(job));
+    return reviews;
   }
-  return reviews;
+  return Promise.all(jobs.map(dispatch));
 }
 
 /**

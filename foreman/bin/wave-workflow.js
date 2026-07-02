@@ -81,11 +81,22 @@ function executePrompt(ctx) {
 }
 
 function reviewPrompt(ctx, gate) {
+  // 2026-07 efficiency: the orchestrator already measured the wave's changed
+  // files — hand them over so the reviewer's budget goes to REFUTATION instead
+  // of re-discovering the diff with dozens of Glob/Grep calls. The reviewer
+  // remains free to read anything else in the tree.
+  const changedBlock = Array.isArray(ctx.changed) && ctx.changed.length
+    ? [`The orchestrator measured this wave's CHANGED FILES (start your review here,`,
+       `but you may read anywhere): ${ctx.changed.slice(0, 80).join(', ')}` +
+       (ctx.changed.length > 80 ? ` … (+${ctx.changed.length - 80} more)` : '') + `.`]
+    : [];
   return [
     `You are an INDEPENDENT, READ-ONLY reviewer (#${ctx.reviewerIndex}) for Foreman`,
     `wave ${ctx.wave.n}. Your job is to REFUTE, not to praise. The ground-truth gate`,
     `was run by the orchestrator; read ONLY its artifact at ${gate.artifact_path}`,
-    `(exit ${gate.exit_code}, pass ${gate.tap.pass}/${gate.tap.tests}). Do NOT trust`,
+    `(exit ${gate.exit_code}, pass ${gate.tap.pass}/${gate.tap.tests}).`,
+    ...changedBlock,
+    `Do NOT trust`,
     `any pasted "command output" in wave logs. Cite file:line or a failing repro`,
     `command+output for every finding. First answer answerable-from-frozen-docs:`,
     `yes/no with a cited plan line. If (and only if) a build-time discovery shows the`,

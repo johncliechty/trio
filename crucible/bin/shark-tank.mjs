@@ -218,7 +218,8 @@ export function tallyFindings(reviews, { priorBlockerIds = [] } = {}) {
 // The Shark driver — built from the injected Wave-1 `agent` seam.
 // ---------------------------------------------------------------------------
 
-function sharkPrompt(role, angle, northStar, draft, research = null) {
+function sharkPrompt(role, angle, northStar, draft, research = null,
+                     { priorBlockerIds = [], changelog = null } = {}) {
   // Fresh researchPrime findings flow to the ANALYST Shark only (persona = researchPrime,
   // MASTER-PLAN §6) — the other Sharks stay deliberately context-fresh.
   const isAnalyst = role.persona === 'researchPrime' || role.role === 'Analyst';
@@ -228,6 +229,30 @@ function sharkPrompt(role, angle, northStar, draft, research = null) {
         `=== FRESH RESEARCH INPUT (researchPrime — you are the Analyst; weigh this evidence by quality) ===`,
         typeof research === 'string' ? research : JSON.stringify(research),
         `=== END RESEARCH ===`,
+      ]
+    : [];
+  // 2026-07 efficiency: tell each Shark what is ALREADY on the blocker register
+  // and what the last revision changed, so its budget goes to NEW ground instead
+  // of re-deriving known findings the tally will discard as not-new. Rigor is
+  // unchanged: the Shark still reads the FULL draft and MAY re-raise anything it
+  // believes is still unresolved (the register is orientation, not a muzzle).
+  const registerBlock = priorBlockerIds.length
+    ? [
+        ``,
+        `=== ALREADY ON THE BLOCKER REGISTER (known topics from prior rounds) ===`,
+        ...priorBlockerIds.map((id) => `  - ${id}`),
+        `These are KNOWN. A finding matching one of these ids counts as not-new in the`,
+        `tally. Spend your effort on NEW failure modes — but if a register item is`,
+        `STILL unresolved in this draft, say so explicitly.`,
+        `=== END REGISTER ===`,
+      ]
+    : [];
+  const changelogBlock = changelog
+    ? [
+        ``,
+        `=== WHAT THE LAST REVISION CHANGED (the reviser's own changelog) ===`,
+        String(changelog),
+        `=== END CHANGELOG ===`,
       ]
     : [];
   return [
@@ -241,6 +266,8 @@ function sharkPrompt(role, angle, northStar, draft, research = null) {
     ``,
     `Press hardest through this PM critique angle: ${angle}.`,
     ...researchBlock,
+    ...registerBlock,
+    ...changelogBlock,
     ``,
     `For EVERY finding emit:`,
     `  - severity: BLOCKER | MAJOR | MINOR | NIT`,
@@ -275,12 +302,15 @@ export function makeSharkDriver({ agent } = {}) {
   }
   return {
     /** Run one Shark over the draft; returns a normalized per-Shark review. */
-    async review(role, { round = 0, northStar, draft, angle, research = null }) {
+    async review(role, { round = 0, northStar, draft, angle, research = null,
+                         priorBlockerIds = [], changelog = null }) {
       const lens = angle ?? angleForShark(round, SHARK_ROLES.findIndex((r) => r.role === role.role));
-      const out = await agent(sharkPrompt(role, lens, northStar, draft, research), {
-        label: `shark:${role.role}:r${round}`,
-        schema: SHARK_SCHEMA,
-      });
+      const out = await agent(
+        sharkPrompt(role, lens, northStar, draft, research, { priorBlockerIds, changelog }), {
+          label: `shark:${role.role}:r${round}`,
+          role: 'shark',
+          schema: SHARK_SCHEMA,
+        });
       return {
         reviewer: role.role,
         angle: lens,
@@ -318,17 +348,42 @@ export async function runSharkTank({
   round = 0,
   priorBlockerIds = [],
   research = null,
+  changelog = null,
   artifactsDir = null,
   log = () => {},
 }) {
   const driver = makeSharkDriver({ agent });
-  const reviews = [];
   const angles = {};
-  for (let i = 0; i < SHARK_ROLES.length; i++) {
-    const role = SHARK_ROLES[i];
+  const jobs = SHARK_ROLES.map((role, i) => {
     const angle = angleForShark(round, i);
     angles[role.role] = angle;
-    reviews.push(await driver.review(role, { round, northStar, draft, angle, research }));
+    return { role, angle };
+  });
+  // 2026-07 efficiency: the three fresh-context Sharks run CONCURRENTLY (the
+  // port of Foreman's FOREMAN_CONCURRENT_REVIEW pattern — tallyFindings keys on
+  // normalized topic ids and is order-independent, and concurrency only
+  // strengthens independence). A REJECTED Shark maps to an abstain
+  // (answerable:'no', zero findings) — never silently dropped — so the caller's
+  // ambiguity handling sees it, exactly like Foreman's mapping. Set
+  // CRUCIBLE_CONCURRENT_SHARKS=0 to restore the historical serial path.
+  let reviews;
+  if (process.env.CRUCIBLE_CONCURRENT_SHARKS !== '0') {
+    const settled = await Promise.allSettled(jobs.map(({ role, angle }) =>
+      driver.review(role, { round, northStar, draft, angle, research,
+                            priorBlockerIds, changelog })));
+    reviews = settled.map((s, i) => s.status === 'fulfilled' ? s.value : {
+      reviewer: jobs[i].role.role,
+      angle: jobs[i].angle,
+      answerable: 'no',
+      note: `shark ${jobs[i].role.role} call rejected (${s.reason?.message || s.reason}) — abstain`,
+      findings: [],
+    });
+  } else {
+    reviews = [];
+    for (const { role, angle } of jobs) {
+      reviews.push(await driver.review(role, { round, northStar, draft, angle,
+                                               research, priorBlockerIds, changelog }));
+    }
   }
 
   const tally = tallyFindings(reviews, { priorBlockerIds });

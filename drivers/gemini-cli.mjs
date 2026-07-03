@@ -195,7 +195,11 @@ export function defaultRunGeminiCli(fullPrompt, label, {
     const args = buildGeminiCliArgs({ model: mdl });
     args.push('-p', ' ');
     const cmdName = process.platform === 'win32' ? 'agy.exe' : 'agy';
-    const child = spawn(cmdName, args, { cwd: target, env: childEnv, detached: true, windowsHide: true });
+    // NEVER `detached: true` here: on Windows a detached console child does not
+    // inherit the (hidden) parent console, so windowsHide is unreliable and agy
+    // flashes a visible window per call (John, 2026-07-03). The exit/timeout
+    // handlers below already tree-kill the child; detaching served no purpose.
+    const child = spawn(cmdName, args, { cwd: target, env: childEnv, shell: false, windowsHide: true });
     
     const killChild = () => {
       try {

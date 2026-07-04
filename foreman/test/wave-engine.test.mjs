@@ -197,6 +197,27 @@ test('vacuous-GREEN guard: a GREEN gate that exercises no changed source HALTs (
   } finally { cleanup(dir); }
 });
 
+test('vacuous-GREEN guard: doc/data-only diff HALTs even when tests mention the filename (wave-6 false-GO regression)', () => {
+  // Live failure 2026-07-03/04 (Anchor rearchitecture wave 6): the gate run
+  // itself refreshed a tracked generated .json whose name appears in test text,
+  // the name-match rescue counted that side effect as a covered deliverable,
+  // and a NO-OP wave converged repeatedly. Doc/data changes must never prove a
+  // wave; a real code change alongside them still passes.
+  const dir = freshCopy();
+  try {
+    const foremanDir = path.join(dir, '.foreman');
+    fs.writeFileSync(path.join(dir, 'INVENTORY.json'), '{}\n');
+    // make the artifact's name appear in test text (the rescue's old loophole)
+    fs.appendFileSync(path.join(dir, 'test/calc.test.mjs'),
+      '\n// regenerates INVENTORY.json as a side effect\n');
+    const reason = _internals.checkVacuousGreen(dir, foremanDir, ['INVENTORY.json']);
+    assert.match(reason || '', /only doc\/data artifacts/,
+      'a doc/data-only diff must HALT, not converge');
+    assert.equal(_internals.checkVacuousGreen(dir, foremanDir, ['src/calc.js', 'INVENTORY.json']), null,
+      'code change alongside the artifact still passes');
+  } finally { cleanup(dir); }
+});
+
 test('finding identity: same finding from 2 reviewers gets agreement=2 and a stable id', () => {
   const f = { severity: 'MAJOR', file: 'src/calc.js', line: 17, rule: 'assertion-failed' };
   const merged = collectFindings([

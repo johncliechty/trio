@@ -77,6 +77,10 @@ function executePrompt(ctx) {
     `Do NOT run any git commands, terminal commands, or tests yourself. The orchestrator`,
     `owns all testing and version control; strictly just edit the source files.`,
     `If the wave is not answerable from the frozen docs, say so explicitly.`,
+    `If you discover the wave is BLOCKED (a required human approval/amendment is`,
+    `missing, a prerequisite is absent) or believe it is ALREADY DONE, do NOT`,
+    `quietly finish with no changes — state the blocker/claim explicitly as your`,
+    `final message; the orchestrator's guards, not you, decide how to proceed.`,
   ].join(' ');
 }
 
@@ -89,13 +93,24 @@ function reviewPrompt(ctx, gate) {
     ? [`The orchestrator measured this wave's CHANGED FILES (start your review here,`,
        `but you may read anywhere): ${ctx.changed.slice(0, 80).join(', ')}` +
        (ctx.changed.length > 80 ? ` … (+${ctx.changed.length - 80} more)` : '') + `.`]
-    : [];
+    : [`The orchestrator measured ZERO changed files for this wave.`];
+  // 2026-07-04 (wave-6 false-GO fix): an empty/deliverable-free diff is a
+  // mandatory blocker, not something a reviewer may wave through — a green gate
+  // over an unchanged tree proves nothing about the wave.
+  const notImplementedRule = [
+    `MANDATORY: if the changed-file list is empty, or nothing in it could plausibly`,
+    `implement this wave's stated deliverables (e.g. only regenerated data/doc`,
+    `artifacts or log noise), you MUST report a BLOCKER finding titled`,
+    `"wave-not-implemented" — do NOT approve an unimplemented wave because the`,
+    `gate is green.`,
+  ];
   return [
     `You are an INDEPENDENT, READ-ONLY reviewer (#${ctx.reviewerIndex}) for Foreman`,
     `wave ${ctx.wave.n}. Your job is to REFUTE, not to praise. The ground-truth gate`,
     `was run by the orchestrator; read ONLY its artifact at ${gate.artifact_path}`,
     `(exit ${gate.exit_code}, pass ${gate.tap.pass}/${gate.tap.tests}).`,
     ...changedBlock,
+    ...notImplementedRule,
     `Do NOT trust`,
     `any pasted "command output" in wave logs. Cite file:line or a failing repro`,
     `command+output for every finding. First answer answerable-from-frozen-docs:`,

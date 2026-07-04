@@ -98,8 +98,29 @@ export function parseClaudeFrames(stdout, { label = '(unlabeled)', cli_status = 
  * This is what makes `CLAUDE_MODEL_EXECUTE=claude-fable-5` (etc.) reachable on every
  * path that flows through this driver.
  */
+/**
+ * TRIO_TIER (John 2026-07-04): one switch that flips every Claude seat of a run.
+ *  - heavy    => the latest frontier Claude ("Fable builds") — for work that
+ *                genuinely needs the top tier.
+ *  - standard => one notch below frontier — the affordable default for builds
+ *                whose rigor lives in the machinery (gates/reviewers/guards),
+ *                not the builder's model tier.
+ * Both tiers keep the 5:1 pattern (Gemini holds the checking seats regardless).
+ * Precedence: an explicit opts.model (e.g. a project's foreman.config.json
+ * models block) still wins over everything; TRIO_TIER, when set, deliberately
+ * BEATS the setx-pinned CLAUDE_MODEL/CLAUDE_MODEL_<ROLE> user env — those encode
+ * the old always-heavy default, and the point of the switch is to flip a run
+ * without unpinning machine-wide env. Update ids when a new frontier ships.
+ */
+const TIER_CLAUDE_MODELS = {
+  heavy: 'claude-fable-5',
+  standard: 'claude-opus-4-8',
+};
+
 export function resolveClaudeModel({ model, role, label, env = process.env } = {}) {
   if (model) return model;
+  const tier = String(env.TRIO_TIER || '').trim().toLowerCase();
+  if (tier && TIER_CLAUDE_MODELS[tier]) return TIER_CLAUDE_MODELS[tier];
   const key = String(role || '').trim() || String(label || '').split(/[:#.\s]/)[0];
   const roleKey = key ? `CLAUDE_MODEL_${key.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}` : null;
   return (roleKey && env[roleKey]) || env.CLAUDE_MODEL || null;

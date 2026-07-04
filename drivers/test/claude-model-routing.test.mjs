@@ -43,6 +43,20 @@ test('resolveClaudeModel: per-role env outranks the global; global is the fallba
   assert.equal(resolveClaudeModel({ role: 'review', env: {} }), null, 'no env ⇒ session default (null)');
 });
 
+test('TRIO_TIER (2026-07-04): heavy/standard flip every Claude seat; explicit model still wins; tier beats setx env; junk tier ignored', () => {
+  // heavy => frontier; standard => one notch below (John's heavy/non-heavy skills)
+  assert.equal(resolveClaudeModel({ role: 'execute', env: { TRIO_TIER: 'heavy' } }), 'claude-fable-5');
+  assert.equal(resolveClaudeModel({ role: 'execute', env: { TRIO_TIER: 'standard' } }), 'claude-opus-4-8');
+  // the whole point: standard tier flips a machine pinned always-heavy via setx
+  assert.equal(
+    resolveClaudeModel({ role: 'execute', env: { TRIO_TIER: 'standard', CLAUDE_MODEL_EXECUTE: 'claude-fable-5', CLAUDE_MODEL: 'claude-fable-5' } }),
+    'claude-opus-4-8');
+  // explicit model (per-project config) still outranks the tier
+  assert.equal(resolveClaudeModel({ model: 'explicit', role: 'execute', env: { TRIO_TIER: 'standard' } }), 'explicit');
+  // unknown tier value falls through to the old ladder unchanged
+  assert.equal(resolveClaudeModel({ role: 'execute', env: { TRIO_TIER: 'mega', CLAUDE_MODEL: 'global-model' } }), 'global-model');
+});
+
 test('resolveClaudeModel: role derives from the Foreman label prefix (execute:/review:/fix:)', () => {
   const env = { CLAUDE_MODEL_EXECUTE: 'exec-m', CLAUDE_MODEL_REVIEW: 'rev-m', CLAUDE_MODEL_FIX: 'fix-m' };
   assert.equal(resolveClaudeModel({ label: 'execute:w3', env }), 'exec-m');

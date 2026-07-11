@@ -215,14 +215,20 @@ export async function makeForemanDriver({ driver, agent, reliability, ...opts } 
   if (!seamAgent) {
     const backend = getDriver(driver);
     providerName = backend.name;
-    // Forward role + model per-call (nullish-fallback to driver-level opts) so the
-    // per-role model tier (e.g. TRIO_MODEL_<ROLE>, resolved in the gemini-cli driver)
-    // is actually reachable on the Foreman build path. Backends that ignore role/model
-    // (e.g. the Claude session-default driver) are unaffected.
+    // Forward role + model to the backend so the per-role model tier (e.g.
+    // TRIO_MODEL_<ROLE>/TRIO_DRIVER_<ROLE>, resolved in the driver ladder) is actually
+    // reachable on the Foreman build path. A DESIGNATED role/model on makeForemanDriver
+    // (its own `opts`) WINS over the per-call wave step (`o`): when a caller builds a
+    // Foreman driver pinned to a seat — e.g. { driver, role:'judge', model:'m' } — that
+    // designation must reach the backend, not be shadowed by the wave step's own
+    // 'execute'/'review'/'fix' role. Only when no designation is set does the per-call
+    // value flow through (the normal Foreman build path passes neither, so wave-step
+    // role/model behave exactly as before). Backends that ignore role/model (e.g. the
+    // Claude session-default driver) are unaffected either way.
     seamAgent = (prompt, o = {}) =>
       backend.runAgent({
         ...opts, prompt, schema: o.schema, label: o.label,
-        role: o.role ?? opts.role, model: o.model ?? opts.model, freshContext: true,
+        role: opts.role ?? o.role, model: opts.model ?? o.model, freshContext: true,
       });
   }
   // Wave 1: apply the reliability wrapper at THIS agent-injection boundary (both the

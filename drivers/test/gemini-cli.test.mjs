@@ -1,14 +1,19 @@
 // drivers/test/gemini-cli.test.mjs — gate for the Gemini CLI HOST backend
-// (`gemini-cli`): the login-based, sub-agent-capable `gemini -p` driver (contrast the
+// (`gemini-cli`): the login-based, sub-agent-capable `agy -p` driver (contrast the
 // raw-HTTP `gemini` WORKER driver gated in backends.test.mjs).
 //
-// Everything runs with NO subprocess: frame parsing is tested against the REAL
-// stream-json dump captured live 2026-06-10, and the seam is driven by an injected
-// `runGemini` stub. Proves: frame parsing, SERVED-model attestation read from the
-// result envelope (never argv), the degraded path when the envelope is unattestable,
-// model-resolution precedence, argv shaping, the env gate, the prompt-suffix
-// schema/retry/ABSTAIN contract (identical to Claude), registry membership, and the
-// capability-matrix row.
+// W0 (2026-07-05) — rewritten for the LIVE agy contract. The old `claude`/stream-json/
+// `--skip-trust` transport (and its `stats.models` attestation, `resolveGeminiEntry`
+// discovery, and stdin sentinel) is DEAD; this gate now exercises the new pure/
+// deterministic seams with NO subprocess:
+//   * buildGeminiCliArgs — the live agy argv (`-p`, `--log-file`, `--model "<LABEL>"`,
+//     `--print-timeout`, and `--sandbox --add-dir` only for edit roles).
+//   * finalTextFromTranscript — the last `source==='MODEL'` line of a transcript.jsonl.
+//   * servedModelFromCliLog — allowlist + substitution-detection served-model attestation
+//     read from an agy cli.log window (agy logs a model line ONLY when it substitutes).
+//   * parseGeminiCliFrames — the THREE honest outcomes (substituted / clean-known / unattested).
+//   * model-resolution precedence, the env gate, the prompt-suffix schema/retry/ABSTAIN
+//     contract (identical to Claude), registry membership, the capability-matrix row.
 //
 // Exercises REAL source in drivers/gemini-cli.mjs + drivers/index.mjs.
 
@@ -22,89 +27,150 @@ import {
 } from '../index.mjs';
 import {
   parseGeminiCliFrames, resolveGeminiModel, buildGeminiCliArgs, defaultRunGeminiCli,
-  resolveGeminiEntry, approvalModeFor, DEFAULT_GEMINI_CLI_MODEL, DEFAULT_GEMINI_APPROVAL_MODE,
+  finalTextFromTranscript, servedModelFromCliLog, approvalModeFor,
+  KNOWN_AGY_LABELS, GEMINI_HEAVY_MODEL, GEMINI_STANDARD_MODEL,
+  DEFAULT_GEMINI_CLI_MODEL, DEFAULT_GEMINI_APPROVAL_MODE,
 } from '../gemini-cli.mjs';
 
-// The actual frames `gemini --skip-trust -p --output-format stream-json` emitted on
-// this host (2026-06-10). Note: init says `model:"auto"` (the REQUEST), while
-// stats.models is keyed by the model that actually SERVED — the attestation source.
-const REAL_STREAM = [
-  '{"type":"init","timestamp":"2026-06-10T12:03:54.495Z","session_id":"404915ee-b125-46ad-95fc-aaf806642483","model":"auto"}',
-  '{"type":"message","timestamp":"2026-06-10T12:03:54.495Z","role":"user","content":"Output exactly the single token: PONG"}',
-  '{"type":"message","timestamp":"2026-06-10T12:03:57.715Z","role":"assistant","content":"PONG","delta":true}',
-  '{"type":"result","timestamp":"2026-06-10T12:03:57.784Z","status":"success","stats":{"total_tokens":16645,"input_tokens":16525,"output_tokens":2,"cached":0,"input":16525,"duration_ms":3289,"tool_calls":0,"models":{"gemini-3.1-pro-preview":{"total_tokens":16645,"input_tokens":16525,"output_tokens":2,"cached":0,"input":16525}}}}',
-].join('\n');
+// --- argv shaping (live agy contract) ------------------------------------------
 
-// --- frame parsing + attestation -----------------------------------------------
+test('buildGeminiCliArgs: edit posture emits -p prompt, --log-file, --model LABEL, --print-timeout, --sandbox --add-dir <target>', () => {
+  const args = buildGeminiCliArgs({
+    prompt: 'STEER…\n\nthe real prompt', logPath: '/tmp/agy.log',
+    model: GEMINI_HEAVY_MODEL, target: '/proj', readonly: false,
+  });
+  // Prompt goes via ARGV `-p` (NOT stdin — stdin truncates ~4KB on agy).
+  assert.deepEqual(args.slice(args.indexOf('-p'), args.indexOf('-p') + 2), ['-p', 'STEER…\n\nthe real prompt']);
+  // The conversation-id source: agy writes "Print mode: conversation=<id>" into --log-file.
+  assert.deepEqual(args.slice(args.indexOf('--log-file'), args.indexOf('--log-file') + 2), ['--log-file', '/tmp/agy.log']);
+  // Model is an agy LABEL, never an API-style id.
+  assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), ['--model', GEMINI_HEAVY_MODEL]);
+  // agy's own print-mode wait is set (value is a `<n>s` string aligned under our kill ceiling).
+  const pt = args.indexOf('--print-timeout');
+  assert.ok(pt !== -1, '--print-timeout is present');
+  assert.match(args[pt + 1], /^\d+s$/);
+  // Edit roles get a scoped auto-approving sandbox on the target dir.
+  assert.deepEqual(args.slice(args.indexOf('--sandbox'), args.indexOf('--sandbox') + 3), ['--sandbox', '--add-dir', '/proj']);
+  // The dead flags are gone (they hard-error on live agy).
+  assert.ok(!args.includes('--skip-trust'), '--skip-trust is dead');
+  assert.ok(!args.includes('--output-format'), '--output-format stream-json is dead');
+  assert.ok(!args.includes('--dangerously-skip-permissions'));
+});
 
-test('parse: real stream-json dump -> text + attested served model from the envelope', () => {
-  const { text, rec } = parseGeminiCliFrames(REAL_STREAM, { label: 'smoke', cli_status: 0 });
+test('buildGeminiCliArgs: read-only posture OMITS --sandbox/--add-dir (reviewers/judges do not edit)', () => {
+  const args = buildGeminiCliArgs({
+    prompt: 'p', logPath: '/tmp/l', model: GEMINI_STANDARD_MODEL, target: '/proj', readonly: true,
+  });
+  assert.ok(!args.includes('--sandbox'), 'no sandbox for a read-only seat');
+  assert.ok(!args.includes('--add-dir'), 'no add-dir for a read-only seat');
+  // The core argv is still intact.
+  assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), ['--model', GEMINI_STANDARD_MODEL]);
+  assert.ok(args.includes('-p') && args.includes('--log-file') && args.includes('--print-timeout'));
+});
+
+test('buildGeminiCliArgs: model defaults to the heavy LABEL when omitted', () => {
+  const args = buildGeminiCliArgs({ prompt: 'p', logPath: '/tmp/l' });
+  assert.deepEqual(args.slice(args.indexOf('--model'), args.indexOf('--model') + 2), ['--model', DEFAULT_GEMINI_CLI_MODEL]);
+  assert.equal(DEFAULT_GEMINI_CLI_MODEL, GEMINI_HEAVY_MODEL, 'the default is the heavy agy LABEL, not a phantom API id');
+});
+
+// --- transcript reply reader ---------------------------------------------------
+
+test('finalTextFromTranscript: returns the LAST source===MODEL content from a JSONL transcript', () => {
+  const jsonl = [
+    JSON.stringify({ source: 'USER', content: 'Output exactly: PONG' }),
+    JSON.stringify({ source: 'MODEL', content: 'thinking out loud, first turn' }),
+    JSON.stringify({ source: 'TOOL', content: 'read_file(...)' }),
+    JSON.stringify({ source: 'MODEL', content: '  FINAL answer  ' }),
+  ].join('\n');
+  // isText:true drives the pure string path (no file / no subprocess); content is trimmed.
+  assert.equal(finalTextFromTranscript(jsonl, { isText: true }), 'FINAL answer');
+});
+
+test('finalTextFromTranscript: blank + non-JSON lines are skipped; no MODEL line -> empty string', () => {
+  const jsonl = ['', 'not json at all', JSON.stringify({ source: 'USER', content: 'hi' }), '   '].join('\n');
+  assert.equal(finalTextFromTranscript(jsonl, { isText: true }), '');
+});
+
+// --- served-model attestation from cli.log -------------------------------------
+
+test('servedModelFromCliLog (a): resolve-failure + override -> substituted, served = override LABEL', () => {
+  // Live agy shape for an UNRECOGNIZED id: it fails to resolve then propagates the override.
+  const win = [
+    'Resolving model gemini-3.1-pro',
+    'Failed to resolve model flag gemini-3.1-pro: gemini-3.1-pro is not recognized as a valid model',
+    'Propagating selected model override to backend: label="Gemini 3.5 Flash (Medium)"',
+  ].join('\n');
+  assert.deepEqual(
+    servedModelFromCliLog(win, { requested: 'gemini-3.1-pro' }),
+    { served: 'Gemini 3.5 Flash (Medium)', substituted: true },
+  );
+});
+
+test('servedModelFromCliLog (b): empty window + a KNOWN label -> clean serve attested by ABSENCE', () => {
+  // agy writes NO model line on a clean serve of a catalogued label, so absence == clean.
+  assert.ok(KNOWN_AGY_LABELS.has(GEMINI_HEAVY_MODEL), 'the heavy label is catalogued');
+  assert.deepEqual(
+    servedModelFromCliLog('', { requested: GEMINI_HEAVY_MODEL }),
+    { served: GEMINI_HEAVY_MODEL, substituted: false },
+  );
+});
+
+test('servedModelFromCliLog (c): empty window + an uncatalogued id -> cannot attest', () => {
+  assert.deepEqual(
+    servedModelFromCliLog('', { requested: 'gemini-3.1-pro' }),
+    { served: null, substituted: false },
+  );
+});
+
+// --- the three honest parseGeminiCliFrames outcomes ----------------------------
+
+test('parseGeminiCliFrames (a) substituted -> ok:false, status:model_substituted, attests the override', () => {
+  const { text, rec } = parseGeminiCliFrames('a reply body', {
+    label: 'x', cli_status: 0,
+    requested_model: 'gemini-3.1-pro',
+    served_model: 'Gemini 3.5 Flash (Medium)', substituted: true,
+  });
+  assert.equal(text, 'a reply body');
+  assert.equal(rec.ok, false, 'a silent cross-family degrade is NEVER a success');
+  assert.equal(rec.status, 'model_substituted');
+  // We DID attest what served — that is how we know it was substituted.
+  assert.equal(rec.model_attested, true);
+  assert.equal(rec.model_served, 'Gemini 3.5 Flash (Medium)');
+  assert.equal(rec.model_family, 'gemini');
+  assert.equal(rec.degraded, false);
+  assert.equal(rec.requested_model, 'gemini-3.1-pro');
+});
+
+test('parseGeminiCliFrames (b) clean known label (served===requested) -> ok:true, status:success, attested', () => {
+  const { text, rec } = parseGeminiCliFrames('PONG', {
+    label: 'x', cli_status: 0,
+    requested_model: GEMINI_HEAVY_MODEL,
+    served_model: GEMINI_HEAVY_MODEL, substituted: false,
+  });
   assert.equal(text, 'PONG');
   assert.equal(rec.ok, true);
   assert.equal(rec.status, 'success');
-  // Attestation: served model is the stats.models KEY, NOT the argv `auto`.
-  assert.equal(rec.model_served, 'gemini-3.1-pro-preview');
   assert.equal(rec.model_attested, true);
-  assert.equal(rec.output_tokens, 2);
-  assert.equal(rec.total_tokens, 16645);
-  assert.equal(rec.tools, 0);
-  assert.equal(rec.duration_ms, 3289);
-  // Gemini's envelope carries no total cost -> honestly null (not a fabricated 0).
-  assert.equal(rec.cost_usd, null);
+  assert.equal(rec.model_served, GEMINI_HEAVY_MODEL);
+  assert.equal(rec.model_family, 'gemini');
+  assert.equal(rec.degraded, false);
 });
 
-test('parse: multiple assistant delta frames concatenate in order', () => {
-  const stream = [
-    '{"type":"message","role":"assistant","content":"Hello, ","delta":true}',
-    '{"type":"message","role":"assistant","content":"world","delta":true}',
-    '{"type":"result","status":"success","stats":{"models":{"gemini-3-flash-preview":{}}}}',
-  ].join('\n');
-  const { text, rec } = parseGeminiCliFrames(stream);
-  assert.equal(text, 'Hello, world');
-  assert.equal(rec.model_served, 'gemini-3-flash-preview');
-  assert.equal(rec.model_attested, true);
-});
-
-test('parse: unattestable envelope (no stats.models) -> DEGRADED, never a claim', () => {
-  const stream = [
-    '{"type":"message","role":"assistant","content":"hi","delta":true}',
-    '{"type":"result","status":"success","stats":{"output_tokens":1}}',
-  ].join('\n');
-  const { rec } = parseGeminiCliFrames(stream);
+test('parseGeminiCliFrames (c) uncatalogued id, served null -> ok:false, status:unattested_model, NOT attested', () => {
+  const { rec } = parseGeminiCliFrames('some reply', {
+    label: 'x', cli_status: 0,
+    requested_model: 'gemini-3.1-pro',
+    served_model: null, substituted: false,
+  });
+  assert.equal(rec.ok, false, 'we refuse to assume a clean serve for an id we cannot verify');
+  assert.equal(rec.status, 'unattested_model');
+  assert.equal(rec.model_attested, false);
   assert.equal(rec.model_served, null);
-  assert.equal(rec.model_attested, false, 'no stats.models => cannot attest the served model');
+  assert.equal(rec.degraded, true, 'honest fallback: model_attested:false ∧ degraded:true');
 });
 
-test('parse: stats.models as an ARRAY -> DEGRADED (no fabricated "0" stamp; SR-5)', () => {
-  const stream = '{"type":"result","status":"success","stats":{"models":["gemini-3.1-pro-preview"]}}';
-  const { rec } = parseGeminiCliFrames(stream);
-  assert.equal(rec.model_served, null, 'an array is not a valid attestation source');
-  assert.equal(rec.model_attested, false);
-});
-
-test('parse: multiple served models -> attests first but flags multi_model', () => {
-  const stream = '{"type":"result","status":"success","stats":{"models":{"gemini-3.1-pro-preview":{},"gemini-3-flash-preview":{}}}}';
-  const { rec } = parseGeminiCliFrames(stream);
-  assert.equal(rec.model_served, 'gemini-3.1-pro-preview');
-  assert.equal(rec.model_attested, true);
-  assert.equal(rec.multi_model, true, 'a multi-model envelope is flagged, not silently single-stamped');
-});
-
-test('parse: no result frame at all -> ok:false, unattested', () => {
-  const { text, rec } = parseGeminiCliFrames('{"type":"message","role":"assistant","content":"partial"}');
-  assert.equal(text, 'partial');
-  assert.equal(rec.ok, false);
-  assert.equal(rec.model_attested, false);
-});
-
-test('parse: blank/garbage lines are skipped, not fatal', () => {
-  const stream = ['', 'not json', REAL_STREAM, '   '].join('\n');
-  const { text, rec } = parseGeminiCliFrames(stream);
-  assert.equal(text, 'PONG');
-  assert.equal(rec.ok, true);
-});
-
-// --- model resolution + argv shaping -------------------------------------------
+// --- model resolution ----------------------------------------------------------
 
 test('resolveGeminiModel: precedence opts > TRIO_MODEL_<ROLE> > TRIO_MODEL > GEMINI_MODEL > default', () => {
   assert.equal(resolveGeminiModel({ model: 'm-explicit', role: 'judge', env: { TRIO_MODEL: 'x' } }), 'm-explicit');
@@ -114,21 +180,10 @@ test('resolveGeminiModel: precedence opts > TRIO_MODEL_<ROLE> > TRIO_MODEL > GEM
   assert.equal(resolveGeminiModel({ env: {} }), DEFAULT_GEMINI_CLI_MODEL);
 });
 
-test('buildGeminiCliArgs: mandatory --skip-trust + stream-json + approval mode + -m (NO -p; prompt is appended separately)', () => {
-  const args = buildGeminiCliArgs({ model: 'gemini-3.1-pro-preview', approvalMode: 'plan' });
-  assert.ok(args.includes('--skip-trust'), 'headless requires --skip-trust');
-  assert.ok(!args.includes('-p'), '-p is appended with the prompt at spawn time, not part of the flag set');
-  assert.deepEqual(args.slice(args.indexOf('--output-format'), args.indexOf('--output-format') + 2), ['--output-format', 'stream-json']);
-  assert.deepEqual(args.slice(args.indexOf('--approval-mode'), args.indexOf('--approval-mode') + 2), ['--approval-mode', 'plan']);
-  assert.deepEqual(args.slice(args.indexOf('-m'), args.indexOf('-m') + 2), ['-m', 'gemini-3.1-pro-preview']);
-});
-
-test('approvalModeFor (gate posture): read-only roles -> plan, edit roles -> auto_edit, explicit wins', () => {
-  // Read-only trio roles (sharks/judge/synthesizer/reviewers/research) stay read-only.
+test('approvalModeFor (back-compat posture): read-only roles -> plan, edit roles -> auto_edit, explicit wins', () => {
   for (const r of ['review', 'judge', 'shark', 'synthesizer', 'research']) {
     assert.equal(approvalModeFor({ role: r }), 'plan', `${r} must be read-only`);
   }
-  // Edit roles auto-approve edits.
   for (const r of ['execute', 'fix', 'build']) {
     assert.equal(approvalModeFor({ role: r }), 'auto_edit', `${r} edits`);
   }
@@ -139,16 +194,6 @@ test('approvalModeFor (gate posture): read-only roles -> plan, edit roles -> aut
   // Explicit approvalMode always wins; unknown role falls back to the default.
   assert.equal(approvalModeFor({ approvalMode: 'yolo', role: 'review' }), 'yolo');
   assert.equal(approvalModeFor({ role: 'mystery' }), DEFAULT_GEMINI_APPROVAL_MODE);
-});
-
-test('resolveGeminiEntry: GEMINI_CLI_JS override is honored when the file exists', () => {
-  // This very test file always exists — use it as a stand-in entry path.
-  const here = new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
-  const r = resolveGeminiEntry({ GEMINI_CLI_JS: here });
-  assert.equal(r.mode, 'node');
-  assert.equal(r.entry, here);
-  // No override + nothing discoverable in a bare env -> shell fallback.
-  assert.equal(resolveGeminiEntry({}).mode, 'shell');
 });
 
 // --- env gate ------------------------------------------------------------------
@@ -236,7 +281,7 @@ test('gemini-cli live smoke', { skip: process.env.GEMINI_CLI_LIVE ? false : 'set
   const prev = process.env.CRUCIBLE_AGENT_LIVE;
   process.env.CRUCIBLE_AGENT_LIVE = '1';
   try {
-    const out = await runAgent({ driver: 'gemini-cli', prompt: 'Reply with the single word: pong', approvalMode: 'plan' });
+    const out = await runAgent({ driver: 'gemini-cli', prompt: 'Reply with the single word: pong' });
     assert.match(String(out), /pong/i);
   } finally {
     if (prev === undefined) delete process.env.CRUCIBLE_AGENT_LIVE; else process.env.CRUCIBLE_AGENT_LIVE = prev;
@@ -247,7 +292,7 @@ test('gemini-cli live timeout: a tiny timeoutMs kills the child -> typed status:
   const prev = process.env.CRUCIBLE_AGENT_LIVE;
   process.env.CRUCIBLE_AGENT_LIVE = '1';
   try {
-    const { rec } = await defaultRunGeminiCli('Take as long as you like.', 'timeout-probe', { approvalMode: 'plan', timeoutMs: 1 });
+    const { rec } = await defaultRunGeminiCli('Take as long as you like.', 'timeout-probe', { timeoutMs: 1 });
     assert.equal(rec.status, 'timeout');
     assert.equal(rec.ok, false);
     assert.equal(rec.model_attested, false, 'a killed run cannot attest a served model');

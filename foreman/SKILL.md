@@ -23,6 +23,8 @@ wave/sprint/section to done through fresh-context sub-agents, auto-advances to
 the next wave, keeps the tree clean, prints running commentary, and **halts only
 on a defined blocker set**.
 
+> **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `C:\dev\Skill Foundry\AGENTS.md` → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
+
 > **Status (2026-06-02): the engine is built and adversarially verified through
 > Phase 3d.** The invocation contract + parsers (Phase 0), the one-wave
 > EXECUTE/GATE/REVIEW/JUDGE/FIX engine (Phase 1), multi-wave auto-advance

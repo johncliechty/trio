@@ -26,6 +26,8 @@ heavyweight planner that turns an intent — or a messy existing project — int
 **vetted, gold-standard, Foreman-ready implementation plan**, while **never
 drifting** from the project's locked objective.
 
+> **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `C:\dev\Skill Foundry\AGENTS.md` → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
+
 > **Status (2026-06-05): the engine is built and GREEN through Wave 11.** The
 > three-stage pipeline, the Shark-Tank round engine, the Synthesizer + Judge, the
 > two-gate convergence, researchPrime integration, the cross-model Enhanced mode +
@@ -109,8 +111,10 @@ user is the final convergence authority**.
   quality/convergence gate, and the post-lock tiered drift detector.
 - `bin/research.mjs` — researchPrime integration (once up-front + cost-guarded per round).
 - `bin/stage0.mjs` / `bin/stage1.mjs` / `bin/stage2.mjs` — the three stage protocols.
-- `bin/enhanced.mjs` / `bin/remote.mjs` — cross-model Enhanced mode + the
-  push-at-approval-gates GitHub remote (never auto-pushes).
+- `bin/enhanced.mjs` / `bin/remote.mjs` — the CROSS-FAMILY verification seam (builds the
+  live role-routed agent: Gemini Sharks/Judge, Claude steering — the 5:1 split, via the
+  shared `makeRoleRoutedAgent` + gemini-cli tier ladder) + the push-at-approval-gates
+  GitHub remote (never auto-pushes).
 - `bin/docs.mjs` — the living-doc + version-control layer.
 - `bin/self-run.mjs` — the dogfood self-run (drives Stage 0→1→2, proves convergence +
   HALT/resume, emits a zero-HALT doc-trio) — also the runnable entrypoint.

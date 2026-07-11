@@ -11,6 +11,8 @@ researchPrime OWNS the evidence ledger, the verification ladder (OBSERVED > CORR
 
 This file is self-contained for the prose protocol; the engine is in `bin/` alongside it.
 
+> **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `C:\dev\Skill Foundry\AGENTS.md` → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
+
 ---
 
 ## Step 0 — Mode + capability binding + run-dir (FIRST, every run)

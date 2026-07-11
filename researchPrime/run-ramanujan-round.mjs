@@ -25,6 +25,13 @@ import {
 import { resolveTier } from './bin/governor.mjs';
 import { adjudicateStakes } from './bin/stakes.mjs';
 import { assembleDeliverable } from './bin/deliverable.mjs';
+import {
+  makeReachedFamilyTracker,
+  instrumentRoundAgent,
+  buildLiveRoundAgent,
+  DEFAULT_ROUND_ROUTES,
+  SINGLE_FAMILY_ROUTES,
+} from './bin/live-round-agent.mjs';
 
 const runDir = process.argv[2];
 if (!runDir) { console.error('need <runDir>'); process.exit(2); }
@@ -58,9 +65,24 @@ const roundResults = [];
 let convergence = null;
 let roundsToDry = null;
 
+// W5: substrateFamilies is DERIVED from the model families actually reached this run — never hard-coded.
+// Default: single-family REPLAY (the recorded Claude-drafted adjudications) ⇒ ['claude']. Opt-in live
+// cross-family verification (RESEARCHPRIME_LIVE_ROUND=1) routes the reviewer/debate/judge seats to a real
+// Gemini `agy -p` sub-agent (the 5:1 split) ⇒ ['claude','gemini'] when those seats genuinely serve; if
+// agy is unavailable the W0 seam throws HaltError and the round HALTS honestly (never self-reviews on Claude).
+const reached = makeReachedFamilyTracker();
+const LIVE_ROUND = process.env.RESEARCHPRIME_LIVE_ROUND === '1';
+const liveAgent = LIVE_ROUND
+  ? await buildLiveRoundAgent({ routes: DEFAULT_ROUND_ROUTES, tracker: reached, env: process.env })
+  : null;
+if (LIVE_ROUND) console.log('LIVE cross-family round: reviewer/debate/judge → gemini-cli, synthesizer/default → claude (5:1).');
+
 for (const inp of inputs) {
+  const agent = LIVE_ROUND
+    ? liveAgent
+    : instrumentRoundAgent({ agent: replayAgent(inp.adjudications ?? {}), routes: SINGLE_FAMILY_ROUTES, tracker: reached });
   const result = await orchestrateRound({
-    agent: replayAgent(inp.adjudications ?? {}),
+    agent,
     round: inp.round,
     northStar: inp.northStar,
     reviews: inp.reviews,
@@ -102,18 +124,23 @@ convergence = {
   N: thresholds.N,
 };
 
-// suspiciously-dry honesty guard (single-family substrate => can FLAG, never mitigate)
+// W5: the substrate families ACTUALLY REACHED this run (['claude'] single-family, or ['claude','gemini']
+// when the live cross-family seats served). Fall back to ['claude'] only if nothing dispatched.
+const substrateFamilies = reached.families().length ? reached.families() : ['claude'];
+
+// suspiciously-dry honesty guard: single-family substrate can FLAG but never mitigate (I1); a genuine
+// multi-family substrate (reached Gemini verification) may mitigate — driven by the DERIVED list.
 const finalRound = roundResults[roundResults.length - 1];
 const unresolvedHigh = countUnresolvedHighSeverity(finalRound.tally.findings);
 const honesty = assessConvergenceHonesty({
   stakesTier: tier,
   roundsToDry: roundsToDry ?? finalState.countedRounds,
   unresolvedHighSeverity: unresolvedHigh,
-  substrateFamilies: ['claude'],
+  substrateFamilies,
   thresholds,
 });
 
-console.log(`\nTIER=${tier} | convergence=${JSON.stringify(convergence)} | unresolvedHigh=${unresolvedHigh}`);
+console.log(`\nTIER=${tier} | convergence=${JSON.stringify(convergence)} | unresolvedHigh=${unresolvedHigh} | substrateFamilies=${JSON.stringify(substrateFamilies)}`);
 console.log(`HONESTY GUARD: ${JSON.stringify(honesty)}`);
 
 if (finalState.converged) {
@@ -122,7 +149,7 @@ if (finalState.converged) {
     rounds: roundResults,
     convergence,
     calibration: null,
-    substrateFamilies: ['claude'],
+    substrateFamilies,
     northStar: inputs[0].northStar,
   });
   const out = { deliverable, convergence, honesty, tier, thresholds, unresolvedHigh };

@@ -74,13 +74,13 @@ export const CROSSED_SYMBOLS = {
     { name: 'JUDGE_ROLE', kind: 'value', serves: 'role stamp' },
     { name: 'JUDGE_SCHEMA', kind: 'value', serves: 'Judge verdict schema' },
   ],
-  // G8 cross-lineage origin fusion (Enhanced mode) · I3 origin integrity
+  // Cross-family verification seam (2026-07-05 W6: the API-key Enhanced-mode provisioner —
+  // detectAndProvision/provisionRoles/makeCrossModelProbe/selectSynthesizerModel/MODEL_REGISTRY —
+  // was RETIRED and replaced by the shared agy-based cross-family seam; the contract now pins that).
   enhanced: [
-    { name: 'detectAndProvision', kind: 'function', serves: 'Enhanced provisioning' },
-    { name: 'provisionRoles', kind: 'function', serves: 'cross-lineage role provisioning' },
-    { name: 'makeCrossModelProbe', kind: 'function', serves: 'cross-model reachability probe' },
-    { name: 'selectSynthesizerModel', kind: 'function', serves: 'Synthesizer model selection' },
-    { name: 'MODEL_REGISTRY', kind: 'value', serves: 'attested lineage registry seed' },
+    { name: 'buildLiveCrucibleAgent', kind: 'function', serves: 'role-routed cross-family agent (Gemini verify / Claude steer)' },
+    { name: 'assertCrossFamilyRouting', kind: 'function', serves: 'fail-closed self-review guard' },
+    { name: 'makeReachedFamilyTracker', kind: 'function', serves: 'reached-backend substrate attestation' },
   ],
   // Checkpoint/resume · budget pre-flight · HALT signalling
   'foreman-lib': [

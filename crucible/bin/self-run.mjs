@@ -22,9 +22,13 @@
 //
 // SUBSTRATE: the dogfood uses a deterministic SCRIPTED agent (no live model, no
 // subprocess, no billing) so the gate (`node --test`) is reproducible. The same
-// orchestration runs on the LIVE subscription seam when CRUCIBLE_AGENT_LIVE=1 — the
-// CLI wires `makeAgentSeam()` in that case. The orchestration is identical; only the
-// agent transport differs.
+// orchestration runs on the LIVE seam when CRUCIBLE_AGENT_LIVE=1 — the CLI then wires the
+// W6 CROSS-FAMILY role-routed agent (`buildLiveCrucibleAgent` from bin/enhanced.mjs): the
+// verification seats (shark / judge) dispatch to a real Gemini `agy -p` backend while the
+// steering / drafting seats (synthesizer / stage authors / default) stay on Claude — the
+// machine-wide 5:1 split. The orchestration is identical; only the per-role transport
+// differs (and a down/unattested Gemini seat HALTs honestly — it is never self-reviewed on
+// Claude). The injected-`agent` seam is preserved so tests stub it.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -37,7 +41,7 @@ import {
   writeCheckpointAtomic,
   readCheckpoint,
 } from './crucible-lib.mjs';
-import { makeAgentSeam } from './agent.mjs';
+import { buildLiveCrucibleAgent } from './enhanced.mjs';
 import { runStage0 } from './stage0.mjs';
 import {
   runBrainstorm,
@@ -349,15 +353,28 @@ export async function dogfoodSelfRun({
 //
 // `node bin/self-run.mjs [outputDir]` runs the dogfood. Default substrate is the
 // deterministic scripted agent (no model, no billing); set CRUCIBLE_AGENT_LIVE=1 to
-// drive the SAME orchestration with a real `claude -p` sub-agent. Exit 0 on a full
-// 5/5 checklist pass, 1 otherwise.
+// drive the SAME orchestration with the W6 CROSS-FAMILY role-routed agent — genuine
+// Gemini `agy -p` Sharks + Judge (verification) and Claude for steering/drafting (the
+// 5:1 split). Exit 0 on a full 5/5 checklist pass, 1 otherwise.
 // ---------------------------------------------------------------------------
 
 export async function main(argv = process.argv.slice(2), { env = process.env, log = (m) => process.stdout.write(m + '\n') } = {}) {
   const outputDir = argv[0] || fs.mkdtempSync(path.join(os.tmpdir(), 'crucible-self-run-'));
   const live = env.CRUCIBLE_AGENT_LIVE === '1';
-  const agent = live ? makeAgentSeam({ env, target: HERE, log }).agent : makeScriptedSelfRunAgent();
-  log(`Crucible dogfood self-run — substrate: ${live ? 'LIVE (claude -p)' : 'scripted (deterministic)'} — output: ${outputDir}`);
+  // LIVE: build the cross-family role-routed agent (shark/judge → Gemini, synth/default →
+  // Claude). It runs the self-review routing guard up front and instruments the reached-
+  // family tracker + the ≤2–3 Gemini concurrency cap; a down/unattested Gemini seat HALTs
+  // (never a silent Claude self-review). Scripted default stays deterministic (no model).
+  let tracker = null;
+  let agent;
+  if (live) {
+    const built = await buildLiveCrucibleAgent({ env, target: HERE, log });
+    agent = built.agent;
+    tracker = built.tracker;
+  } else {
+    agent = makeScriptedSelfRunAgent();
+  }
+  log(`Crucible dogfood self-run — substrate: ${live ? 'LIVE cross-family (Gemini shark/judge, Claude synth/default)' : 'scripted (deterministic)'} — output: ${outputDir}`);
 
   const { transcript, checklist } = await dogfoodSelfRun({ agent, outputDir, log });
   log('');
@@ -366,6 +383,9 @@ export async function main(argv = process.argv.slice(2), { env = process.env, lo
   log(`doc-trio: ${transcript.docTrio.dir}`);
   log(`well-formedness gate: pass=${transcript.gate.pass} (exit ${transcript.gate.status}, ${transcript.gate.total_waves} wave[s])`);
   log(`convergence: finding r${transcript.convergence.findingRound?.round} → dry r${transcript.convergence.dryRound?.round}; HALT/resume at "${transcript.haltResume.pendingAction}"`);
+  // Substrate provenance is DERIVED from the families ACTUALLY reached (never hardcoded): a
+  // genuine cross-family run reports [claude, gemini]; a Gemini-absent run honestly reports [claude].
+  if (live && tracker) log(`substrate families reached: [${tracker.families().join(', ')}] (verification seats = Gemini; steering/drafting = Claude)`);
   return checklist.allPass ? 0 : 1;
 }
 

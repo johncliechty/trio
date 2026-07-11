@@ -1,203 +1,306 @@
-// enhanced.mjs — Crucible's cross-model ENHANCED mode (Wave 9).
+// enhanced.mjs — Crucible's CROSS-FAMILY verification seam (Wave W6 — RETIRED shim).
 //
-// MASTER-PLAN §10 draws two substrate modes. Wave 3 built the per-role STAMP and an
-// INJECTABLE probe seam on the Judge; Wave 9 binds the REAL capability-binding and
-// adds the Synthesizer's reasoning-strength selection, so a run can actually upgrade
-// independence when extra model families are reachable — and degrade-and-stamp when
-// they are not.
+// HISTORY / RETIREMENT. Through Wave 9 this module was a COMPETING cross-model path: a
+// hardcoded model registry whose Gemini entry was a non-current, API-style id, provisioned
+// via an API-key env probe + a child-process capability spawn. That violated two
+// standing rules — the no-phantom-model rule (never name an API-style / non-current id;
+// `agy` silently degrades those to Flash) and the single-seam rule (one shared role
+// router, never a bespoke per-module backend). It was ALSO never wired into the live
+// path (only its own test imported it). Wave W6 RETIRES it: this file is now a thin shim
+// over the trio's shared `makeRoleRoutedAgent` (drivers/index.mjs) + the gemini-cli tier
+// ladder (`resolveGeminiModel`), building Crucible's live agent with the machine-wide 5:1
+// split — verification seats (shark / judge) on a real Gemini `agy -p` seat, steering /
+// drafting (synthesizer / stage authors / default) on Claude.
 //
-//   - DEFAULT mode (subscription-only, like Foreman): only Claude is reachable. The
-//     Judge is a same-model fresh-context persona; the Synthesizer is Claude
-//     extended-thinking. Both are STAMPED so provenance is honest.
-//   - ENHANCED mode (activated when extra model CLIs / API keys are reachable):
-//       · the lock Judge is the strongest model from a family OTHER than the plan's
-//         author — FAMILY-DIVERSE (Claude-authored ⇒ Gemini → GPT → Grok), removing
-//         same-family self-preference at the single highest-leverage decision point;
-//       · the Synthesizer takes the strongest REASONING model (Gemini Deep Think →
-//         o-series → Claude extended-thinking).
+// The model for the Gemini seats is left UNPINNED so the gemini-cli driver's TRIO_TIER
+// ladder resolves it (heavy → "Gemini 3.1 Pro (High)", standard → "Gemini 3.5 Flash
+// (Medium)") — NEVER an API-style id. There is no hardcoded model registry, no API-key env
+// probe, and no child-process capability spawn here anymore.
 //
-// Capability-binding is TRY-AND-OBSERVE (the researchPrime idiom, mirrored from
-// research.mjs): a family is reachable if its API key env var is set OR its CLI
-// answers a probe. The probe transport is INJECTED so tests detect present-vs-absent
-// with zero subprocesses. Missing keys NEVER block a run — it degrades to Default and
-// says so (the stamp's `cross_model:false`).
-
-import { spawnSync } from 'node:child_process';
+// Reference topology (JUST-BUILT, mirrored): researchPrime/bin/live-round-agent.mjs (the
+// W5 live cross-family round agent). The four load-bearing behaviors are identical:
+//   1. ROLE-ROUTED AGENT via makeRoleRoutedAgent — shark/judge → gemini-cli (tier-resolved
+//      model), synthesizer/default → claude. The injected-agent SEAM is preserved:
+//      instrumentCrucibleAgent wraps ANY agent (a stub in tests, the live role-routed
+//      agent in production), so no live call is needed to exercise tracking + the cap.
+//   2. REACHED-FAMILY TRACKER — records the distinct family of every dispatch that
+//      ACTUALLY returned (attested), so a run's substrate provenance is DERIVED from what
+//      was reached, never a hardcoded list.
+//   3. CONCURRENCY CAP — a counting semaphore bounds concurrent LIVE-GEMINI (agy)
+//      dispatches to CRUCIBLE_GEMINI_MAX_CONCURRENCY (default 2, hard ceiling 3: agy OOMs
+//      above ~3). Only gemini-family calls are gated; Claude dispatches run unbounded.
+//   4. HONEST DEGRADE — a failed / unattested Gemini call throws (the W0 gemini-cli seam's
+//      HaltError on non-attested) and is NEVER recorded as reached and NEVER retried onto
+//      Claude; it propagates so the run HALTs. The routing guard additionally refuses to
+//      even BUILD an agent whose verification role would resolve to the drafter family
+//      (fail-closed against self-review).
+//
+// Stdlib + the shipped crucible/trio seams only. The trio role-routed agent is a LAZY
+// dynamic import (live path only), so importing THIS module never loads the trio and never
+// spawns a subprocess — the deterministic test injects a stub through instrumentCrucibleAgent.
 
 import { HaltError } from './crucible-lib.mjs';
-import { JUDGE_ROLE, stampRole, selectJudgeModel } from './judge.mjs';
-import { SYNTHESIZER_ROLE } from './synthesizer.mjs';
 
-// ---------------------------------------------------------------------------
-// The cross-model registry — the extra families Enhanced mode can bind.
-//
-// `reasoning_rank` orders the Synthesizer choice (§10: Gemini Deep Think → o-series
-// → Claude extended-thinking). `judge_rank` orders the family-diverse Judge choice
-// (§10: Claude-authored ⇒ Gemini → GPT → Grok). Claude is NOT in this registry — it
-// is the always-present substrate, added separately by `detectReachableModels`.
-// ---------------------------------------------------------------------------
+/** The drafter family (who AUTHORS the plan / drafts / revisions) in Crucible's topology. */
+export const DRAFTER_FAMILY = 'claude';
 
-export const MODEL_REGISTRY = [
-  { family: 'gemini', model: 'gemini-deep-think', reasoning_rank: 3, judge_rank: 3, detect: ['gemini'], envKeys: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'] },
-  { family: 'gpt', model: 'o-series', reasoning_rank: 2, judge_rank: 2, detect: ['codex', 'chatgpt'], envKeys: ['OPENAI_API_KEY'] },
-  { family: 'grok', model: 'grok', reasoning_rank: 1, judge_rank: 1, detect: ['grok'], envKeys: ['XAI_API_KEY', 'GROK_API_KEY'] },
-];
+/** The VERIFICATION roles — the seats that, under the 5:1 split, route to the cross-family
+ *  (Gemini) backend. In Crucible these are exactly the adversarial seats: the Shark roster
+ *  (bin/shark-tank.mjs, role:'shark') and the context-free deciding Judge (bin/judge.mjs,
+ *  role:'judge'). The Synthesizer is the STEERING seat and stays on Claude (it steers +
+ *  runs the anti-anchoring fresh-eyes pass; it never verifies). */
+export const VERIFICATION_ROLES = Object.freeze(['shark', 'judge']);
 
-/**
- * Claude — the always-reachable substrate (Default mode runs on this alone).
- * 2026-07 doctrine change (John): the Synthesizer — the persistent steering brain —
- * PINS to frontier Claude (claude-fable-5), so Claude's `reasoning_rank` now tops the
- * registry. Cross-family independence stays where it belongs: the lock JUDGE remains
- * family-diverse (Claude-authored ⇒ Gemini first), i.e. Gemini verifies, Claude steers.
- */
-export const CLAUDE_SUBSTRATE = { family: 'claude', model: 'claude-fable-5', reasoning_rank: 4, judge_rank: 0, via: 'substrate' };
+/** The DEFAULT live route table: verification roles → the Gemini HOST backend (`gemini-cli`,
+ *  the W0 live `agy -p` driver with served-model attestation); synthesizer/default → Claude.
+ *  The model is left UNPINNED so the gemini-cli ladder resolves it from TRIO_TIER — never an
+ *  API-style id (agy silently degrades those to Flash). */
+export const DEFAULT_CRUCIBLE_ROUTES = Object.freeze({
+  shark: { driver: 'gemini-cli' },
+  judge: { driver: 'gemini-cli' },
+  synthesizer: { driver: 'claude' },
+  default: { driver: 'claude' },
+});
 
-// ---------------------------------------------------------------------------
-// Try-and-observe capability binding.
-// ---------------------------------------------------------------------------
+/** The SINGLE-FAMILY (replay / Gemini-absent) route table: every role → Claude. A run wired
+ *  with this honestly reaches only ['claude']; the routing guard REJECTS it for verification
+ *  (all-Claude verification is self-review), so it is only for a non-adversarial replay. */
+export const SINGLE_FAMILY_ROUTES = Object.freeze({ default: { driver: 'claude' } });
 
-/**
- * Default CLI probe: try-and-observe whether `cmd --version` runs. ENOENT (no such
- * CLI) and any spawn error are observed as "not reachable" (false) — never thrown,
- * so a missing CLI silently degrades the run to Default mode (MASTER-PLAN §10).
- *
- * @param {string} cmd
- * @returns {boolean}
- */
-export function defaultProbeCli(cmd) {
-  try {
-    const r = spawnSync(cmd, ['--version'], { encoding: 'utf8', timeout: 5000 });
-    return !r.error && (r.status === 0 || r.status === null && !!r.stdout);
-  } catch {
-    return false;
+/** The env var + safe default + hard ceiling for the live-Gemini concurrency cap. agy OOMs
+ *  above ~3 concurrent `agy -p` children, so the ceiling is 3 and the default is a
+ *  conservative 2 (within Crucible's ≤2–3 verification-seat budget). */
+export const GEMINI_CAP_ENV = 'CRUCIBLE_GEMINI_MAX_CONCURRENCY';
+export const DEFAULT_GEMINI_CAP = 2;
+export const MAX_GEMINI_CAP = 3;
+
+/** Thrown when a VERIFICATION role would resolve to the DRAFTER family (self-review). A named
+ *  HaltError subclass so the engine treats it as a HALT-for-human and the caller/test can
+ *  assert the run HALTs rather than silently self-reviewing on the drafter's own model. */
+export class SelfReviewHalt extends HaltError {
+  constructor(role, resolvedFamily, drafterFamily, driver) {
+    super(
+      `self-review HALT: verification role ${JSON.stringify(role)} resolves to driver ${JSON.stringify(driver)} ` +
+        `(family ${JSON.stringify(resolvedFamily)}) which is the DRAFTER family ${JSON.stringify(drafterFamily)} — ` +
+        `a verification seat MUST resolve to a NON-drafter family (never self-review).`,
+      `route ${JSON.stringify(role)} to a cross-family backend (e.g. driver 'gemini-cli') or fix routes.default.`,
+    );
+    this.name = 'SelfReviewHalt';
+    this.role = role;
+    this.resolved_family = resolvedFamily;
+    this.drafter_family = drafterFamily;
+    this.driver = driver;
   }
 }
 
+/** Map a trio driver name to its model FAMILY (the leading token — STRICT prefix, never a
+ *  substring, so 'claude-…-gemini-fallback' stamps claude, not gemini). Returns null for an
+ *  empty/unknown driver so the routing guard fails CLOSED (an unverifiable family is unsafe). */
+export function familyFromDriver(driver) {
+  const t = String(driver ?? '').trim().toLowerCase();
+  if (!t) return null;
+  if (t.startsWith('gemini')) return 'gemini';
+  if (t.startsWith('claude')) return 'claude';
+  if (t.startsWith('openai') || t.startsWith('gpt')) return 'openai';
+  if (t.startsWith('grok')) return 'grok';
+  return t.split(/[\s\-_]/)[0] || null;
+}
+
+/** The role KEY for an `agent(prompt, opts)` call — identical resolution to makeRoleRoutedAgent:
+ *  `opts.role` else the label prefix before ':' / '#' / '.' / whitespace, lowercased. */
+export function resolveRoleKey(opts = {}) {
+  return String(opts.role || opts.label || '').split(/[:#.\s]/)[0].toLowerCase();
+}
+
+/** The FAMILY a given role resolves to under a route table (route[role] else route.default),
+ *  via familyFromDriver. Mirrors makeRoleRoutedAgent's own selection. Returns null when neither
+ *  the role nor default names a resolvable driver. */
+export function familyFromRoute(routes = {}, role = '') {
+  const route = routes[role] || routes.default || {};
+  return familyFromDriver(route.driver || null);
+}
+
 /**
- * Detect which model families are reachable (try-and-observe). Claude is always
- * present (the substrate). Each registry family is reachable if an API key is set OR
- * its CLI answers the probe; the result records HOW (`via: 'api-key' | 'cli'`).
- *
- * @param {object}   [o]
- * @param {object}   [o.env=process.env]
- * @param {Function} [o.probeCli=defaultProbeCli]   injectable CLI probe (tests stub it)
- * @param {Function} [o.log=()=>{}]
- * @returns {Array<{family:string,model:string,reasoning_rank:number,judge_rank:number,via:string}>}
+ * ROUTING GUARD (behavior 4, fail-closed). Assert EVERY verification role resolves to a
+ * NON-drafter family under `routes`. HALTs (SelfReviewHalt) the moment any verification seat
+ * would resolve to the drafter family OR to an unverifiable/empty driver — so a self-review
+ * agent can never even be built.
+ * @param {{routes?:object, drafterFamily?:string, roles?:string[]}} [o]
+ * @returns {Object<string,string>} role → resolved cross-family, on pass
  */
-export function detectReachableModels({ env = process.env, probeCli = defaultProbeCli, log = () => {} } = {}) {
-  const reachable = [{ ...CLAUDE_SUBSTRATE }];
-  for (const entry of MODEL_REGISTRY) {
-    const keyHit = (entry.envKeys || []).find((k) => env && env[k]);
-    const cliHit = !keyHit && (entry.detect || []).find((cmd) => probeCli(cmd));
-    if (keyHit || cliHit) {
-      const via = keyHit ? 'api-key' : 'cli';
-      reachable.push({ family: entry.family, model: entry.model, reasoning_rank: entry.reasoning_rank, judge_rank: entry.judge_rank, via });
-      log(`enhanced: ${entry.family} reachable via ${via}${keyHit ? ` (${keyHit})` : ` (${cliHit})`}`);
+export function assertCrossFamilyRouting({ routes = {}, drafterFamily = DRAFTER_FAMILY, roles = VERIFICATION_ROLES } = {}) {
+  const drafter = String(drafterFamily ?? '').trim().toLowerCase();
+  const resolved = {};
+  for (const role of roles) {
+    const route = routes[role] || routes.default || {};
+    const driver = route.driver || null;
+    const family = familyFromDriver(driver);
+    if (!family || family === drafter) {
+      throw new SelfReviewHalt(role, family, drafter, driver);
     }
+    resolved[role] = family;
   }
-  if (reachable.length === 1) log('enhanced: only Claude reachable — Default (subscription-only) mode');
-  return reachable;
+  return resolved;
 }
 
-// ---------------------------------------------------------------------------
-// Cross-model selection — the Judge probe + the Synthesizer selector.
-// ---------------------------------------------------------------------------
+/** Resolve the live-Gemini concurrency cap: `CRUCIBLE_GEMINI_MAX_CONCURRENCY` clamped to
+ *  [1, 3] (agy OOMs above ~3), default 2. A non-integer / out-of-range env value falls back. */
+export function resolveGeminiCap(env = process.env) {
+  const raw = Number.parseInt(env[GEMINI_CAP_ENV], 10);
+  if (!Number.isInteger(raw) || raw < 1) return DEFAULT_GEMINI_CAP;
+  return Math.min(raw, MAX_GEMINI_CAP);
+}
 
 /**
- * Build the cross-model probe the Judge consumes (`bin/judge.mjs` `selectJudgeModel`'s
- * `probe`): it surfaces the strongest reachable model from a family OTHER than the
- * plan's author (family-diverse, §10), or null when none is reachable ⇒ the Judge
- * falls back to the same-model persona (Default). Wave 3 left this seam injectable;
- * this is its real binding.
- *
- * @param {Array}  reachable                 detectReachableModels() output
- * @param {string} [authorFamily='claude']   the family that AUTHORED the plan
- * @returns {() => ({model:string,family:string}|null)}
+ * A minimal in-process counting semaphore (behavior 3). `acquire()` resolves once a slot is
+ * free (FIFO for waiters); `release()` frees a slot and admits the next waiter. No timers, no
+ * I/O — purely deterministic, so the concurrency cap is testable without any real subprocess.
+ * @param {number} max  slots (integer >= 1)
  */
-export function makeCrossModelProbe(reachable = [], authorFamily = 'claude') {
-  return () => {
-    const diverse = reachable
-      .filter((m) => m.family !== authorFamily)
-      .sort((a, b) => (b.judge_rank ?? 0) - (a.judge_rank ?? 0));
-    return diverse.length ? { model: diverse[0].model, family: diverse[0].family } : null;
+export function makeSemaphore(max) {
+  if (!Number.isInteger(max) || max < 1) {
+    throw new TypeError('makeSemaphore(max): max must be an integer >= 1');
+  }
+  let active = 0;
+  const waiters = [];
+  return {
+    acquire() {
+      return new Promise((resolve) => {
+        if (active < max) { active += 1; resolve(); }
+        else waiters.push(resolve);
+      });
+    },
+    release() {
+      if (active <= 0) return;
+      const next = waiters.shift();
+      if (next) next(); // hand the just-freed slot straight to the next waiter (active unchanged)
+      else active -= 1;
+    },
+    get active() { return active; },
+    get max() { return max; },
   };
 }
 
 /**
- * Select the Synthesizer's model by REASONING strength across ALL reachable families
- * (Claude included — the 2026-07 doctrine pins the steering role to frontier Claude,
- * which now carries the top `reasoning_rank`). A non-Claude selection would stamp
- * `enhanced`/cross-model; the Claude selection stamps `default` (cross_model:false),
- * keeping provenance honest either way. Same shape as `selectJudgeModel`.
- *
- * @param {object} [o]
- * @param {Array}  [o.reachable=[]]   detectReachableModels() output
- * @returns {{model:string,family:string,mode:string,reachable:boolean}}
+ * A per-run REACHED-FAMILY tracker (behavior 2). Records the distinct model families that
+ * ACTUALLY ran (an agent dispatch that returned attested). `families()` is the honest
+ * substrate provenance — never a hardcoded list.
+ * @param {Iterable<string>} [seed=[]]  optional pre-seeded families (e.g. a known drafter)
  */
-export function selectSynthesizerModel({ reachable = [] } = {}) {
-  const ranked = [...reachable]
-    .sort((a, b) => (b.reasoning_rank ?? 0) - (a.reasoning_rank ?? 0));
-  const top = ranked[0];
-  if (top && top.family !== 'claude') {
-    return { model: top.model, family: top.family, mode: 'enhanced', reachable: true };
-  }
-  // Frontier Claude does the reasoning (fully functional; the pinned steering seat).
-  return { model: CLAUDE_SUBSTRATE.model, family: 'claude', mode: 'default', reachable: false };
+export function makeReachedFamilyTracker(seed = []) {
+  const reached = new Set();
+  const add = (f) => { if (f) reached.add(String(f).trim().toLowerCase()); };
+  for (const f of seed || []) add(f);
+  return {
+    note(family) { add(family); },
+    families() { return [...reached].sort(); },
+    has(family) { return reached.has(String(family ?? '').trim().toLowerCase()); },
+    get size() { return reached.size; },
+  };
 }
 
-// ---------------------------------------------------------------------------
-// Provisioning — select BOTH roles from one reachability scan and stamp each.
-// ---------------------------------------------------------------------------
-
 /**
- * Provision the Judge and the Synthesizer from a reachability scan, returning each
- * role's selection + per-role STAMP and the overall substrate mode. Graceful
- * degrade is built in: when nothing different-family/reasoning is reachable, each
- * role falls to its Default (same-model) form and is stamped `cross_model:false` —
- * "missing keys never block a run; it degrades to Default and says so" (§10).
+ * Wrap ANY injected `agent(prompt, opts)` so that, per dispatch:
+ *   • the call's role → family is resolved from `routes` (matching makeRoleRoutedAgent's choice);
+ *   • a GEMINI-family call acquires a slot from the shared gemini semaphore BEFORE dispatch and
+ *     releases it after (the concurrency cap — behavior 3); Claude calls are ungated;
+ *   • on a SUCCESSFUL return the family is recorded as REACHED (behavior 2). A THROW (the W0
+ *     seam's HaltError on a non-attested / down Gemini) is NEVER recorded and NEVER caught — it
+ *     propagates so the run HALTs honestly, and the slot is released in `finally` (behavior 4).
+ *
+ * This is the injected-agent SEAM: `agent` can be a deterministic stub (tests) or the live
+ * role-routed agent (production). Nothing here spawns a process.
  *
  * @param {object} o
- * @param {Array}  o.reachable                  detectReachableModels() output
- * @param {string} [o.authorFamily='claude']    the family that AUTHORED the plan
- * @returns {{mode:string, reachable:Array, judge:{selection:object,stamp:object},
- *            synthesizer:{selection:object,stamp:object}}}
+ * @param {Function} o.agent                       the underlying agent(prompt, opts) (stub or live)
+ * @param {object}   [o.routes=DEFAULT_CRUCIBLE_ROUTES]
+ * @param {object}   o.tracker                      a makeReachedFamilyTracker()
+ * @param {object}   [o.geminiSemaphore]            a makeSemaphore(cap); built from o.geminiCap if omitted
+ * @param {number}   [o.geminiCap]                  cap for the internally-built semaphore
+ * @returns {(prompt:string, opts?:object)=>Promise<any>}
  */
-export function provisionRoles({ reachable, authorFamily = 'claude' } = {}) {
-  if (!Array.isArray(reachable)) {
-    throw new HaltError('provisionRoles requires a reachable[] scan', 'pass detectReachableModels() output');
+export function instrumentCrucibleAgent({
+  agent,
+  routes = DEFAULT_CRUCIBLE_ROUTES,
+  tracker,
+  geminiSemaphore = null,
+  geminiCap,
+} = {}) {
+  if (typeof agent !== 'function') {
+    throw new TypeError('instrumentCrucibleAgent: an injected agent(prompt, opts) is required');
   }
+  if (!tracker || typeof tracker.note !== 'function' || typeof tracker.families !== 'function') {
+    throw new TypeError('instrumentCrucibleAgent: a reached-family tracker (makeReachedFamilyTracker()) is required');
+  }
+  const sem = geminiSemaphore
+    || makeSemaphore(Number.isInteger(geminiCap) && geminiCap >= 1 ? Math.min(geminiCap, MAX_GEMINI_CAP) : DEFAULT_GEMINI_CAP);
 
-  const judgeSel = selectJudgeModel({ authorFamily, probe: makeCrossModelProbe(reachable, authorFamily) });
-  const synthSel = selectSynthesizerModel({ reachable });
-
-  const judgeStamp = stampRole({ role: JUDGE_ROLE, model: judgeSel.model, family: judgeSel.family, mode: judgeSel.mode, reachable: judgeSel.reachable });
-  const synthStamp = stampRole({ role: SYNTHESIZER_ROLE, model: synthSel.model, family: synthSel.family, mode: synthSel.mode, reachable: synthSel.reachable });
-
-  // The run is Enhanced iff at least one role genuinely bound a cross-model upgrade.
-  const mode = judgeStamp.cross_model || synthStamp.cross_model ? 'enhanced' : 'default';
-
-  return {
-    mode,
-    reachable,
-    judge: { selection: judgeSel, stamp: judgeStamp },
-    synthesizer: { selection: synthSel, stamp: synthStamp },
+  return async (prompt, opts = {}) => {
+    const role = resolveRoleKey(opts);
+    const family = familyFromRoute(routes, role);
+    const gated = family === 'gemini';
+    if (gated) await sem.acquire();
+    try {
+      const out = await agent(prompt, opts);
+      // Reached ONLY on a successful (attested) return — a thrown HaltError below is never
+      // recorded, so a failed/unavailable Gemini call can never inflate the reached families.
+      tracker.note(family);
+      return out;
+    } finally {
+      if (gated) sem.release();
+    }
   };
 }
 
 /**
- * Convenience: detect reachable models, then provision both roles. The single entry
- * point the orchestrator calls at stage start. Returns the provisioning plus the
- * raw reachability scan so the run can log/stamp exactly what was bound.
- *
- * @param {object}   [o]
- * @param {string}   [o.authorFamily='claude']
- * @param {object}   [o.env=process.env]
- * @param {Function} [o.probeCli=defaultProbeCli]
- * @param {Function} [o.log=()=>{}]
+ * Resolve the tier-selected Gemini model LABEL for the verification seats — a thin passthrough
+ * to the gemini-cli driver's TRIO_TIER ladder (`resolveGeminiModel`). Exposed so a caller / log
+ * can PREVIEW which agy label the shark/judge seats will run under, WITHOUT ever pinning an
+ * API-style id. LAZY import so this module stays trio-free at import time.
+ * @param {object} [o]
+ * @returns {Promise<string>} the resolved agy model LABEL (e.g. "Gemini 3.5 Flash (Medium)")
  */
-export function detectAndProvision({ authorFamily = 'claude', env = process.env, probeCli = defaultProbeCli, log = () => {} } = {}) {
-  const reachable = detectReachableModels({ env, probeCli, log });
-  const provisioned = provisionRoles({ reachable, authorFamily });
-  log(`enhanced: provisioned ${provisioned.mode} mode — Judge=${provisioned.judge.stamp.model} (cross-model:${provisioned.judge.stamp.cross_model}), Synthesizer=${provisioned.synthesizer.stamp.model} (cross-model:${provisioned.synthesizer.stamp.cross_model})`);
-  return provisioned;
+export async function resolveGeminiModel({ role = 'judge', env = process.env } = {}) {
+  const { resolveGeminiModel: resolve } = await import('../../drivers/gemini-cli.mjs');
+  return resolve({ role, env });
+}
+
+/**
+ * Build the LIVE role-routed Crucible agent (the 5:1 split: shark/judge → Gemini `agy -p`,
+ * synthesizer/default → Claude), instrumented with the reached-family tracker + the live-Gemini
+ * concurrency cap. LAZY dynamic import of the trio registry so importing this module never loads
+ * the trio. Runs the routing guard FIRST so a self-review route can never even be built. ENV:
+ * forces CRUCIBLE_AGENT_LIVE=1 (the trio-wide live gate the gemini-cli driver requires). NOT
+ * called by the deterministic test (which injects a stub through instrumentCrucibleAgent).
+ * @param {object} o
+ * @param {object}   [o.routes=DEFAULT_CRUCIBLE_ROUTES]
+ * @param {object}   [o.tracker]                    a makeReachedFamilyTracker() (built if omitted)
+ * @param {string}   [o.drafterFamily='claude']
+ * @param {object}   [o.env=process.env]
+ * @param {number}   [o.geminiCap]                  override the env-resolved cap
+ * @param {string}   [o.target]                     cwd / edit scope threaded to the backend
+ * @param {Function} [o.log]
+ * @returns {Promise<{agent:Function, tracker:object}>}
+ */
+export async function buildLiveCrucibleAgent({
+  routes = DEFAULT_CRUCIBLE_ROUTES,
+  tracker = makeReachedFamilyTracker([DRAFTER_FAMILY]),
+  drafterFamily = DRAFTER_FAMILY,
+  env = process.env,
+  geminiCap,
+  target,
+  log,
+} = {}) {
+  // Behavior 4 (fail-closed): never build a self-review agent.
+  assertCrossFamilyRouting({ routes, drafterFamily });
+  const cap = Number.isInteger(geminiCap) ? Math.min(geminiCap, MAX_GEMINI_CAP) : resolveGeminiCap(env);
+  const { makeRoleRoutedAgent } = await import('../../drivers/index.mjs');
+  const routed = makeRoleRoutedAgent({
+    routes,
+    env: { ...env, CRUCIBLE_AGENT_LIVE: '1' },
+    ...(target !== undefined ? { target } : {}),
+    ...(log !== undefined ? { log } : {}),
+  });
+  const agent = instrumentCrucibleAgent({ agent: routed, routes, tracker, geminiCap: cap });
+  return { agent, tracker };
 }

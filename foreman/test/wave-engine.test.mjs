@@ -564,3 +564,103 @@ test('production agent-driver seam maps an injected agent() to the driver contra
   assert.equal((await drv.fix(ctx, { artifact_path: '/p/.foreman/g.json' }, [])).note, 'agent fix complete');
   assert.throws(() => makeAgentDriver({}), TypeError);
 });
+
+// --- T10 (2026-07-11): transport failures degrade; the reviewer fan-out is stakes-gated ---
+
+function passingProject() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-t10-'));
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'test'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'src', 'calc.js'), 'export const add = (a, b) => a + b;\n');
+  fs.writeFileSync(path.join(dir, 'test', 'base.test.mjs'),
+    "import test from 'node:test';\nimport assert from 'node:assert/strict';\n" +
+    "import { add } from '../src/calc.js';\ntest('add', () => { assert.equal(add(1, 2), 3); });\n");
+  return dir;
+}
+// execute touches src so the vacuous guard passes; review behavior injectable per call.
+function t10Driver(reviewImpl) {
+  let calls = 0;
+  return {
+    driver: {
+      async execute(ctx) {
+        const f = path.join(ctx.projectDir, 'src', 'calc.js');
+        fs.writeFileSync(f, fs.readFileSync(f, 'utf8') + '// touched\n');
+        return { note: 'touch', citation: null };
+      },
+      async review(ctx, gate) { calls += 1; return reviewImpl(ctx, gate, calls); },
+      async fix() { return { note: 'no-op' }; },
+    },
+    reviewCalls: () => calls,
+  };
+}
+
+test('T10a: ONE transport-failed reviewer is dropped loudly; the wave still GOes on the survivor', async () => {
+  const dir = passingProject();
+  try {
+    const { driver } = t10Driver((ctx) => ctx.reviewerIndex === 0
+      ? { reviewer: 'r0', answerable: 'transport-failed', transport_failed: true, note: 'agy exit 1', findings: [] }
+      : { reviewer: 'r1', answerable: 'yes', claim: 'green', findings: [] });
+    const r = await runWave({
+      projectDir: dir, testCommand: 'node --test', wave: { n: 1, title: 'w', line: 1 }, totalWaves: 1,
+      planPath: 'PLAN.md', driver, reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(r.status, 'GO', 'a lone dead reviewer cannot sink a verified wave');
+    assert.equal(r.verdict, 'GO');
+    assert.ok(!r.haltReason, 'no transport/ambiguity halt fired for a single dead reviewer');
+  } finally { cleanup(dir); }
+});
+
+test('T10a: ALL reviewers transport-failed => transport HALT (nothing verified), not an ambiguity HALT', async () => {
+  const dir = passingProject();
+  try {
+    const { driver } = t10Driver(() =>
+      ({ reviewer: 'r', answerable: 'transport-failed', transport_failed: true, note: 'backend down', findings: [] }));
+    const r = await runWave({
+      projectDir: dir, testCommand: 'node --test', wave: { n: 1, title: 'w', line: 1 }, totalWaves: 1,
+      planPath: 'PLAN.md', driver, reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(r.status, 'HALT');
+    assert.match(r.haltReason, /review transport HALT/);
+    assert.match(r.haltReason, /nothing verified/);
+    assert.ok(!/ambiguity/.test(r.haltReason), 'a transport problem never masquerades as a plan problem');
+  } finally { cleanup(dir); }
+});
+
+test('T10a: a GENUINE answerable:no still halts as ambiguity (the §4.7 gate is untouched)', async () => {
+  const dir = passingProject();
+  try {
+    const { driver } = t10Driver(() =>
+      ({ reviewer: 'r', answerable: 'no', note: 'the plan does not define the expected rounding', findings: [] }));
+    const r = await runWave({
+      projectDir: dir, testCommand: 'node --test', wave: { n: 1, title: 'w', line: 1 }, totalWaves: 1,
+      planPath: 'PLAN.md', driver, reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(r.status, 'HALT');
+    assert.match(r.haltReason, /ambiguity HALT/);
+  } finally { cleanup(dir); }
+});
+
+test('T10b: ordinary mid-run wave runs a LEAN panel (1 reviewer); the terminal wave gets the full panel', async () => {
+  // mid-run: wave 1 of 2 -> 1 review call
+  let dir = passingProject();
+  try {
+    const { driver, reviewCalls } = t10Driver(() => ({ reviewer: 'r', answerable: 'yes', findings: [] }));
+    const r = await runWave({
+      projectDir: dir, testCommand: 'node --test', wave: { n: 1, title: 'w', line: 1 }, totalWaves: 2,
+      planPath: 'PLAN.md', driver, reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(r.status, 'GO');
+    assert.equal(reviewCalls(), 1, 'ordinary clean wave: second reviewer stakes-gated away');
+  } finally { cleanup(dir); }
+  // terminal: wave 2 of 2 -> full panel
+  dir = passingProject();
+  try {
+    const { driver, reviewCalls } = t10Driver(() => ({ reviewer: 'r', answerable: 'yes', findings: [] }));
+    const r = await runWave({
+      projectDir: dir, testCommand: 'node --test', wave: { n: 2, title: 'w', line: 1 }, totalWaves: 2,
+      planPath: 'PLAN.md', driver, reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(r.status, 'GO');
+    assert.equal(reviewCalls(), 2, 'terminal wave: full adversarial panel');
+  } finally { cleanup(dir); }
+});

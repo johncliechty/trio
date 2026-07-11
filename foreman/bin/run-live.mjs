@@ -214,8 +214,12 @@ async function agent(prompt, opts = {}) {
     obj = extractJson((await runClaude(strict, `${label}#retry`)).text);
   }
   if (!obj) {
-    emit(`   !! ${label} still unparseable — ABSTAIN (answerable:no) → engine HALTs for human review`);
-    return { answerable: 'no', note: `reviewer ${label} response was not parseable JSON after one retry — cannot verify findings; HALT for human review`, findings: [] };
+    // T10 (2026-07-11): an unparseable reply is a TRANSPORT failure, not a plan
+    // problem — it must never masquerade as the §4.7 "docs don't answer" ambiguity
+    // HALT (observed live: one agy hiccup halted a whole run). Marked so the engine
+    // DROPS this reviewer and proceeds with survivors; only ALL-failed halts.
+    emit(`   !! ${label} still unparseable after one retry — marking transport_failed (engine proceeds with surviving reviewers)`);
+    return { answerable: 'transport-failed', transport_failed: true, note: `reviewer ${label} response was not parseable JSON after one retry`, findings: [] };
   }
   return obj;
 }

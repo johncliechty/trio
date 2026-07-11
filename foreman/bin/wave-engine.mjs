@@ -963,26 +963,61 @@ export async function runWave(o) {
     // to read. Every GO still passes gate + full ≥2-agree adversarial review +
     // all §5 guards — unchanged. FOREMAN_REVIEW_ON_RED=1 restores the old
     // review-every-iteration behavior (A/B + non-regression seam).
+    // T10b (2026-07-11): the reviewer fan-out is STAKES-GATED. Exact-string ≥2-agree
+    // has never fired in a sampled live log ("0 agreed" every wave), so on an
+    // ordinary clean wave the second reviewer bought ~2-5 min + 1 call for near-zero
+    // verdict changes. Full panel where stakes are real: the TERMINAL wave, any wave
+    // that needed fix iterations, or FOREMAN_FULL_REVIEW=1 (restores always-full).
+    const fullPanel = process.env.FOREMAN_FULL_REVIEW === '1' ||
+      (wave?.n != null && totalWaves != null && wave.n === totalWaves) || iteration > 0;
+    const effectiveReviewers = fullPanel ? reviewerCount : Math.min(reviewerCount, 1);
+
     let reviews;
     if (!lastGate.green && process.env.FOREMAN_REVIEW_ON_RED !== '1' && iteration < fixIterCap) {
       reviews = [];
       steps.push(`▸ review skipped (gate RED, iter ${iteration}/${fixIterCap} — verdict already determined)`);
       log(`review: skipped — gate RED (reviewers can only block GREEN, §5); fix guidance = gate artifact`);
     } else if (reviewConcurrencyOn()) {
+      if (effectiveReviewers < reviewerCount) {
+        steps.push(`▸ review lean (${effectiveReviewers}/${reviewerCount} — ordinary mid-run wave; full panel on terminal/fix-iter waves)`);
+      }
       const settled = await Promise.allSettled(
-        Array.from({ length: reviewerCount }, (_, r) =>
+        Array.from({ length: effectiveReviewers }, (_, r) =>
           driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate)));
+      // T10a: a REJECTED reviewer call is a transport failure, not a plan problem.
       reviews = settled.map((s, r) => s.status === 'fulfilled' ? s.value : {
-        reviewer: `reviewer-${r}`, answerable: 'no',
-        note: `reviewer ${r} call rejected (${s.reason?.message || s.reason}) — cannot verify findings; HALT for human review`,
+        reviewer: `reviewer-${r}`, answerable: 'transport-failed', transport_failed: true,
+        note: `reviewer ${r} call rejected (${s.reason?.message || s.reason})`,
         findings: [],
       });
     } else {
+      if (effectiveReviewers < reviewerCount) {
+        steps.push(`▸ review lean (${effectiveReviewers}/${reviewerCount} — ordinary mid-run wave; full panel on terminal/fix-iter waves)`);
+      }
       reviews = [];
-      for (let r = 0; r < reviewerCount; r++) {
+      for (let r = 0; r < effectiveReviewers; r++) {
         reviews.push(await driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate));
       }
     }
+
+    // T10a (2026-07-11): DEGRADE, don't halt, on transport-failed reviewers. A lone
+    // reviewer cannot block anyway (≥2-agree), so halting the whole run because ONE
+    // reply didn't parse was fail-deadly (observed live: agy exit 1 nearly killed a
+    // green wave). Drop the failed seats loudly; HALT only when the ENTIRE panel
+    // failed (then nothing verified the wave — that is a real stop).
+    const transportFailed = reviews.filter((rv) => rv && rv.transport_failed);
+    if (transportFailed.length) {
+      if (transportFailed.length === reviews.length && reviews.length > 0) {
+        const reason = `review transport HALT: ALL ${reviews.length} reviewer(s) unreachable/unparseable — nothing verified this wave`;
+        steps.push(`✗ ${reason}`);
+        return finishHalt({ reason, recommend:
+          `check the reviewer backend (agy/claude transport), then re-invoke wave ${wave.n} — this is a transport problem, not a plan problem` });
+      }
+      steps.push(`▸ review degraded: ${transportFailed.length} reviewer(s) dropped (transport failure) — proceeding with ${reviews.length - transportFailed.length}`);
+      log(`review: ${transportFailed.length} transport-failed reviewer(s) dropped — ${transportFailed.map((rv) => rv.note).join(' · ')}`);
+      reviews = reviews.filter((rv) => !(rv && rv.transport_failed));
+    }
+
     // Ambiguity gate (§4.7): any reviewer answering "no" is a HALT. UNCHANGED —
     // this remains the bare hard-halt for "the docs don't answer this" (mere
     // ambiguity), and it is checked FIRST so F3 can never weaken it.

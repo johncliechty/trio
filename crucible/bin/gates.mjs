@@ -162,12 +162,25 @@ export function evaluateConvergenceGate({
   );
   if (unresolvedMajorDrift.length) reasons.push(`${unresolvedMajorDrift.length} unresolved MAJOR drift flag(s)`);
 
-  // The fresh-eyes pass must concur (when one was run). Anything but a 'lockable'
-  // lean is a non-concur and holds the lock.
-  const freshConcurs = !freshEyes || freshEyes.lean === 'lockable';
-  if (!freshConcurs) reasons.push(`fresh-eyes pass does not concur (lean=${freshEyes?.lean ?? '?'})`);
+  // T7 (2026-07-11): fresh-eyes is ADVISORY-unless-BLOCKER. The old rule made the
+  // lock a 3-of-3 unanimity (dry AND Judge AND fresh-eyes lean) — three lock-holders
+  // with no tie-break, which produced the observed live oscillation (findings
+  // 22→17→20 across 4 dry rounds, ~30 calls into the cap). Now a non-lockable lean
+  // HOLDS the lock only when it names a concrete BLOCKER-severity concern; a bare
+  // "not-lockable" vibe is recorded as advisory for the Judge and the human, not a
+  // veto. The Judge (cross-family when routed) + the dry round remain the deciders;
+  // the USER remains the final authority either way.
+  const freshBlockingConcerns = (freshEyes && freshEyes.lean !== 'lockable' && Array.isArray(freshEyes.concerns))
+    ? freshEyes.concerns.filter((c) => c && typeof c === 'object' && /^blocker$/i.test(String(c.severity ?? '')))
+    : [];
+  const freshHolds = freshBlockingConcerns.length > 0;
+  if (freshHolds) {
+    reasons.push(`fresh-eyes pass raises ${freshBlockingConcerns.length} BLOCKER concern(s) (lean=${freshEyes?.lean ?? '?'})`);
+  } else if (freshEyes && freshEyes.lean !== 'lockable') {
+    reasons.push(`advisory: fresh-eyes lean=${freshEyes?.lean ?? '?'} with no BLOCKER concern — recorded, not a veto`);
+  }
 
-  const modelSideLockable = dry && judgeLockable && unresolvedMajorDrift.length === 0 && freshConcurs;
+  const modelSideLockable = dry && judgeLockable && unresolvedMajorDrift.length === 0 && !freshHolds;
 
   if (!modelSideLockable) {
     return { verdict: 'NOT_CONVERGED', lockable: false, modelSideLockable: false, halted: false, reasons };
@@ -185,7 +198,9 @@ export function evaluateConvergenceGate({
       lockable: false,
       modelSideLockable: true,
       halted: true,
-      reasons: ['model-side lockable; awaiting the user (final authority) to approve the lock'],
+      // T7: advisory notes (e.g. a non-lockable fresh-eyes lean with no BLOCKER)
+      // ride along — recorded for the human, never silently dropped.
+      reasons: [...reasons, 'model-side lockable; awaiting the user (final authority) to approve the lock'],
       halt,
     };
   }

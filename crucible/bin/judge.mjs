@@ -89,6 +89,33 @@ export function selectJudgeModel({ authorFamily = 'claude', probe = defaultProbe
   return { model: authorFamily, family: authorFamily, mode: 'default', reachable: false };
 }
 
+/**
+ * T7 (2026-07-11): derive the Judge's selection from the run's ROLE ROUTES — the
+ * ground truth of where the judge role's calls actually dispatch. When a role-routed
+ * agent sends `role:'judge'` to a non-author family (the DEFAULT_CRUCIBLE_ROUTES
+ * shape: judge → gemini-cli), the stamp is honestly `enhanced`/cross_model — the old
+ * default probe returned null and UNDERSTATED a genuinely cross-family run as a
+ * same-model persona (and the observed live pathology was the inverse: the default
+ * Claude substrate judging its own family's plan across 4 held dry rounds).
+ *
+ * @param {object} o
+ * @param {?object} [o.routes=null]         role → { driver, model } (judge ?? default)
+ * @param {string}  [o.authorFamily='claude']
+ * @returns {{model:string,family:string,mode:string,reachable:boolean}}
+ */
+export function selectJudgeFromRoutes({ routes = null, authorFamily = 'claude' } = {}) {
+  const r = routes && (routes.judge ?? routes.default);
+  const drv = r && r.driver ? String(r.driver).trim().toLowerCase() : null;
+  const family = !drv ? null
+    : drv.startsWith('gemini') ? 'gemini'
+    : drv.startsWith('claude') ? 'claude'
+    : drv.split(/[-\s]/)[0] || null;
+  if (family && family !== authorFamily) {
+    return { model: (r.model || r.driver), family, mode: 'enhanced', reachable: true };
+  }
+  return { model: authorFamily, family: authorFamily, mode: 'default', reachable: false };
+}
+
 // ---------------------------------------------------------------------------
 // The Judge's decision schema + its context-free prompt.
 // ---------------------------------------------------------------------------
@@ -157,7 +184,7 @@ function judgePrompt({ northStar, findings, acceptanceCriteria, freshEyes }) {
  * @param {Function} [o.probeCrossModel=defaultProbeCrossModel]
  * @param {Function} [o.log=()=>{}]
  */
-export function makeJudge({ agent, authorFamily = 'claude', probeCrossModel = defaultProbeCrossModel, log = () => {} } = {}) {
+export function makeJudge({ agent, authorFamily = 'claude', probeCrossModel = defaultProbeCrossModel, routes = null, log = () => {} } = {}) {
   if (typeof agent !== 'function') {
     throw new HaltError(
       'makeJudge requires an agent() function',
@@ -168,7 +195,10 @@ export function makeJudge({ agent, authorFamily = 'claude', probeCrossModel = de
   // so the Judge's adjudication call inherits typed retry + round-aware idempotency.
   // Transparent on the success path (one inner call, opts unchanged).
   const reliableAgent = makeReliableAgent({ agent });
-  const selection = selectJudgeModel({ authorFamily, probe: probeCrossModel });
+  // T7: routes (where the judge role ACTUALLY dispatches) beat the probe when supplied.
+  const selection = routes
+    ? selectJudgeFromRoutes({ routes, authorFamily })
+    : selectJudgeModel({ authorFamily, probe: probeCrossModel });
   const stamp = stampRole({ role: JUDGE_ROLE, model: selection.model, family: selection.family, mode: selection.mode, reachable: selection.reachable });
 
   return {

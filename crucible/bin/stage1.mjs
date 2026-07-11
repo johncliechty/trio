@@ -477,6 +477,9 @@ async function reviseDraft({ agent, northStar, draft, verdict, direction, round,
  * @param {?object} [o.research=null]                 the Wave-5 coordinator
  * @param {?object} [o.synthesizer=null]              an injected Synthesizer (else built here)
  * @param {?object} [o.judge=null]                    an injected Judge (else built here)
+ * @param {?object} [o.routes=null]                   the run's role routes — lets the built Judge
+ *                                                    stamp enhanced/cross_model from where the
+ *                                                    judge role ACTUALLY dispatches (T7)
  * @param {string[]}[o.acceptanceCriteria=[]]         the Judge's oracle
  * @param {number}  [o.roundCap=5]                     §8 safety ceiling
  * @param {number}  [o.startRound=1]
@@ -494,6 +497,7 @@ export async function runMasterPlanLoop({
   research = null,
   synthesizer = null,
   judge = null,
+  routes = null,
   acceptanceCriteria = [],
   roundCap = 5,
   startRound = 1,
@@ -503,11 +507,15 @@ export async function runMasterPlanLoop({
 } = {}) {
   requireAgent(agent, 'runMasterPlanLoop');
   const synth = synthesizer || makeSynthesizer({ agent, northStar, log });
-  const jdg = judge || makeJudge({ agent, log });
+  // T7 (2026-07-11): when the caller supplies the run's ROUTES, the Judge's
+  // selection/stamp is DERIVED from where the judge role actually dispatches —
+  // a route to a non-author family stamps enhanced/cross_model honestly.
+  const jdg = judge || makeJudge({ agent, routes, log });
 
   let currentDraft = draft;
   let priorBlockerIds = [];
   let lastChangelog = null;   // the reviser's own changelog, fed to the next round's Sharks
+  let directed = false;       // has the Director ever spoken? (anti-anchoring spine needs one position)
   const rounds = [];
 
   for (let round = startRound; round < startRound + roundCap; round++) {
@@ -524,12 +532,12 @@ export async function runMasterPlanLoop({
       changelog: lastChangelog && lastChangelog.length ? lastChangelog.join('\n') : null,
     });
 
-    // The Synthesizer reads the round and issues direction (steers, never decides).
-    const direction = await synth.direct({ round, verdict, research: research?.forSynthesizer?.() ?? null });
-    rounds.push({ round, verdict, direction });
-
     if (!verdict.dry) {
-      // BLOCKED — record the blockers (anti-oscillation), fix the draft, loop.
+      // BLOCKED — the Synthesizer steers the revision (its one consumed output),
+      // record the blockers (anti-oscillation), fix the draft, loop.
+      const direction = await synth.direct({ round, verdict, research: research?.forSynthesizer?.() ?? null });
+      directed = true;
+      rounds.push({ round, verdict, direction });
       priorBlockerIds = [...new Set([...priorBlockerIds, ...verdict.blockers.map((b) => b.id)])];
       const rev = await reviseDraft({ agent, northStar, draft: currentDraft, verdict, direction, round, log });
       currentDraft = rev.draft;
@@ -537,7 +545,18 @@ export async function runMasterPlanLoop({
       continue;
     }
 
-    // DRY — run the anti-anchoring fresh-eyes cold pass BEFORE the lock (Wave 3).
+    // DRY — T7/T11 (2026-07-11): the Synthesizer call is SKIPPED on a round that
+    // locks — its direction is only ever consumed by the NEXT revision, so calling
+    // it unconditionally wasted one guaranteed call per converging loop. Exception:
+    // if the Director has never spoken (first-round-dry), take its single steer so
+    // the anti-anchoring reconcile below compares against a real standing position.
+    let direction = null;
+    if (!directed) {
+      direction = await synth.direct({ round, verdict, research: research?.forSynthesizer?.() ?? null });
+      directed = true;
+    }
+
+    // Run the anti-anchoring fresh-eyes cold pass BEFORE the lock (Wave 3).
     const cold = await freshEyesColdPass({ agent, transcripts: verdict.reviews, northStar, log });
     const oracle = freshEyesIsolationOracle({ cold, directorSnapshot: synth.snapshot() });
     const reconcile = reconcileFreshEyes({ directorPosition: synth.position(), freshEyes: cold.assessment });
@@ -545,8 +564,9 @@ export async function runMasterPlanLoop({
     // The Judge DECIDES from the injected evidence (Wave 3).
     const judgeVerdict = await jdg.decide({ northStar, findings: verdict.findings, acceptanceCriteria, freshEyes: cold.assessment, round });
 
-    // The convergence gate (Wave 4): dry-round + Judge + drift + fresh-eyes concur.
+    // The convergence gate (Wave 4): dry-round + Judge + drift + fresh-eyes (advisory-unless-BLOCKER, T7).
     const gate = evaluateConvergenceGate({ tally: verdict, judgeVerdict, freshEyes: cold.assessment, approved: false });
+    rounds.push({ round, verdict, direction });
     if (gate.modelSideLockable) {
       log(`stage1 loop: model-side convergence at round ${round} (${rounds.length} round(s) run)`);
       return {
@@ -566,9 +586,14 @@ export async function runMasterPlanLoop({
       };
     }
 
-    // Dry, but the Judge or fresh-eyes held the lock (e.g. a material divergence) —
-    // run one more challenge round.
+    // Dry, but the Judge or a BLOCKER-bearing fresh-eyes pass held the lock —
+    // run one more challenge round. The loop continues, so the Synthesizer's
+    // steer IS consumed here: take it now if this round skipped it (T7/T11).
     log(`stage1 loop: dry round ${round} held (${gate.reasons.join('; ') || reconcile.reason}) — challenge round`);
+    if (!direction) {
+      direction = await synth.direct({ round, verdict, research: research?.forSynthesizer?.() ?? null });
+      rounds[rounds.length - 1].direction = direction;
+    }
     priorBlockerIds = [...new Set([...priorBlockerIds, ...verdict.blockers.map((b) => b.id)])];
     const rev = await reviseDraft({ agent, northStar, draft: currentDraft, verdict, direction, round, log });
     currentDraft = rev.draft;

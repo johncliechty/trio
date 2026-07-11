@@ -195,14 +195,27 @@ test('convergence gate: an unresolved MAJOR drift flag holds the loop; a resolve
   assert.equal(ok.verdict, 'AWAITING_APPROVAL');
 });
 
-test('convergence gate: a non-concurring fresh-eyes pass holds the loop', () => {
-  const g = evaluateConvergenceGate({
+test('convergence gate (T7): fresh-eyes is advisory-unless-BLOCKER — a named BLOCKER concern holds, a bare lean does not', () => {
+  // A concrete BLOCKER-severity concern HOLDS the lock (fresh-eyes retains real teeth).
+  const holds = evaluateConvergenceGate({
     tally: { dry: true },
     judgeVerdict: { lockable: true, decision: 'CONVERGED' },
-    freshEyes: { lean: 'not-lockable' },
+    freshEyes: { lean: 'not-lockable', concerns: [{ severity: 'BLOCKER', note: 'phase 2 depends on an unbuilt API' }] },
   });
-  assert.equal(g.modelSideLockable, false);
-  assert.match(g.reasons.join(' '), /fresh-eyes pass does not concur/);
+  assert.equal(holds.modelSideLockable, false);
+  assert.match(holds.reasons.join(' '), /BLOCKER concern/);
+
+  // A bare non-lockable lean with NO named BLOCKER is ADVISORY — the old 3-of-3
+  // unanimity produced the observed live oscillation (22→17→20 over 4 dry rounds,
+  // ~30 calls into the cap). Dry + Judge decide; the user stays the final authority.
+  const advisory = evaluateConvergenceGate({
+    tally: { dry: true },
+    judgeVerdict: { lockable: true, decision: 'CONVERGED' },
+    freshEyes: { lean: 'not-lockable', concerns: [] },
+  });
+  assert.equal(advisory.modelSideLockable, true, 'a vibe without a named BLOCKER cannot veto');
+  assert.equal(advisory.verdict, 'AWAITING_APPROVAL', 'the user still gates the lock');
+  assert.match(advisory.reasons.join(' '), /advisory: fresh-eyes/, 'the divergence is recorded, not lost');
 });
 
 test('convergence gate: model-side lockable but unapproved ⇒ HALT for the user (final authority), not a self-lock', () => {

@@ -124,16 +124,31 @@ user is the final convergence authority**.
 **Tests:** `test/*.test.mjs`, auto-discovered by `test/index.mjs`. The gate is
 `node --test test/`.
 
-## How to invoke
+## How to invoke — the OPERATOR RUNBOOK (2026-07-11; a live session drives THIS, never an improvised protocol)
 
-1. **Run the engine.** Drive the stages through the `agent()` seam: scripted/stubbed
-   in tests, or the live `claude -p` sub-agent with `CRUCIBLE_AGENT_LIVE=1`.
-2. **Dogfood it deterministically** (no model, no billing): `node bin/self-run.mjs
-   [outputDir]`. It plans a fixture intent end-to-end, emits a Foreman-ready doc-trio
-   into the output dir, and prints the 5-gate checklist (exit 0 on a full pass).
-3. **Hand off to Foreman.** Stage 2 gates the handoff on Foreman's real
-   `node foreman/bin/locate-plan.mjs --json <dir>` (exit 0 required) — Crucible never
-   hands Foreman a malformed doc-trio.
+1. **Bind the live seam.** `CRUCIBLE_AGENT_LIVE=1`; build the cross-family agent via
+   `buildLiveCrucibleAgent()` (`bin/enhanced.mjs` — Gemini Sharks/Judge, Claude steering, the 5:1
+   split, Gemini cap 2). Pass its ROUTES into the loop (`runMasterPlanLoop({ ..., routes })`) so the
+   Judge's stamp derives from where the judge role ACTUALLY dispatches (T7) — the default same-model
+   Judge persona is the agy-down fallback, not the normal path.
+2. **Stage 0** → `runStage0`/protocol: complexity triage HALTs for depth confirmation; frame; candidate
+   North Star. **Gate ergonomics (John's locked preferences):** present the candidate North Star
+   VERBATIM IN THE MESSAGE BODY (never clipped into a dialog preview); if the user asked for research,
+   DELIVER IT BEFORE the lock ask; present decisions ONE AT A TIME, each with 30-second plain-English
+   context and a recommendation first.
+3. **Stage 1** → `runStage1({ agent, northStar, depth, routes, artifactsDir, ... })` — brainstorm →
+   triage → phased plan → Shark loop. On the round cap it HALTs WITH the best draft + open findings
+   attached and persisted (T5) — review those, never restart from zero.
+4. **Stage 2** → `runStage2({ agent, northStar, masterPlan, outputDir, depth, routes, ... })` —
+   decompose → loop → approval → emit + well-formedness gate → Foreman handoff. A cap HALT emits the
+   unapproved doc-trio to `<outputDir>/_unapproved-cap-draft` (gated, clearly not the handoff).
+5. **Dogfood deterministically** (no model, no billing): `node bin/self-run.mjs [outputDir]`.
+6. **LITE honesty note:** the user-confirmed LITE depth currently shrinks the round cap (5→2) only —
+   it does NOT yet collapse stages (a small task still pays ~18-20 calls + 4 gates). The stage-merged
+   LITE (≤6 calls, 2 gates) is planned, not built; do not promise it.
+
+Long runs emit the LOCKED global Status table every ~10 min unprompted (user-global AGENTS.md), and
+every real run writes a `journal/runs/` training record (Skill Foundry AGENTS.md "Run capture").
 
 ## Usage journal (sleep-loop feed — append after every REAL run)
 

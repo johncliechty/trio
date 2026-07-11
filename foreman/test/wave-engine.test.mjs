@@ -218,6 +218,105 @@ test('vacuous-GREEN guard: doc/data-only diff HALTs even when tests mention the 
   } finally { cleanup(dir); }
 });
 
+// --- T4 (2026-07-11): honest test-only path through the vacuous-GREEN guard ---
+// Live failure (Anchor-zombie-build 2026-06-28): terminal acceptance wave 10/10
+// HALTed "changed no source file reachable by an executed test" after 6 GO waves
+// — but a test-only wave's deliverable IS its tests, and the engine already held
+// the proof (inventory rose + the green gate ran the larger suite).
+
+function testOnlyProject() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-testonly-'));
+  fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
+  fs.mkdirSync(path.join(dir, 'test'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'src', 'calc.js'), 'export const add = (a, b) => a + b;\n');
+  fs.writeFileSync(path.join(dir, 'test', 'base.test.mjs'),
+    "import test from 'node:test';\nimport assert from 'node:assert/strict';\n" +
+    "import { add } from '../src/calc.js';\n" +
+    "test('add works', () => { assert.equal(add(1, 2), 3); });\n");
+  return dir;
+}
+
+test('T4 REGRESSION: an acceptance wave that only ADDS a test reaches GO (inventory rose + gate ran the larger suite)', async () => {
+  const dir = testOnlyProject();
+  try {
+    const wave = { n: 1, title: 'acceptance: end-to-end coverage', line: 1 };
+    const r = await runWave({
+      projectDir: dir, testCommand: 'node --test', wave, totalWaves: 1, planPath: 'PLAN.md',
+      driver: makeScriptedDriver({
+        repairs: [],
+        onExecute: async (ctx) => {
+          fs.writeFileSync(path.join(ctx.projectDir, 'test', 'acceptance.test.mjs'),
+            "import test from 'node:test';\nimport assert from 'node:assert/strict';\n" +
+            "import { add } from '../src/calc.js';\n" +
+            "test('acceptance: add end-to-end', () => { assert.equal(add(40, 2), 42); });\n");
+        },
+      }),
+      reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(r.status, 'GO', 'a genuine test-only deliverable must converge, not dead-stop');
+    assert.equal(r.gate.green, true);
+    assert.equal(r.gate.tap.tests, 2, 'the green gate executed the LARGER suite');
+  } finally { cleanup(dir); }
+});
+
+test('T4: a modify-only test wave HALTs untagged, GOes with a [test-only] title tag', async () => {
+  const editBaseTest = async (ctx) => {
+    const f = path.join(ctx.projectDir, 'test', 'base.test.mjs');
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('add(1, 2), 3', 'add(2, 2), 4'));
+  };
+  // untagged: no net-new tests -> the evidence bar fails -> HALT with the exact reason
+  let dir = testOnlyProject();
+  try {
+    const r = await runWave({
+      projectDir: dir, testCommand: 'node --test',
+      wave: { n: 1, title: 'tighten expectations', line: 1 }, totalWaves: 1, planPath: 'PLAN.md',
+      driver: makeScriptedDriver({ repairs: [], onExecute: editBaseTest }),
+      reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(r.status, 'HALT');
+    assert.match(r.haltReason, /test-only evidence bar did not pass/,
+      'the HALT explains exactly which leg failed');
+  } finally { cleanup(dir); }
+  // tagged: the human declared a modify-only test wave -> did-not-shrink + full gate suffices
+  dir = testOnlyProject();
+  try {
+    const r = await runWave({
+      projectDir: dir, testCommand: 'node --test',
+      wave: { n: 1, title: 'tighten expectations [test-only]', line: 1 }, totalWaves: 1, planPath: 'PLAN.md',
+      driver: makeScriptedDriver({ repairs: [], onExecute: editBaseTest }),
+      reviewerCount: 2, fixIterCap: 4,
+    });
+    assert.equal(r.status, 'GO', 'the [test-only] tag is the human channel for modify-only test waves');
+  } finally { cleanup(dir); }
+});
+
+test('T4 unit: the evidence bar stays conservative — a partial gate or a no-op wave still HALTs', () => {
+  const dir = testOnlyProject();
+  try {
+    const foremanDir = path.join(dir, '.foreman');
+    const extra = (over = {}) => ({
+      invBefore: { files: 1, tests: 1, asserts: 1, skips: 0 },
+      invNow: { files: 2, tests: 2, asserts: 2, skips: 0 },
+      gateTap: { tests: 2, pass: 2, fail: 0 }, waveTitle: '', ...over,
+    });
+    // full evidence -> accepted
+    assert.equal(_internals.checkVacuousGreen(dir, foremanDir, ['test/extra.test.mjs'], extra()), null);
+    // gate ran only a SUBSET of the new inventory -> conservative HALT
+    assert.match(_internals.checkVacuousGreen(dir, foremanDir, ['test/extra.test.mjs'],
+      extra({ gateTap: { tests: 1, pass: 1, fail: 0 } })) || '', /evidence bar did not pass/);
+    // inventory SHRANK -> even a [test-only] tag does not accept it
+    assert.match(_internals.checkVacuousGreen(dir, foremanDir, ['test/extra.test.mjs'],
+      extra({ invNow: { files: 1, tests: 0, asserts: 0, skips: 0 }, waveTitle: 'x [test-only]' })) || '',
+      /evidence bar did not pass/);
+    // a wave that changed NOTHING keeps the original F2-9 no-op HALT untouched
+    assert.match(_internals.checkVacuousGreen(dir, foremanDir, [], extra()) || '',
+      /changed no source file reachable/);
+    // and with NO evidence supplied (legacy 3-arg call) behavior is unchanged
+    assert.match(_internals.checkVacuousGreen(dir, foremanDir, ['test/extra.test.mjs']) || '',
+      /evidence bar did not pass|changed no source file reachable/);
+  } finally { cleanup(dir); }
+});
+
 test('finding identity: same finding from 2 reviewers gets agreement=2 and a stable id', () => {
   const f = { severity: 'MAJOR', file: 'src/calc.js', line: 17, rule: 'assertion-failed' };
   const merged = collectFindings([

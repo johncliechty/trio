@@ -18,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { readCheckpoint, writeCheckpointAtomic, newCheckpoint, HaltError } from '../bin/foreman-lib.mjs';
-import { runProject, _internals } from '../bin/project-engine.mjs';
+import { runProject, clearHaltedCheckpoint, _internals } from '../bin/project-engine.mjs';
 import { makeScriptedDriver } from '../bin/drivers/scripted-driver.mjs';
 
 const FIXTURE = path.resolve(import.meta.dirname, '../fixtures/canonical-project');
@@ -289,5 +289,59 @@ test('planResume unit: maps checkpoint state -> start wave', () => {
     // halted -> throws
     writeCheckpointAtomic(cpPath, { ...base, current_wave: 2, last_verdict: 'HALT', status: 'halted' });
     assert.throws(() => _internals.planResume(cpPath, 3), (e) => e instanceof HaltError);
+  } finally { cleanup(dir); }
+});
+
+// --- clear-halt: the human acknowledgment path out of a HALT (T2, 2026-07-11) ---
+// Previously go.ps1 appended a `--clear-halt` flag no code parsed, so every HALT
+// meant hand-editing foreman-checkpoint.json. clearHaltedCheckpoint flips
+// halted -> budget_stopped @ gate; resume then re-proves GREEN (never a backdoor).
+
+test('clearHaltedCheckpoint: halted -> budget_stopped @ gate, iteration preserved, planResume resumes at the wave', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-clearhalt-'));
+  try {
+    const cpPath = path.join(dir, 'foreman-checkpoint.json');
+    const base = newCheckpoint({ plan_path: 'p', total_waves: 3 });
+    writeCheckpointAtomic(cpPath, {
+      ...base, current_wave: 2, iteration: 2, intra_wave_step: 'fix',
+      last_verdict: 'HALT', status: 'halted', pending_action: 'vacuous-GREEN: wave changed no source file',
+    });
+
+    const r = clearHaltedCheckpoint(cpPath);
+    assert.equal(r.cleared, true);
+    assert.equal(r.wave, 2);
+    assert.match(r.clearedHalt, /vacuous-GREEN/);
+
+    const cp = readCheckpoint(cpPath);
+    assert.equal(cp.status, 'budget_stopped', 'cleared to the ordinary resumable stop state');
+    assert.equal(cp.intra_wave_step, 'gate', 'resume re-enters AT THE GATE (re-proves GREEN)');
+    assert.equal(cp.iteration, 2, 'remaining fix budget preserved');
+    assert.match(cp.pending_action, /halt cleared by human/, 'audit trail records the human clear');
+    assert.match(cp.pending_action, /vacuous-GREEN/, '...and what the halt was');
+
+    // planResume now continues instead of throwing: same wave, intra-wave seed at the gate.
+    const plan = _internals.planResume(cpPath, 3);
+    assert.equal(plan.startWave, 2, 'resume re-enters the halted wave');
+    assert.equal(plan.resumeFrom.intraStep, 'gate');
+    assert.equal(plan.resumeFrom.iteration, 2);
+  } finally { cleanup(dir); }
+});
+
+test('clearHaltedCheckpoint: idempotent no-op on non-halted checkpoints (safe to pass unconditionally)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-clearhalt-'));
+  try {
+    const cpPath = path.join(dir, 'foreman-checkpoint.json');
+    const base = newCheckpoint({ plan_path: 'p', total_waves: 3 });
+    for (const status of ['running', 'budget_stopped', 'done']) {
+      const before = { ...base, current_wave: 1, status, last_verdict: status === 'done' ? 'GO' : null };
+      writeCheckpointAtomic(cpPath, before);
+      const r = clearHaltedCheckpoint(cpPath);
+      assert.equal(r.cleared, false, `${status}: nothing to clear`);
+      assert.equal(r.status, status);
+      assert.deepEqual(readCheckpoint(cpPath), before, `${status}: checkpoint untouched`);
+    }
+    // A torn/invalid checkpoint still HALTs — clearing never guesses.
+    fs.writeFileSync(cpPath, '{ "torn": tru');
+    assert.throws(() => clearHaltedCheckpoint(cpPath), (e) => e instanceof HaltError);
   } finally { cleanup(dir); }
 });

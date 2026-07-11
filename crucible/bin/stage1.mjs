@@ -481,6 +481,9 @@ async function reviseDraft({ agent, northStar, draft, verdict, direction, round,
  * @param {number}  [o.roundCap=5]                     §8 safety ceiling
  * @param {number}  [o.startRound=1]
  * @param {?string} [o.artifactsDir=null]             Shark-Tank round artifacts dir
+ * @param {string}  [o.capPendingAction='stage1-round-cap']  the HALT's pending_action
+ *                                                    (Stage 2 reuses this loop under
+ *                                                    its own name)
  * @param {Function}[o.log=()=>{}]
  */
 export async function runMasterPlanLoop({
@@ -495,6 +498,7 @@ export async function runMasterPlanLoop({
   roundCap = 5,
   startRound = 1,
   artifactsDir = null,
+  capPendingAction = 'stage1-round-cap',
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runMasterPlanLoop');
@@ -572,10 +576,44 @@ export async function runMasterPlanLoop({
   }
 
   // The cap is a safety ceiling, not a success condition — HALT to the user (§8).
-  throw haltForHuman(
-    `Stage 1 hit the round cap (${roundCap}) without converging — the safety ceiling tripped`,
-    'stage1-round-cap',
+  //
+  // T5 (2026-07-11): the HALT no longer DISCARDS the run. The one full live run
+  // (zombie-hunter, journal 0001) burned ~30 model calls into this cap and
+  // emitted NOTHING — the user had to hand-stitch the emit path from exported
+  // internals; the journal itself proposed this fix. The BEST DRAFT + the open
+  // findings now (a) ride on the HaltError so the orchestrator/user always gets
+  // them, and (b) are persisted to artifactsDir when one is set. The user stays
+  // the convergence authority — this is still a HALT, never an auto-lock.
+  const lastRound = rounds.length ? rounds[rounds.length - 1] : null;
+  const openFindings = lastRound
+    ? (lastRound.verdict.findings || []).filter((f) => !f.demoted)
+    : [];
+  const bestDraft = {
+    draft: currentDraft,
+    roundsRun: rounds.length,
+    openFindings,
+    priorBlockerIds,
+    lastDirection: lastRound ? lastRound.direction : null,
+  };
+  if (artifactsDir) {
+    try {
+      fs.mkdirSync(artifactsDir, { recursive: true });
+      fs.writeFileSync(path.join(artifactsDir, 'BEST-DRAFT.md'), String(currentDraft));
+      fs.writeFileSync(path.join(artifactsDir, 'OPEN-FINDINGS.json'),
+        JSON.stringify(openFindings, null, 2) + '\n');
+      log(`loop cap: best draft + ${openFindings.length} open finding(s) persisted to ${artifactsDir}`);
+    } catch (e) {
+      log(`loop cap: could not persist best draft (${e.message}) — the HALT payload still carries it`);
+    }
+  }
+  const err = haltForHuman(
+    `hit the round cap (${roundCap}) without converging — the safety ceiling tripped; ` +
+      `the best draft (${rounds.length} round(s) of refinement) and ${openFindings.length} open ` +
+      `finding(s) are attached${artifactsDir ? ` and persisted to ${artifactsDir}` : ''} — nothing was discarded`,
+    capPendingAction,
   );
+  err.best_draft = bestDraft;
+  throw err;
 }
 
 // ---------------------------------------------------------------------------

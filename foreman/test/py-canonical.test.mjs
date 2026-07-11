@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { locateDocs, parseWaves, discoverTestCommand, readCheckpoint } from '../bin/foreman-lib.mjs';
+import { locateDocs, parseWaves, discoverTestCommand, normalizePytestGate, readCheckpoint, HaltError } from '../bin/foreman-lib.mjs';
 import { runWave, runGate, _internals } from '../bin/wave-engine.mjs';
 import { makeScriptedDriver } from '../bin/drivers/scripted-driver.mjs';
 
@@ -208,4 +208,70 @@ test('Phase 3d unit — looksLikePytest detects pytest output but NOT node TAP/s
   // node TAP / spec output must NOT be misclassified (keeps the JS path intact)
   assert.equal(_internals.looksLikePytest('# pass 3\n# fail 0\nok 1 - add'), false);
   assert.equal(_internals.looksLikePytest('ℹ tests 3\nℹ pass 3\n✔ add'), false);
+});
+
+// --- T3 (2026-07-11): trust the parsed summary; normalize pytest gates to -v ---
+// Live misroute (Anchor-zombie 2026-06-28): a genuine RED under `pytest -q`
+// (74 tests, 40 pass, 34 fail, exit 1) emitted NO per-test events, so the
+// "nothing ran" heuristic HALTed it as vacuous with a wrong recommendation
+// instead of routing it to the fix loop.
+
+test('T3 REGRESSION: a genuine pytest RED with a summary but NO per-test events (-q shape) is RED, not vacuous', () => {
+  const dir = tmpProjectNoTests();
+  try {
+    // Synthesize the -q output shape: a real summary banner, zero per-test events, exit 1.
+    const g = runGate({
+      projectDir: dir, foremanDir: path.join(dir, '.foreman'), wave: { n: 1 }, iteration: 0,
+      testCommand: 'cmd /c "echo ==== 34 failed, 40 passed in 2.53s ====& exit 1"',
+    });
+    assert.equal(g.green, false, 'a RED is still RED');
+    assert.equal(g.vacuous_reason, null,
+      'the parsed summary (40 passed/34 failed) proves tests RAN — never "nothing ran"');
+    assert.equal(g.tap.pass, 40);
+    assert.equal(g.tap.fail, 34);
+    assert.equal(g.exit_code, 1);
+  } finally { cleanup(dir); }
+});
+
+test('T3: pytest output with NO summary and NO events (true nothing-ran) is still vacuous', () => {
+  const dir = tmpProjectNoTests();
+  try {
+    const g = runGate({
+      projectDir: dir, foremanDir: path.join(dir, '.foreman'), wave: { n: 1 }, iteration: 0,
+      testCommand: 'cmd /c "echo ==== no tests ran in 0.01s ====& exit 5"',
+    });
+    assert.equal(g.green, false);
+    assert.match(g.vacuous_reason || '', /no real tests/,
+      'a genuinely empty run keeps the Phase 3d vacuous HALT');
+  } finally { cleanup(dir); }
+});
+
+test('T3 unit — normalizePytestGate: bare pytest gains -v; -q HALTs at contract time; -v and non-pytest untouched', () => {
+  // bare pytest -> -v inserted (the manifest-discovery self-sabotage fix)
+  assert.equal(normalizePytestGate('pytest', 'plan declaration').command, 'pytest -v');
+  assert.equal(normalizePytestGate('python -m pytest', 'plan').command, 'python -m pytest -v');
+  assert.equal(normalizePytestGate('pytest tests/unit', 'plan').command, 'pytest -v tests/unit',
+    '-v inserted after the pytest token, args preserved');
+  assert.equal(normalizePytestGate('pip install -e . && pytest tests/', 'plan').command,
+    'pip install -e . && pytest -v tests/', 'chained commands: -v lands on pytest, not the chain tail');
+  // already verbose -> untouched
+  assert.equal(normalizePytestGate('python -m pytest -v', 'plan').command, 'python -m pytest -v');
+  assert.equal(normalizePytestGate('pytest -vv tests/', 'plan').command, 'pytest -vv tests/');
+  // -q/--quiet -> HALT with the exact edit, BEFORE any execute call is spent
+  assert.throws(() => normalizePytestGate('pytest -q', 'plan declaration'), (e) => e instanceof HaltError);
+  assert.throws(() => normalizePytestGate('python -m pytest --quiet tests/', 'plan'), (e) => e instanceof HaltError);
+  // non-pytest commands pass through byte-identical
+  assert.equal(normalizePytestGate('node --test', 'plan').command, 'node --test');
+  assert.equal(normalizePytestGate('npm test', 'plan').command, 'npm test');
+});
+
+test('T3: manifest-discovered pytest gate is born with -v (never a gate the engine cannot pass)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-pydisc-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'pyproject.toml'), '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n');
+    const r = discoverTestCommand('# Plan with no test-command line\n', dir);
+    assert.equal(r.command, 'pytest -v');
+    // and a plan-declared -q is refused at discovery (contract) time
+    assert.throws(() => discoverTestCommand('test-command: `pytest -q`\n', dir), (e) => e instanceof HaltError);
+  } finally { cleanup(dir); }
 });

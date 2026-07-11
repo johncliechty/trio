@@ -84,6 +84,7 @@ export const SHARK_SCHEMA = {
         properties: {
           severity: { enum: ['BLOCKER', 'MAJOR', 'MINOR', 'NIT'] },
           topic: { type: 'string' },
+          claim_id: { type: ['string', 'null'] },
           section: { type: 'string' },
           tag: { enum: ['refinement', 'out-of-scope'] },
           traces_to_north_star: { enum: ['yes', 'no'] },
@@ -121,8 +122,25 @@ export function normalizeTopic(s) {
   return (kept.length ? kept : tokens).sort().join('-');
 }
 
+/**
+ * Canonicalize an EXPLICIT claim id (e.g. "C3", "claim-heartbeat-cadence"). Unlike
+ * `normalizeTopic` this preserves token ORDER — an id is an identifier, not prose.
+ */
+function normalizeClaimId(v) {
+  if (v == null) return '';
+  return String(v).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
 /** The stable, cross-Shark normalized id for a finding. */
 export function normalizeFindingId(f) {
+  // An EXPLICIT claim id BEATS the free-text topic slug. When the artifact under
+  // review carries stable claim ids (researchPrime's ledger), reviewers disputing
+  // the same claim must converge on ONE identity even when their topic wording
+  // differs — three reviewers slugging the same claim three ways each counted
+  // agreement:1 and produced a real false-DRY (researchPrime journal 0001,
+  // 2026-07-06). Identity precedence: claim_id > topic > location.
+  const claimKey = normalizeClaimId(f.claim_id ?? f.claimId);
+  if (claimKey) return `claim:${claimKey}`;
   const topicKey = normalizeTopic(f.topic);
   if (topicKey) return `topic:${topicKey}`;
   const scope = normalizeTopic(f.section || f.file) || 'plan';

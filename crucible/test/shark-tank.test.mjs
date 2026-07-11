@@ -73,6 +73,47 @@ test('normalizeFindingId keys on topic, collapsing cross-Shark wording', () => {
   assert.match(c, /^loc:/);
 });
 
+test('normalizeFindingId: an explicit claim_id BEATS the topic slug (identity precedence)', () => {
+  // Same claim, three different topic wordings — the exact shape of the
+  // 2026-07-06 false-DRY (researchPrime journal 0001).
+  const a = normalizeFindingId({ claim_id: 'C3', topic: 'heartbeat cadence is unsourced' });
+  const b = normalizeFindingId({ claim_id: 'C3', topic: 'no citation for the cadence claim' });
+  const c = normalizeFindingId({ claimId: ' C3 ', topic: 'cadence figure lacks evidence' });
+  assert.equal(a, b, 'same claim_id ⇒ same id regardless of topic wording');
+  assert.equal(a, c, 'claimId alias + case/whitespace-insensitive canonicalization');
+  assert.match(a, /^claim:/);
+  // Different claims stay distinct even with identical topics.
+  const d = normalizeFindingId({ claim_id: 'C4', topic: 'heartbeat cadence is unsourced' });
+  assert.notEqual(a, d, 'distinct claim ids ⇒ distinct identities');
+  // No claim_id ⇒ unchanged legacy behavior (topic slug).
+  const e = normalizeFindingId({ topic: 'heartbeat cadence is unsourced' });
+  assert.match(e, /^topic:/);
+  // Order preserved: claim ids are identifiers, not prose (no token sorting).
+  assert.notEqual(
+    normalizeFindingId({ claim_id: 'ab-cd' }),
+    normalizeFindingId({ claim_id: 'cd-ab' }),
+    'claim id token order is significant',
+  );
+});
+
+test('REGRESSION (false-DRY, journal 0001): three reviewers, same claim_id, divergent slugs ⇒ ≥2-agree fires', () => {
+  const reviews = [
+    { reviewer: 'Skeptic', findings: [
+      { severity: 'BLOCKER', claim_id: 'C3', topic: 'heartbeat cadence unsourced', traces_to_north_star: 'yes', criterion: 'C1' }] },
+    { reviewer: 'Contrarian', findings: [
+      { severity: 'BLOCKER', claim_id: 'C3', topic: 'cadence number has no citation', traces_to_north_star: 'yes', criterion: 'C1' }] },
+    { reviewer: 'Analyst', findings: [
+      { severity: 'MAJOR', claim_id: 'C3', topic: 'evidence missing for cadence figure', traces_to_north_star: 'yes', criterion: 'C1' }] },
+  ];
+  // Pre-fix, these slugged to three distinct topic ids: agreement 1 each ⇒ DRY.
+  const t = tallyFindings(reviews);
+  assert.equal(t.verdict, 'BLOCKED', 'the shared claim_id makes the quorum register');
+  assert.equal(t.blockers.length, 1);
+  assert.equal(t.blockers[0].agreement, 3);
+  assert.equal(t.blockers[0].severity, 'BLOCKER', 'max severity raised across reviewers');
+  assert.match(t.blockers[0].id, /^claim:c3$/);
+});
+
 // --- angle rotation --------------------------------------------------------
 
 test('angleForShark rotates across Sharks and rounds, always within the 8 angles', () => {

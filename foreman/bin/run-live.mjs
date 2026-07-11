@@ -28,6 +28,9 @@ const MAX_WAVES = flag('--max-waves', null);
 const MAX_WALL_MIN = flag('--max-wallclock-min', null);
 const USE_GIT = argv.includes('--git');
 const RESUME = argv.includes('--resume');
+// --clear-halt: human acknowledgment that a HALTED checkpoint's blocker is handled.
+// Idempotent no-op on non-halted checkpoints; resume still re-proves GREEN at the gate.
+const CLEAR_HALT = argv.includes('--clear-halt');
 const BRANCH = flag('--branch', null);
 const STATUS_FILE = flag('--status', path.join(PROJECT, '_foreman-status.log'));
 const ALLOWED = flag('--allowed-tools', 'Bash,Edit,Write,Read,Glob,Grep');
@@ -221,7 +224,7 @@ async function agent(prompt, opts = {}) {
 // an absolute `file:///C:/dev/foreman/...` archive path. `new URL(spec, import.meta.url)`
 // pins resolution inside the canonical trio tree, so a renamed/removed archive can never
 // be silently executed (asserted by drivers/test/canonical-no-escape.test.mjs).
-const { runProject } = await import(new URL('./project-engine.mjs', import.meta.url));
+const { runProject, clearHaltedCheckpoint } = await import(new URL('./project-engine.mjs', import.meta.url));
 // Wave 4: obtain the foreman driver seam through the trio driver registry (claude
 // default) rather than calling makeAgentDriver directly. The instrumented `agent`
 // above is injected unchanged, so the live `claude -p` path stays byte-for-byte
@@ -261,6 +264,20 @@ const budgetConfig = (MAX_WAVES != null || MAX_WALL_MIN != null) ? {
   maxWaves: MAX_WAVES != null ? Number(MAX_WAVES) : null,
   maxWallClockMs: MAX_WALL_MIN != null ? Number(MAX_WALL_MIN) * 60000 : null,
 } : null;
+
+// Clear a halted checkpoint BEFORE runProject (whose planResume refuses 'halted').
+// Only meaningful with --resume; without a checkpoint on disk there is nothing to clear.
+if (RESUME && CLEAR_HALT) {
+  const cpPath = path.join(PROJECT, 'foreman-checkpoint.json');
+  if (fs.existsSync(cpPath)) {
+    try {
+      clearHaltedCheckpoint(cpPath, { log: (s) => emit(s) });
+    } catch (e) {
+      emit(`!! --clear-halt failed: ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
+      process.exit(3);
+    }
+  }
+}
 
 let result, threw = null;
 try {

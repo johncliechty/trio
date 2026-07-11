@@ -386,7 +386,8 @@ function reachableFromTests(root, foremanDir) {
  * halted for human confirmation rather than auto-advanced; instrumentation that
  * could prove a specific changed *test* actually ran is Phase-3 hardening.
  */
-function checkVacuousGreen(root, foremanDir, changedFiles) {
+function checkVacuousGreen(root, foremanDir, changedFiles, extra = {}) {
+  const { invBefore = null, invNow = null, gateTap = null, waveTitle = '' } = extra;
   const sources = changedFiles.filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f) && !f.endsWith('.log'));
   // 2026-07-04 (rearchitecture wave-6 false-GO fix): doc/data artifacts cannot
   // PROVE a wave. The gate run itself can refresh a tracked generated artifact
@@ -412,7 +413,43 @@ function checkVacuousGreen(root, foremanDir, changedFiles) {
   };
   const exercised = code.some((f) => reach.has(f) || exercisedByName(f));
   if (exercised) return null;
+
+  // T4 (2026-07-11): HONEST TEST-ONLY PATH. A test-only / acceptance wave's
+  // deliverable IS its tests — "changed no source file" is not a defect, it is
+  // the plan. The engine already holds the evidence to prove such a wave
+  // honestly, so use it instead of dead-stopping every terminal acceptance wave
+  // (observed live: wave 10/10 HALTed after 6 GO waves — the most expensive
+  // false-positive class):
+  //   (a) the wave's code diff is empty but it DID deliver test files,
+  //   (b) the static test inventory ROSE from the wave-start snapshot
+  //       (net-new tests exist — the deliverable is real), and
+  //   (c) the GREEN gate executed at least the full new inventory
+  //       (the larger suite actually RAN; a partial gate stays conservative).
+  // An explicit `[test-only]` tag in the wave title is the human channel for a
+  // wave that only MODIFIES tests (no net rise): the tag relaxes (b) to
+  // "did not shrink" — the anti-weakening guard §5 separately polices real
+  // reductions, and the gate-execution bar (c) still applies.
+  const changedTests = changedFiles.filter((f) => !f.endsWith(' (deleted)') && isTestFile(f));
+  if (code.length === 0 && changedTests.length > 0 &&
+      invBefore && invNow && gateTap && Number.isInteger(gateTap.tests)) {
+    const declaredTestOnly = /\[test[-_ ]?only\]/i.test(waveTitle);
+    const rose = invNow.tests > invBefore.tests;
+    const heldSteady = invNow.tests >= invBefore.tests;
+    const ranFullSuite = gateTap.tests >= invNow.tests;
+    if (rose && ranFullSuite) return null;
+    if (declaredTestOnly && heldSteady && ranFullSuite) return null;
+  }
+
   if (sources.length === 0) {
+    if (changedTests.length > 0) {
+      // A test-only wave that FAILED the evidence bar: say exactly which leg failed
+      // so the human clears it in one look, not a checkpoint autopsy.
+      return `wave changed only test files (${changedTests.join(', ')}) but the test-only ` +
+        `evidence bar did not pass: declared tests ${invBefore ? invBefore.tests : '?'} -> ` +
+        `${invNow ? invNow.tests : '?'}, green gate executed ${gateTap && Number.isInteger(gateTap.tests) ? gateTap.tests : '?'} ` +
+        `— a test-only wave auto-passes when the inventory ROSE and the green gate ran the ` +
+        `larger suite (or tag the wave title [test-only] for a modify-only test wave)`;
+    }
     // F2-9: the wave changed no source file at all (a no-op wave, or one that
     // touched only tests/non-source). An already-green suite proves nothing.
     return `wave reached green without proving its own deliverable was exercised ` +
@@ -651,11 +688,25 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
   // normal RED / fix-loop path so red→green can be driven. (The exit-0 forged-
   // echo and inconsistency cases are already handled above.)
   if (!green && !vacuous_reason && looksLikePytest(merged)) {
-    const noneRan =
+    // T3 (2026-07-11): TRUST THE PARSED SUMMARY FIRST. A real `N passed/M failed`
+    // banner proves tests RAN even when no per-test EVENTS were emitted — pytest
+    // without `-v` prints dots, not events — so a genuine RED must keep the
+    // normal fix-loop path, never dead-stop as "nothing ran". (Live misroute:
+    // gate parsed `exit 1 · 40 passed/34 failed` under `pytest -q`, yet HALTed
+    // "collected/ran no real tests" with a wrong recommendation — Anchor-zombie
+    // 2026-06-28. This also covers partial collection errors: `X passed, Y
+    // errors` is a gating RED the fixer can drive, not a proved-nothing halt.)
+    // The exit-0 GREEN bar above is UNCHANGED — passing still requires real
+    // per-test events, which is why pytest gates are normalized to `-v` at
+    // contract time (discoverTestCommand).
+    const summaryShowsRuns =
+      (Number.isInteger(tap.pass) && tap.pass > 0) ||
+      (Number.isInteger(tap.fail) && tap.fail > 0);
+    const noneRan = !summaryShowsRuns && (
       /\bno tests ran\b/.test(merged) ||
       /\bduring collection\b/i.test(merged) ||
       exitCode === 5 ||
-      (events.pass === 0 && events.fail === 0); // no per-test events at all
+      (events.pass === 0 && events.fail === 0)); // no per-test events at all
     if (noneRan) {
       vacuous_reason =
         `pytest collected/ran no real tests ` +
@@ -986,7 +1037,14 @@ export async function runWave(o) {
 
     if (verdict.go) {
       // ----- vacuous-GREEN guard before declaring convergence (§5) -----
-      const vac = checkVacuousGreen(projectDir, foremanDir, changed);
+      // T4: hand the guard the test-only evidence it needs (wave-start inventory
+      // snapshot, fresh inventory, the gate's executed counts, the wave title).
+      const vac = checkVacuousGreen(projectDir, foremanDir, changed, {
+        invBefore,
+        invNow: inventory(projectDir, foremanDir),
+        gateTap: lastGate.tap,
+        waveTitle: wave.title || '',
+      });
       if (vac) {
         const reason = `vacuous-GREEN HALT: ${vac}`;
         steps.push(`✗ ${reason}`);

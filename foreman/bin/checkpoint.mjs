@@ -10,12 +10,17 @@
 //        write then read back; assert deep-equality; report PASS/FAIL.
 //   dashboard <file>
 //        render the §10 commentary block from a checkpoint.
+//   clear <file>
+//        clear a HALTED checkpoint to a clean, resumable budget-stop (human
+//        acknowledgment of the blocker). No-op on non-halted checkpoints.
+//        Resume still re-proves GREEN through the orchestrator gate.
 //
 // Exit codes: 0 ok · 3 HALT (invalid checkpoint) · 1 roundtrip mismatch · 2 error
 
 import {
   HaltError, newCheckpoint, writeCheckpointAtomic, readCheckpoint, renderDashboard,
 } from './foreman-lib.mjs';
+import { clearHaltedCheckpoint } from './project-engine.mjs';
 import path from 'node:path';
 
 function flag(args, name, def = undefined) {
@@ -89,8 +94,16 @@ function main(argv) {
       process.stdout.write(block + '\n');
       return 0;
     }
+    case 'clear': {
+      const r = clearHaltedCheckpoint(file, { log: (s) => process.stdout.write(s + '\n') });
+      if (r.cleared) {
+        process.stdout.write(`cleared: wave ${r.wave} halt -> budget_stopped @ gate` +
+          (r.clearedHalt ? ` (was: ${r.clearedHalt})` : '') + '\n');
+      }
+      return 0;
+    }
     default:
-      process.stderr.write('usage: checkpoint.mjs <new|read|roundtrip|dashboard> <file> [flags]\n');
+      process.stderr.write('usage: checkpoint.mjs <new|read|roundtrip|dashboard|clear> <file> [flags]\n');
       return 2;
   }
 }

@@ -63,7 +63,7 @@ const DEFAULT_DECOMP = [
 ];
 
 /** A label-routed stub agent covering Stage-2 decomposition + the reused loop. */
-function makeStage2Agent({ decomp = DEFAULT_DECOMP, blockedUntilRound = 1 } = {}) {
+function makeStage2Agent({ decomp = DEFAULT_DECOMP, blockedUntilRound = 1, distinctBlockerPerRound = false } = {}) {
   const calls = [];
   async function agent(prompt, opts = {}) {
     calls.push({ prompt, opts });
@@ -78,9 +78,12 @@ function makeStage2Agent({ decomp = DEFAULT_DECOMP, blockedUntilRound = 1 } = {}
       const role = parts[1];
       const round = parseInt(String(parts[2] || 'r0').slice(1), 10) || 0;
       if (round < blockedUntilRound && (role === 'Skeptic' || role === 'Contrarian')) {
+        // A distinct topic per round defeats anti-oscillation so cap tests never converge.
+        const topic = distinctBlockerPerRound
+          ? `decomposition underspecified r${round}` : 'decomposition underspecified';
         return {
           answerable: 'yes',
-          findings: [{ severity: 'BLOCKER', topic: 'decomposition underspecified', section: 'waves', tag: 'refinement', traces_to_north_star: 'yes', criterion: 'C1', message: 'a wave lacks acceptance criteria' }],
+          findings: [{ severity: 'BLOCKER', topic, section: 'waves', tag: 'refinement', traces_to_north_star: 'yes', criterion: 'C1', message: 'a wave lacks acceptance criteria' }],
         };
       }
       return { answerable: 'yes', findings: [] };
@@ -235,6 +238,35 @@ test('done-when: a scripted approved Master Plan runs through Stage 2 to a doc-t
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('T5 REGRESSION: a Stage-2 round-cap EMITS the unapproved doc-trio, runs the machine gate, and HALTs with everything attached', async () => {
+  const agent = makeStage2Agent({ blockedUntilRound: 99, distinctBlockerPerRound: true });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crucible-s2cap-'));
+  try {
+    let halt = null;
+    try {
+      await runStage2({
+        agent, northStar: NORTH_STAR, masterPlan: MASTER_PLAN, criteria: CRITERIA,
+        outputDir: dir, roundCap: 2,
+      });
+    } catch (e) { halt = e; }
+    assert.ok(halt instanceof HaltError && halt.pending_action === 'stage2-round-cap',
+      'the shared loop HALTs under the Stage-2 name');
+    assert.ok(halt.best_draft, 'the best draft rides on the HALT');
+    assert.ok(halt.emitted, 'the doc-trio was emitted on the HALT path');
+    // Emitted to an UNMISTAKABLY-unapproved draft dir — never the handoff target itself.
+    const draftDir = path.join(dir, '_unapproved-cap-draft');
+    assert.ok(fs.existsSync(path.join(draftDir, DEFAULT_DOC_FILENAMES.plan)), 'plan emitted');
+    assert.ok(fs.existsSync(path.join(draftDir, DEFAULT_DOC_FILENAMES.description)), 'description emitted');
+    assert.ok(fs.existsSync(path.join(draftDir, 'foreman.config.json')), 'config emitted');
+    assert.equal(halt.emitted.wellFormedness.pass, true,
+      'by-construction rendering passes the REAL well-formedness gate even unconverged');
+    assert.match(halt.reason, /NOT the handoff/);
+    // The real handoff target itself received no doc-trio (no unapproved handoff).
+    assert.ok(!fs.existsSync(path.join(dir, DEFAULT_DOC_FILENAMES.plan)),
+      'outputDir root stays clean — approval still gates the real handoff');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('Stage 2 HALTs at the approval gate when unapproved (the user is the convergence authority)', async () => {

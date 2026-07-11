@@ -424,10 +424,41 @@ export async function runStage2({
   const plan = renderImplementationPlan({ title, northStar, criteria, waves, testCommand });
 
   // (3) The Shark-Tank loop to model-side convergence (Stage-1's generic loop).
-  const loop = await runMasterPlanLoop({
-    agent, northStar, criteria,
-    draft: plan, research, acceptanceCriteria, roundCap, artifactsDir, log,
-  });
+  //
+  // T5 (2026-07-11): a round-cap HALT no longer throws the run away. The emission
+  // path re-renders from the STRUCTURED waves (well-formed by construction — the
+  // same property the approved path relies on), so on cap we can honestly emit
+  // the current doc-trio to an UNMISTAKABLY-unapproved draft dir, run the machine
+  // well-formedness gate over it, and HALT with everything attached for the user
+  // to review. The user stays the convergence authority; Foreman is never handed
+  // the draft dir (handoff still requires approval on the real outputDir).
+  let loop;
+  try {
+    loop = await runMasterPlanLoop({
+      agent, northStar, criteria,
+      draft: plan, research, acceptanceCriteria, roundCap, artifactsDir, log,
+      capPendingAction: 'stage2-round-cap',
+    });
+  } catch (e) {
+    if (e && e.halt_for_human && e.pending_action === 'stage2-round-cap') {
+      const draftDir = path.join(path.resolve(outputDir), '_unapproved-cap-draft');
+      try {
+        const description = renderDescriptionDoc({ title, northStar, criteria, summary });
+        const executionLog = renderExecutionLog({ title, waveCount: waves.length });
+        const docTrio = writeDocTrio({ outputDir: draftDir, plan, description, executionLog, log });
+        const gate = runWellFormednessGate({ projectDir: docTrio.dir, artifactsDir, log });
+        e.emitted = { docTrio, wellFormedness: { pass: !!gate.pass, status: gate.status ?? null } };
+        e.reason += ` — the full doc-trio is EMITTED for review at ${docTrio.dir} ` +
+          `(well-formedness gate: ${gate.pass ? 'PASS' : 'FAIL'}; this draft dir is NOT the handoff)`;
+        log(`stage2 cap: unapproved doc-trio emitted to ${docTrio.dir} (well-formedness ${gate.pass ? 'PASS' : 'FAIL'})`);
+      } catch (emitErr) {
+        // Emission is best-effort on the HALT path — the HaltError still carries
+        // the best draft; never mask the cap HALT with an emission failure.
+        log(`stage2 cap: could not emit the draft doc-trio (${emitErr.reason || emitErr.message})`);
+      }
+    }
+    throw e;
+  }
 
   // (4) The user-approval HALT gate (implementation-plan-approval). HALTs if unapproved.
   const approval = approveImplementationPlan({ loop, approved, log });

@@ -241,6 +241,29 @@ test('runMasterPlanLoop HALTs when it hits the round cap (the safety ceiling)', 
   );
 });
 
+test('T5 REGRESSION: the round-cap HALT carries the BEST DRAFT + open findings and persists them — never discards the run', async () => {
+  // The one full live run (zombie-hunter, journal 0001) burned ~30 calls into
+  // this cap and emitted NOTHING; the journal proposed exactly this fix.
+  const agent = makeStage1Agent({ blockedUntilRound: 99, distinctBlockerPerRound: true });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crucible-cap-'));
+  try {
+    let halt = null;
+    try {
+      await runMasterPlanLoop({ agent, northStar: NORTH_STAR, draft: 'v1', roundCap: 2, artifactsDir: dir });
+    } catch (e) { halt = e; }
+    assert.ok(halt instanceof HaltError && halt.pending_action === 'stage1-round-cap', 'still a HALT — the user stays the convergence authority');
+    assert.ok(halt.best_draft, 'the HALT carries the best-draft payload');
+    assert.match(halt.best_draft.draft, /revised/, "the attached draft reflects the loop's refinement rounds, not the v1 input");
+    assert.equal(halt.best_draft.roundsRun, 2);
+    assert.ok(halt.best_draft.openFindings.length >= 1, 'the open findings ride along');
+    assert.match(halt.reason, /nothing was discarded/);
+    // and the artifacts are persisted for the human to review
+    assert.match(fs.readFileSync(path.join(dir, 'BEST-DRAFT.md'), 'utf8'), /revised/);
+    const open = JSON.parse(fs.readFileSync(path.join(dir, 'OPEN-FINDINGS.json'), 'utf8'));
+    assert.ok(Array.isArray(open) && open.length >= 1);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // --- (5) the user-approval HALT gate ----------------------------------------
 
 test('approveMasterPlan HALTs at the canonical master-plan-approval gate until approved', () => {

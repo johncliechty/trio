@@ -114,6 +114,43 @@ export function planResume(checkpointPath, totalWaves) {
 }
 
 /**
+ * Clear a HALTED checkpoint so `--resume` can continue the run — the HUMAN
+ * acknowledgment step §6 requires, made real (previously `go.ps1` passed a
+ * `--clear-halt` flag that nothing parsed, so every halt meant hand-editing
+ * `foreman-checkpoint.json`).
+ *
+ * SAFE BY CONSTRUCTION: the halt is cleared to a `budget_stopped` checkpoint
+ * seeded at `intra_wave_step:'gate'`, i.e. the ordinary intra-wave resume path.
+ * Resume ALWAYS re-runs the orchestrator gate before any GO (see runWave), so
+ * clearing a halt can never smuggle in a GREEN — the wave must re-prove real
+ * passing tests from the current disk state. The remaining fix budget
+ * (`iteration`) is preserved.
+ *
+ * Non-halted checkpoints are left untouched (idempotent no-op), so the flag is
+ * safe to pass unconditionally on every resume, which is exactly what go.ps1
+ * has always done.
+ *
+ * @param {string} checkpointPath
+ * @param {{log?:(s:string)=>void}} [o]
+ * @returns {{cleared:boolean, status:string, wave?:number, clearedHalt?:?string}}
+ */
+export function clearHaltedCheckpoint(checkpointPath, { log = () => {} } = {}) {
+  const cp = readCheckpoint(checkpointPath); // HaltError on torn/invalid — never guess
+  if (cp.status !== 'halted') {
+    log(`clear-halt: checkpoint status is '${cp.status}' — nothing to clear`);
+    return { cleared: false, status: cp.status };
+  }
+  const clearedHalt = cp.pending_action ?? null;
+  cp.status = 'budget_stopped';
+  cp.intra_wave_step = 'gate';
+  cp.pending_action = `halt cleared by human (--clear-halt)${clearedHalt ? ` — was: ${clearedHalt}` : ''}`;
+  writeCheckpointAtomic(checkpointPath, cp);
+  log(`clear-halt: wave ${cp.current_wave} halt cleared -> budget_stopped @ gate (iteration ${cp.iteration} preserved); ` +
+    `resume will re-prove GREEN through the orchestrator gate`);
+  return { cleared: true, status: cp.status, wave: cp.current_wave, clearedHalt };
+}
+
+/**
  * Run a whole project: every parsed wave, in ascending order, to a genuine GO,
  * then project-DONE. Stops the entire run on the first non-GO wave.
  *

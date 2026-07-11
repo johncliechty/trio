@@ -448,6 +448,12 @@ function reviewerPrompt(role, { round, angle, focus }) {
   return [
     `[researchPrime G3 verification reviewer — ${role.role} (${role.persona}); angle ${angle}]`,
     `round ${round}: independently verify the claims and report any defect you can substantiate.`,
+    // G6 identity discipline: agreement is keyed on claim_id FIRST (falling back to
+    // the topic slug only when no id exists). Three reviewers wording the same claim
+    // three ways defeated the >=2-agree quorum once (journal 0001) — never again.
+    `For EVERY finding: when the claim you dispute carries an id in the artifact, set`,
+    `claim_id to that EXACT id (agreement across reviewers is keyed on it); always also`,
+    `set topic to a short stable phrase naming the issue.`,
     focus ? `STEER (Synthesizer): press hardest on — ${focus}` : `(no steering hint this round)`,
   ].join('\n');
 }

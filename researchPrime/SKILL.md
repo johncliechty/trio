@@ -58,6 +58,19 @@ Gather evidence; record each item in the evidence ledger with its origin(s) and 
 
 ### ENGINE mode (Node available)
 
+**Operator recipe (T9, 2026-07-11 — THE canonical way to run rounds; no per-run harness authoring):**
+1. Make a run dir; write `round-1-input.json`: `{ round, northStar, stakes, reviews:[{reviewer, angle,
+   lineage, findings:[{claim_id?, topic, severity, traces_to_north_star, message}]}], adjudications?:{...} }`.
+   When the reviewed artifact carries claim ids, reviewers MUST set `claim_id` (agreement keys on it — G6).
+2. `node bin/run-rounds.mjs <runDir> [--max-rounds N]` — replay mode by default (recorded adjudications);
+   `RESEARCHPRIME_LIVE_ROUND=1` routes reviewer/debate/judge LIVE to Gemini via agy (5:1; agy down ⇒
+   honest HALT, never self-review). `--max-rounds` (default 8) is a HARD budget — the cap stops honestly
+   with open blockers in `RUN-STATE.json`, never an unbounded loop.
+3. Fix blockers, add `round-<N+1>-input.json`, re-run. Convergence = dry streak N, OR N+1 consecutive
+   genuinely-empty rounds = **CLEAN convergence** (explicit stamp, distinct from DRY — a defect-free
+   artifact converges honestly instead of pressuring reviewers into filler nits).
+4. Deliverable lands as `DELIVERABLE-ENGINE.json`; a training record auto-writes to `journal/runs/`.
+
 Drive the REAL engine loop. The assembled orchestrator is `bin/governor.mjs` + `bin/round.mjs`, presented by `bin/deliverable.mjs`; `bin/dogfood.mjs` is the canonical worked example. Do NOT call `bin/engine.mjs runEngine` — that module is a skeleton with no-op gate slots.
 
 Per governed round (`runGovernedRound({ agent, stakes, reviews, round, northStar })` -> `orchestrateRound(...)`):
@@ -68,8 +81,8 @@ Per governed round (`runGovernedRound({ agent, stakes, reviews, round, northStar
 - **G8 cross-lineage origin fusion** — Enhanced-only; INERT by default behind the human-gated lineage enum (claims zero cross-lineage origins, wears the inert stamp).
 - **G4 separate context-free Judge** (`makeJudge`) — DECIDES.
 - **Active Deep-Think Synthesizer** (`makeSynthesizer`) — STEERS and files a separate brief; never decides.
-- **G5 convergence-until-dry** with the honest tracker (an EMPTY round never counts toward convergence) and the suspiciously-dry guard (a high-stakes run going dry too fast with unresolved high-severity findings fires probe-or-dissent; on a single-family substrate it emits the shared-blind-spot UN-MITIGABLE stamp — it FLAGS, it does not claim to mitigate).
-- **Checkpoint/resume + budget pre-flight** reuse Foreman's durable primitives via the imported surface.
+- **G5 convergence-until-dry, or CLEAN** with the honest tracker: an EMPTY round never counts toward DRY convergence (I7 — you cannot fake adversarial dryness by declining to look), but N+1 CONSECUTIVE empty rounds converge CLEAN with the explicit distinct stamp (T8 — a defect-free artifact terminates honestly). The suspiciously-dry guard is unchanged (a high-stakes run going dry too fast with unresolved high-severity findings fires probe-or-dissent; on a single-family substrate it emits the shared-blind-spot UN-MITIGABLE stamp — it FLAGS, it does not claim to mitigate).
+- **Durability (honest statement, corrected 2026-07-11):** the governed round loop is resumable via the ON-DISK round protocol — `bin/run-rounds.mjs` persists every round's input/result JSON plus `RUN-STATE.json`, and re-running continues from the files (Foreman-style in-process checkpointing exists only in the forbidden `runEngine` skeleton; do not rely on it). A mid-round agy HALT costs at most the in-flight round, never the run.
 
 Assemble the run with `assembleDeliverable({ mode:'engine', rounds, convergence, calibration, substrateFamilies, northStar })`: it carries the round history, the Judge verdict, the convergence proof, the rho-hat/learned-quorum state, and the separate Synthesizer Brief (decides:false). The engine resolves the trio's Crucible/Foreman via its in-repo siblings — no configuration; leave RP_TRIO_ROOT unset. If the import probe is NO-GO (a trio symbol was renamed), do not fork — fall back to degraded mode.
 

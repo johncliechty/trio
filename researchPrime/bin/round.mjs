@@ -118,40 +118,73 @@ export function isEmptyRound(round) {
   return total === 0;
 }
 
-// ── G5 — convergence-until-dry, with the I7 honest-convergence guard ───────────────────────────────
+// ── G5 — convergence-until-dry, with the I7 honest-convergence guard + the T8 CLEAN path ───────────
+/** The stamp a CLEAN convergence wears — explicit and DISTINCT from DRY, never conflated. */
+export const CLEAN_CONVERGENCE_STAMP =
+  'CLEAN convergence: the panel raised ZERO findings for the required consecutive rounds — ' +
+  'nothing to dispute was found (DISTINCT from DRY, where findings were raised but none was a ' +
+  'new blocker). Clean requires MORE consecutive evidence than dry (cleanN = N + 1).';
+
 /**
- * Build a convergence tracker: the run is CONVERGED after N consecutive NON-EMPTY dry rounds.
+ * Build a convergence tracker: the run is CONVERGED after N consecutive NON-EMPTY dry rounds
+ * (DRY convergence), OR — T8 (2026-07-11) — after cleanN consecutive EMPTY rounds (CLEAN
+ * convergence, explicit stamp).
  *
- * I7 (b): an EMPTY round does NOT increment the dry counter — it is simply not counted (neither
- * advances nor resets the streak), so a run cannot manufacture convergence with empty rounds.
+ * I7 (b), REFINED not abandoned: an EMPTY round still does NOT touch the DRY counter — a run can
+ * never manufacture *adversarial* convergence by declining to look. But the OLD rule made a
+ * genuinely defect-free artifact structurally UNABLE to converge: zero-finding rounds counted for
+ * nothing, so reviewers were pressured to invent filler nits (the dogfood literally scripted one
+ * per round to terminate). CLEAN is the honest exit: strictly MORE consecutive empty rounds than
+ * dry needs (cleanN = N + 1 by default), stamped distinctly so the deliverable can never pass a
+ * clean run off as an adversarially-dry one.
  *
- * @param {{N:number}} o  N = the pre-registered dry-round convergence threshold (Wave 1)
+ * @param {{N:number, cleanN?:number}} o  N = the pre-registered dry threshold (Wave 1);
+ *   cleanN = the clean threshold (default N + 1; must be > 0)
  */
-export function makeConvergenceTracker({ N } = {}) {
+export function makeConvergenceTracker({ N, cleanN = null } = {}) {
   if (!Number.isInteger(N) || N < 1) {
     throw new HaltError('makeConvergenceTracker: N must be an integer >= 1 (the committed threshold)');
   }
+  const CLEAN_N = cleanN == null ? N + 1 : cleanN;
+  if (!Number.isInteger(CLEAN_N) || CLEAN_N < 1) {
+    throw new HaltError('makeConvergenceTracker: cleanN must be an integer >= 1');
+  }
   let dryStreak = 0;
+  let emptyStreak = 0;
   let rounds = 0;
-  let countedRounds = 0; // non-empty rounds — the only ones convergence sees
+  let countedRounds = 0; // non-empty rounds — the only ones DRY convergence sees
+  const snapshot = (extra) => {
+    const dry = dryStreak >= N;
+    const clean = emptyStreak >= CLEAN_N;
+    return {
+      converged: dry || clean,
+      mode: dry ? 'dry' : clean ? 'clean' : null,
+      stamp: !dry && clean ? CLEAN_CONVERGENCE_STAMP : null,
+      dryStreak, emptyStreak, rounds, countedRounds,
+      ...extra,
+    };
+  };
   return {
     /**
      * Observe one completed round. Returns the post-observation state, including whether this round
-     * COUNTED (non-empty) and whether the run has now CONVERGED.
+     * COUNTED toward DRY (non-empty) and whether the run has now CONVERGED (and in which MODE).
      */
     observe(round) {
       rounds += 1;
       if (isEmptyRound(round)) {
-        // I7: not counted — the dry streak is untouched (NOT incremented, NOT reset).
-        return { converged: dryStreak >= N, counted: false, empty: true, dryStreak, rounds, countedRounds };
+        // I7: invisible to the DRY streak (not incremented, not reset) — but it ADVANCES the
+        // CLEAN streak: consecutive genuinely-empty rounds are themselves evidence.
+        emptyStreak += 1;
+        return snapshot({ counted: false, empty: true });
       }
       countedRounds += 1;
+      emptyStreak = 0; // findings appeared — a clean exit must re-earn its consecutive streak
       if (isDryRound(round)) dryStreak += 1;
       else dryStreak = 0;
-      return { converged: dryStreak >= N, counted: true, empty: false, dryStreak, rounds, countedRounds };
+      return snapshot({ counted: true, empty: false });
     },
     state() {
-      return { dryStreak, rounds, countedRounds, converged: dryStreak >= N };
+      return snapshot({});
     },
   };
 }
@@ -407,19 +440,19 @@ export async function orchestrateRound({
   // G8 cross-lineage fusion (flagged-inert by default; routes through the shared module).
   const fusion = g8FuseOrigins(reviews, g8);
 
-  // G4 separate context-free Judge (reuse the trio's makeJudge through the spy seam).
+  // G4 Judge + Synthesizer: INDEPENDENT seats (the Judge reads the tally findings; the
+  // Synthesizer steers off the same tally) — dispatched CONCURRENTLY (2026-07-11; they
+  // ran serially for no reason, a free agent-call of latency in every medium+ round).
+  // Call counts, spy semantics, and results are identical to the serial path.
   let judgeVerdict = null;
-  if (judge) {
-    const j = makeJudge({ agent: spy('judge') });
-    judgeVerdict = await j.decide({ northStar, findings: tally.findings, round });
-  }
-
-  // The active Deep-Think Synthesizer steers (reuse makeSynthesizer through the spy seam).
   let direction = null;
-  if (synthesize) {
-    const s = makeSynthesizer({ agent: spy('synthesizer'), northStar });
-    direction = await s.direct({ round, verdict: tally, northStar });
-  }
+  const judgeP = judge
+    ? makeJudge({ agent: spy('judge') }).decide({ northStar, findings: tally.findings, round })
+    : Promise.resolve(null);
+  const synthP = synthesize
+    ? makeSynthesizer({ agent: spy('synthesizer'), northStar }).direct({ round, verdict: tally, northStar })
+    : Promise.resolve(null);
+  [judgeVerdict, direction] = await Promise.all([judgeP, synthP]);
 
   return {
     round,

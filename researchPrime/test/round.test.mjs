@@ -88,12 +88,32 @@ test('(b) an EMPTY round does NOT increment the dry counter N (I7) — convergen
   s = tracker.observe(dryNonEmpty()); // second real dry round
   assert.deepEqual([s.counted, s.dryStreak, s.converged], [true, 2, true]);
 
-  // The load-bearing negative: a run of ONLY empty rounds never converges (you cannot converge by
-  // declining to look) — but one real dry round does (N=1 here).
-  const onlyEmpty = makeConvergenceTracker({ N: 1 });
-  assert.equal(onlyEmpty.observe(emptyRound()).converged, false);
-  assert.equal(onlyEmpty.observe(emptyRound()).converged, false);
-  assert.equal(onlyEmpty.observe(dryNonEmpty()).converged, true);
+  // T8 (2026-07-11) — I7 REFINED: empty rounds still can never manufacture DRY convergence,
+  // but cleanN (= N + 1) CONSECUTIVE empty rounds now converge CLEAN with the explicit,
+  // distinct stamp — a genuinely defect-free artifact is no longer structurally unable to
+  // converge (the old rule pressured reviewers into filler nits; the dogfood scripted one
+  // per round just to terminate).
+  const onlyEmpty = makeConvergenceTracker({ N: 1 }); // cleanN defaults to N + 1 = 2
+  let e = onlyEmpty.observe(emptyRound());
+  assert.equal(e.converged, false, 'one empty round is not enough (cleanN > N: clean needs MORE evidence than dry)');
+  assert.equal(e.dryStreak, 0, 'the DRY streak stays untouched — empty can never fake adversarial dryness');
+  e = onlyEmpty.observe(emptyRound());
+  assert.equal(e.converged, true, 'cleanN consecutive empty rounds converge');
+  assert.equal(e.mode, 'clean', '...in CLEAN mode, never dry');
+  assert.match(e.stamp, /CLEAN convergence/, 'the explicit stamp rides the state');
+  assert.match(e.stamp, /DISTINCT from DRY/);
+
+  // A non-empty round RESETS the clean streak — clean must be CONSECUTIVE evidence.
+  const cleanReset = makeConvergenceTracker({ N: 5 }); // cleanN 6; dry unreachable here
+  cleanReset.observe(emptyRound());
+  const afterFinding = cleanReset.observe(hotRound());
+  assert.equal(afterFinding.emptyStreak, 0, 'a finding resets the clean streak');
+  assert.equal(afterFinding.converged, false);
+
+  // DRY convergence still reports mode 'dry' with no clean stamp (never conflated).
+  const dryMode = makeConvergenceTracker({ N: 1 });
+  const d = dryMode.observe(dryNonEmpty());
+  assert.deepEqual([d.converged, d.mode, d.stamp], [true, 'dry', null]);
 
   // A hot round RESETS the streak (only a hot round may; an empty one is invisible).
   const reset = makeConvergenceTracker({ N: 2 });

@@ -28,6 +28,7 @@ import {
 import {
   parseGeminiCliFrames, resolveGeminiModel, buildGeminiCliArgs, defaultRunGeminiCli,
   finalTextFromTranscript, servedModelFromCliLog, approvalModeFor,
+  shouldStopAttestationPoll,
   KNOWN_AGY_LABELS, GEMINI_HEAVY_MODEL, GEMINI_STANDARD_MODEL,
   DEFAULT_GEMINI_CLI_MODEL, DEFAULT_GEMINI_APPROVAL_MODE,
 } from '../gemini-cli.mjs';
@@ -299,4 +300,37 @@ test('gemini-cli live timeout: a tiny timeoutMs kills the child -> typed status:
   } finally {
     if (prev === undefined) delete process.env.CRUCIBLE_AGENT_LIVE; else process.env.CRUCIBLE_AGENT_LIVE = prev;
   }
+});
+
+// --- B2 (2026-07-11): the attestation poll's happy-path tail ---------------------
+// Pre-fix, EVERY successful Gemini call paid the full 40x250ms (~10s) poll because a
+// clean serve of a known label never writes the substitution line the loop waited
+// for. The poll now stops early on attest-by-absence; the tripwire is unchanged.
+
+test('B2: known label + readable evidence-free window stops after the grace (attest-by-absence)', () => {
+  const known = GEMINI_HEAVY_MODEL;
+  // inside the grace: keep polling (straggler substitution lines land slightly async)
+  assert.equal(shouldStopAttestationPoll({ cliWindow: '', requested: known, elapsedMs: 0 }), null);
+  assert.equal(shouldStopAttestationPoll({ cliWindow: 'unrelated log noise', requested: known, elapsedMs: 1750 }), null);
+  // grace elapsed, window readable, no evidence: decided — stop
+  assert.equal(shouldStopAttestationPoll({ cliWindow: '', requested: known, elapsedMs: 2000 }), 'known-label-clean');
+  // and servedModelFromCliLog stamps the clean serve for that same window
+  const attest = servedModelFromCliLog('', { requested: known });
+  assert.equal(attest.served, known);
+  assert.equal(attest.substituted, false);
+});
+
+test('B2: substitution evidence stops IMMEDIATELY at any tick (tripwire intact)', () => {
+  const known = GEMINI_HEAVY_MODEL;
+  const win = `Failed to resolve model flag ${known}\nPropagating selected model override to backend: label="Gemini 3.5 Flash (Medium)"`;
+  assert.equal(shouldStopAttestationPoll({ cliWindow: win, requested: known, elapsedMs: 0 }), 'substitution-evidence');
+  const attest = servedModelFromCliLog(win, { requested: known });
+  assert.equal(attest.substituted, true, 'the substitution still stamps ok:false downstream');
+});
+
+test('B2: unknown labels and unreadable windows never stop early (conservative full poll)', () => {
+  // uncatalogued id: attest-by-absence is impossible — poll the full window
+  assert.equal(shouldStopAttestationPoll({ cliWindow: '', requested: 'gemini-9.9-imaginary', elapsedMs: 9999 }), null);
+  // unreadable cli.log (null window): we cannot attest what we could not read
+  assert.equal(shouldStopAttestationPoll({ cliWindow: null, requested: GEMINI_STANDARD_MODEL, elapsedMs: 9999 }), null);
 });

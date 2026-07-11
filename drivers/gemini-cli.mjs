@@ -324,6 +324,34 @@ const reEscape = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
  * @param {?string}[o.requested]   the requested agy LABEL / id
  * @returns {{ served: ?string, substituted: boolean }}
  */
+/**
+ * B2 (2026-07-11): when should the post-exit cli.log attestation poll STOP?
+ * Pure/testable. Three answers:
+ *   'substitution-evidence' — a resolve-failure / override line landed: stop NOW,
+ *       `servedModelFromCliLog` will stamp the substitution (tripwire fully intact).
+ *   'known-label-clean'     — the requested label is CATALOGUED, the window is
+ *       readable, and a straggler grace (default 2s — agy writes substitution lines
+ *       slightly async) has elapsed with no evidence: attest-by-absence is already
+ *       decided, waiting the full ~10s adds nothing. This was the review's largest
+ *       standing tax: EVERY successful Gemini call paid the whole 40x250ms poll,
+ *       because a clean serve never writes the line the loop waited for.
+ *   null                    — keep polling (unknown label, unreadable window, or
+ *       still inside the grace). Unknown labels always poll the full window — they
+ *       are the substitution-risk case the tripwire exists for.
+ */
+export function shouldStopAttestationPoll({ cliWindow, requested, elapsedMs, graceMs = 2000 } = {}) {
+  if (typeof cliWindow === 'string' &&
+      (/Failed to resolve model flag/i.test(cliWindow) ||
+       /Propagating selected model override to backend:/i.test(cliWindow))) {
+    return 'substitution-evidence';
+  }
+  if (requested && KNOWN_AGY_LABELS_NORM.has(norm(requested)) &&
+      typeof cliWindow === 'string' && elapsedMs >= graceMs) {
+    return 'known-label-clean';
+  }
+  return null;
+}
+
 export function servedModelFromCliLog(cliLogWindow, { requested = null } = {}) {
   // W0-fix: a null / non-string window (unreadable cli.log) fails CLOSED — Branch 3
   // UNATTESTED, NEVER the Branch 2 clean-stamp. We cannot attest what we could not read.
@@ -565,12 +593,16 @@ export function defaultRunGeminiCli(fullPrompt, label, {
       // simply never logs and is attested by absence in servedModelFromCliLog. A `null`
       // window means cli.log was unreadable this tick — keep polling (no window yet); after
       // the loop whatever it is (null → UNATTESTED) is passed straight through.
+      // B2 (2026-07-11): a KNOWN label with a readable, evidence-free window stops
+      // after a short straggler grace (attest-by-absence is already decided) instead
+      // of paying the full ~10s on EVERY successful call. Unknown labels still poll
+      // the full window; substitution evidence still stops immediately (tripwire
+      // intact). Grace tunable via AGY_ATTEST_GRACE_MS.
+      const graceMs = Number(env.AGY_ATTEST_GRACE_MS) > 0 ? Number(env.AGY_ATTEST_GRACE_MS) : 2000;
       let cliWindow = null;
       for (let i = 0; i < 40; i++) {
         cliWindow = cliLogTailSince(cliLogBefore);
-        if (typeof cliWindow === 'string' &&
-            (/Failed to resolve model flag/i.test(cliWindow) ||
-             /Propagating selected model override to backend:/i.test(cliWindow))) break;
+        if (shouldStopAttestationPoll({ cliWindow, requested: mdl, elapsedMs: i * 250, graceMs })) break;
         await sleep(250);
       }
       const attest = servedModelFromCliLog(cliWindow, { requested: mdl });

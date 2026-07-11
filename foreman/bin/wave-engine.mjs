@@ -1058,8 +1058,10 @@ export async function runWave(o) {
         recommend:
           `PLAN-AMENDMENT-PROPOSAL for wave ${wave.n}. Rationale: ${pa.rationale.trim()} ` +
           `Proposed diff to ${pa.target ?? planPath}:\n${pa.proposed_diff.trim()}\n` +
-          `This is a HALT (no silent re-planning): approve to apply the bounded amendment and resume wave ${wave.n}, ` +
-          `or reject and resolve the plan manually. On approval + --resume the amendment is applied (or recorded as applied) and the wave continues.`,
+          `This is a HALT (no silent re-planning). To approve: apply the proposed diff to the plan doc ` +
+          `YOURSELF (or have your session apply it), then resume with --resume --clear-halt — the wave re-enters ` +
+          `at the gate and re-proves GREEN. (T12 honesty note, 2026-07-11: there is NO automatic apply-on-approval ` +
+          `mechanism; the prior text promised one that was never built.)`,
       });
     }
     findings = collectFindings(reviews);

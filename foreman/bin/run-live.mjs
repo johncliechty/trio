@@ -13,6 +13,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 import { classifyExit, makeTelemetryRecord } from './transport.mjs';
@@ -269,6 +270,42 @@ const budgetConfig = (MAX_WAVES != null || MAX_WALL_MIN != null) ? {
   maxWallClockMs: MAX_WALL_MIN != null ? Number(MAX_WALL_MIN) * 60000 : null,
 } : null;
 
+// ---- The LOCKED 10-minute Status table (global AGENTS.md rule), engine-emitted ----
+// Code-enforced cadence: the engine itself posts the table to the status log every
+// ~10 min (armed AT LAUNCH), so a long run can never silently go dark because a
+// supervising session forgot. Shell-free: reads only the checkpoint + in-process
+// telemetry. The supervising session relays these to chat per the global rule.
+const RUN_T0 = Date.now();
+function emitStatusTable(tag = '') {
+  let cp = null;
+  try { cp = JSON.parse(fs.readFileSync(path.join(PROJECT, 'foreman-checkpoint.json'), 'utf8')); } catch { /* pre-checkpoint */ }
+  const now = new Date();
+  const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const elapsedMin = Math.round((Date.now() - RUN_T0) / 60000);
+  const doneWaves = cp ? (cp.last_verdict === 'GO' ? cp.current_wave : cp.current_wave - 1) : 0;
+  const total = cp?.total_waves ?? '?';
+  const perWave = doneWaves > 0 ? (Date.now() - RUN_T0) / doneWaves : null;
+  const remaining = perWave && Number.isInteger(cp?.total_waves) ? Math.max(0, cp.total_waves - doneWaves) : null;
+  const eta = perWave && remaining != null ? `~${Math.round((perWave * remaining) / 60000)}m to run end (pace estimate)` : 'estimating (no completed wave yet)';
+  const est = calls.reduce((a, c) => a + (c.cost_usd || 0), 0);
+  emit([
+    `[${hhmm}] Foreman build · ${path.basename(PROJECT)}${tag ? ` · ${tag}` : ''}`,
+    `─────────────────────────────────`,
+    `Effort   ${cp ? path.basename(cp.plan_path) : '(resolving contract)'} (${total} waves)`,
+    `Doing    wave ${cp?.current_wave ?? '?'} · ${cp?.intra_wave_step ?? 'starting'} (iter ${cp?.iteration ?? 0})`,
+    `Status   ${doneWaves}/${total} waves · elapsed ${elapsedMin}m`,
+    `Tests    last verdict ${cp?.last_verdict ?? '—'}`,
+    `Blocker  ${cp?.status === 'halted' ? (cp.pending_action || 'HALTED') : 'none'}`,
+    `Procs    agent_calls ${calls.length} · est $${est.toFixed(2)} (subscription equiv)`,
+    `─────────────────────────────────`,
+    `ETA      ${eta}`,
+    `To do    waves ${Math.min(doneWaves + 1, Number(total) || doneWaves + 1)}..${total}`,
+  ].join('\n'));
+}
+emitStatusTable('t=0');
+const statusTimer = setInterval(() => emitStatusTable(), 10 * 60 * 1000);
+if (typeof statusTimer.unref === 'function') statusTimer.unref();
+
 // Clear a halted checkpoint BEFORE runProject (whose planResume refuses 'halted').
 // Only meaningful with --resume; without a checkpoint on disk there is nothing to clear.
 if (RESUME && CLEAR_HALT) {
@@ -305,10 +342,36 @@ const tot = calls.reduce((a, c) => ({
   ms: a.ms + (c.duration_ms || 0), denials: a.denials + (c.permission_denials || 0),
 }), { out: 0, cost: 0, ms: 0, denials: 0 });
 
+clearInterval(statusTimer);
+emitStatusTable('final');
 emit(`=== DONE === status=${result?.status ?? (threw ? 'THREW' : 'n/a')} · ` +
   `waves=${(result?.waveResults || []).map((w) => `${w.wave}:${w.status}`).join(',') || 'none'} · ` +
   `stoppedAt=${result?.stoppedAt ?? '-'} · agent_calls=${calls.length} · denials=${tot.denials} · ` +
   `est_cost=$${tot.cost.toFixed(4)} (subscription equiv) · out_tokens=${tot.out}`);
+
+// ---- Run capture for training (Skill Foundry AGENTS.md "Run capture") — best-effort ----
+try {
+  const skillDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const runsDir = path.join(skillDir, 'journal', 'runs');
+  fs.mkdirSync(runsDir, { recursive: true });
+  const startedIso = new Date(RUN_T0).toISOString();
+  fs.writeFileSync(path.join(runsDir, `${startedIso.replace(/[:.]/g, '-')}-${Math.abs(Date.now() % 100000)}.json`),
+    JSON.stringify({
+      skill: 'foreman',
+      tier: process.env.TRIO_TIER || 'standard',
+      started: startedIso, ended: new Date().toISOString(),
+      input: PROJECT,
+      params: { reviewers: REVIEWERS, fixIterCap: CAP, maxWaves: MAX_WAVES, git: USE_GIT, resume: RESUME, clearHalt: CLEAR_HALT },
+      output: STATUS_FILE,
+      result: `${result?.status ?? (threw ? 'THREW' : 'n/a')}: ` +
+        `${(result?.waveResults || []).map((w) => `${w.wave}:${w.status}`).join(',') || 'none'}` +
+        (result?.haltReason ? ` — ${String(result.haltReason).slice(0, 200)}` : ''),
+      cross_model: ['REVIEW', 'SHARK', 'REVIEWER', 'DEBATE'].some((r) => String(process.env[`TRIO_DRIVER_${r}`] || '').startsWith('gemini')),
+      models: null,
+      duration_s: Math.round((Date.now() - RUN_T0) / 1000),
+      journal_ref: null,
+    }, null, 2) + '\n');
+} catch { /* capture is best-effort by design */ }
 if (result?.haltReason) emit(`HALT/STOP reason: ${result.haltReason}`);
 if (result?.recommend) emit(`recommended next: ${result.recommend}`);
 

@@ -23,19 +23,25 @@ wave/sprint/section to done through fresh-context sub-agents, auto-advances to
 the next wave, keeps the tree clean, prints running commentary, and **halts only
 on a defined blocker set**.
 
-> **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `C:\dev\Skill Foundry\AGENTS.md` → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
+> **Tier definition (Heavy vs regular · stakes-gated cross-model · seat mapping) + invocation
+> discipline (zero deliberation · the LOCKED global status table · run capture):** canonical in
+> `C:\dev\Skill Foundry\AGENTS.md` → "Skill tiers" / "Invocation discipline" / "Run capture".
+> Trio build tier: `TRIO_TIER=heavy|standard` (standard is the build default). Do not re-define
+> or deliberate any of it.
 
-> **Status (2026-06-02): the engine is built and adversarially verified through
-> Phase 3d.** The invocation contract + parsers (Phase 0), the one-wave
-> EXECUTE/GATE/REVIEW/JUDGE/FIX engine (Phase 1), multi-wave auto-advance
-> (Phase 2), budget pre-flight + intra-wave/git resume (Phase 3a-c), and Node +
-> Python/pytest gate support (Phase 3d) are all implemented in `bin/` — 106/106
-> unit tests, each phase re-verified by an independent adversarial review. The
-> model-driven {execute, review, fix} steps run as real sub-agents through an
-> injected `agent()` seam; the ground-truth gate is run by the orchestrator
-> itself so a sub-agent cannot forge a GREEN. **Remaining work:** the empirical
-> live `agent()`-driven calibration on the Pro/Max subscription (tokens/wave +
-> Pro-window pacing).
+> **Status (refreshed 2026-07-11): PRODUCTION — ~15 real builds shipped** (aurora,
+> researchPrime-upgrade, ramanujan, the Anchor rearchitecture 20/20 waves, most Foundry
+> skills). Engine: contract + parsers, the one-wave EXECUTE/GATE/REVIEW/JUDGE/FIX loop,
+> multi-wave auto-advance, budget pre-flight + intra-wave/git resume, Node + pytest gates —
+> suite `node --test "test/*.test.mjs"` (120 tests; the bare directory form false-fails on
+> fixture subdirs). The ground-truth gate is orchestrator-run (unforgeable); the JUDGE is a
+> pure function, not an agent. 2026-07-11 fixes: `--clear-halt` actually implemented
+> (`checkpoint.mjs clear`; halted→budget_stopped@gate, resume re-proves GREEN); pytest
+> summaries trusted before per-test-event heuristics + gates normalized to `-v` at contract
+> time (`-q` refuses pre-run); the vacuous-GREEN guard has an honest test-only path
+> (inventory rose + gate ran the larger suite auto-passes; tag a modify-only test wave
+> `[test-only]` in its title); transport-failed reviewers degrade instead of halting; the
+> reviewer fan-out is stakes-gated (full panel on terminal/fix-iter waves).
 
 ## What Foreman is / is NOT
 
@@ -55,11 +61,11 @@ agree; see `research1-out/.../01-report.md` F1/F2).
 | Phase | Topology |
 |---|---|
 | EXECUTE | single-threaded linear agent per wave; compress when long |
-| REVIEW | `REVIEWER_COUNT` (default 2) independent reviewers, **sequential**, read-only, prompted to refute |
+| REVIEW | `REVIEWER_COUNT` (default 2) independent reviewers, **CONCURRENT** (default on), read-only, prompted to refute; **stakes-gated** — ordinary clean mid-run waves run 1, the full panel runs on the terminal wave / after fix iterations / `FOREMAN_FULL_REVIEW=1`; skipped entirely on RED intermediate iterations (the gate artifact IS the fix guidance) |
 | FIX | single-threaded linear agent |
-| JUDGE | 1 rubric judge; the **orchestrator-run ground-truth gate dominates** (§5) |
+| JUDGE | a PURE FUNCTION (0 model calls); the **orchestrator-run ground-truth gate dominates** (§5) |
 
-`REVIEWER_COUNT` is one config var (default 2, sequential) — never hard-coded.
+`REVIEWER_COUNT` is one config var (default 2) — never hard-coded.
 Independence comes from separate sub-agent calls, never multi-persona-in-one-generation.
 
 ---
@@ -298,3 +304,10 @@ polished, with the 7 canonical fields (see the Skill Foundry's
 observation, outcome (worked | friction | failed | refused), provenance
 (genuine-execution | seeded — only genuine-execution corroborates).
 No journal entries → the sleep loop has nothing to learn from.
+
+**Auto-capture (2026-07-11):** `bin/run-live.mjs` now writes the machine-readable training
+record to `journal/runs/<ts>.json` AUTOMATICALLY at the end of every run (project, params,
+per-wave outcomes, halt reason, tier, duration — the AGENTS.md "Run capture" standard) and
+emits the LOCKED global Status table to the status log at t=0, every ~10 min, and at
+completion. The human NNNN entry above is for LESSONS — write one when a run taught you
+something; the mechanical record is already handled.

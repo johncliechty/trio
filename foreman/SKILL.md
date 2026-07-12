@@ -271,6 +271,21 @@ drive only the model steps via the `agent()` seam.
 
 ## How to invoke
 
+> **⏱ STATUS UPDATES TO CHAT — the launch pattern that makes the 10-min rule actually fire
+> (2026-07-11 fix).** A Foreman build runs for hours. If a driving session launches the engine as a
+> BLOCKING foreground call, the session is frozen for the whole run and CANNOT post updates — that is
+> why status cadence silently goes dark. So whenever a Claude session drives a build:
+> 1. **Launch the engine in the BACKGROUND** (Bash `run_in_background: true` — or `go.ps1` spawned
+>    detached), NEVER a foreground call. The launch returns immediately and the session stays free.
+> 2. **Arm the cadence at launch** — `ScheduleWakeup` (~600s) or `/loop 10m`, the moment the run starts.
+> 3. **Each tick, relay — shell-free:** the engine writes the LOCKED Status table to
+>    `<projectDir>/_foreman-status.log` at t=0, every ~10 min, and on halt/done. READ its tail with the
+>    Read tool (never spawn a shell) and POST the latest `[HH:MM] Foreman build …` table block into chat.
+>    The chat window is the PRIMARY channel (global AGENTS.md); the log is the data source.
+> 4. **Stop the cadence** when the checkpoint `status` flips to `halted`/`done`, or the background task
+>    notifies completion. The engine's own timer is the fallback if the session misses a tick — but only
+>    the session can reach chat, so the background+relay pattern is mandatory, not optional.
+
 1. **Resolve the contract first.** From the project folder, run
    `node <skill>/bin/locate-plan.mjs .`. If it prints `HALT:` (exit 3), fix the
    named problem (add the missing doc, add `## Wave N` headings, declare a

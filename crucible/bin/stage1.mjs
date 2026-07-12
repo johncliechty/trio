@@ -36,6 +36,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { HaltError, haltForHuman, HALT_GATES } from './crucible-lib.mjs';
+import { startStatusHeartbeat } from './status-heartbeat.mjs';
 import { runSharkTank } from './shark-tank.mjs';
 import {
   makeSynthesizer,
@@ -503,6 +504,8 @@ export async function runMasterPlanLoop({
   startRound = 1,
   artifactsDir = null,
   capPendingAction = 'stage1-round-cap',
+  statusLog = null,
+  statusLabel = 'Crucible plan',
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runMasterPlanLoop');
@@ -518,6 +521,29 @@ export async function runMasterPlanLoop({
   let directed = false;       // has the Director ever spoken? (anti-anchoring spine needs one position)
   const rounds = [];
 
+  // 2026-07-11: the 10-min Status heartbeat — off unless the caller passes a
+  // statusLog (so tests/dogfood stay silent). The supervising session tails the
+  // log and relays to chat (see SKILL.md "How to run"). Snapshot reads live state.
+  const heartbeat = startStatusHeartbeat({
+    logPath: statusLog,
+    label: statusLabel,
+    snapshot: () => {
+      const last = rounds.length ? rounds[rounds.length - 1] : null;
+      const openBlk = last ? (last.verdict.blockers || []).length : 0;
+      return {
+        effort: `${statusLabel} (cap ${roundCap} rounds)`,
+        doing: `Shark-Tank round ${rounds.length + 1} · ${rounds.length ? (last.verdict.dry ? 'dry — checking lock' : 'blocked — revising') : 'first review'}`,
+        status: `${rounds.length}/${roundCap} rounds run`,
+        tests: last ? `last round: ${last.verdict.verdict}` : '—',
+        blocker: openBlk ? `${openBlk} open blocker(s) this round` : 'none',
+        procs: 'sharks∥ + judge + synthesizer (agy 5:1)',
+        eta: `<= ${roundCap - rounds.length} more round(s) to cap`,
+        todo: 'converge to a dry lockable round, then the user-approval HALT',
+      };
+    },
+  });
+
+  try {
   for (let round = startRound; round < startRound + roundCap; round++) {
     // Per-round research only on a genuinely NEW candidate (Wave-5 cost-guard).
     let analystBrief = null;
@@ -639,6 +665,11 @@ export async function runMasterPlanLoop({
   );
   err.best_draft = bestDraft;
   throw err;
+  } finally {
+    // Fires on BOTH exits — the converged `return` inside the loop and the
+    // cap-HALT `throw` — so the final table lands and the timer is always cleared.
+    heartbeat.stop();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -718,6 +749,7 @@ export async function runStage1({
   depth = null,
   grasscatcherPath = null,
   artifactsDir = null,
+  statusLog = null,
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runStage1');
@@ -756,6 +788,7 @@ export async function runStage1({
     agent, northStar, criteria,
     draft: renderMasterPlanDraft(plan),
     research, acceptanceCriteria, roundCap, artifactsDir, log,
+    statusLog, statusLabel: 'Crucible Stage 1 (Master Plan)',
   });
 
   // (5) The user-approval HALT gate (master-plan-approval).

@@ -136,19 +136,30 @@ user is the final convergence authority**.
    VERBATIM IN THE MESSAGE BODY (never clipped into a dialog preview); if the user asked for research,
    DELIVER IT BEFORE the lock ask; present decisions ONE AT A TIME, each with 30-second plain-English
    context and a recommendation first.
-3. **Stage 1** → `runStage1({ agent, northStar, depth, routes, artifactsDir, ... })` — brainstorm →
-   triage → phased plan → Shark loop. On the round cap it HALTs WITH the best draft + open findings
-   attached and persisted (T5) — review those, never restart from zero.
-4. **Stage 2** → `runStage2({ agent, northStar, masterPlan, outputDir, depth, routes, ... })` —
-   decompose → loop → approval → emit + well-formedness gate → Foreman handoff. A cap HALT emits the
+3. **Stage 1** → `runStage1({ agent, northStar, depth, routes, artifactsDir, statusLog, ... })` —
+   brainstorm → triage → phased plan → Shark loop. On the round cap it HALTs WITH the best draft +
+   open findings attached and persisted (T5) — review those, never restart from zero.
+4. **Stage 2** → `runStage2({ agent, northStar, masterPlan, outputDir, depth, routes, statusLog, ... })`
+   — decompose → loop → approval → emit + well-formedness gate → Foreman handoff. A cap HALT emits the
    unapproved doc-trio to `<outputDir>/_unapproved-cap-draft` (gated, clearly not the handoff).
 5. **Dogfood deterministically** (no model, no billing): `node bin/self-run.mjs [outputDir]`.
 6. **LITE honesty note:** the user-confirmed LITE depth currently shrinks the round cap (5→2) only —
    it does NOT yet collapse stages (a small task still pays ~18-20 calls + 4 gates). The stage-merged
    LITE (≤6 calls, 2 gates) is planned, not built; do not promise it.
 
-Long runs emit the LOCKED global Status table every ~10 min unprompted (user-global AGENTS.md), and
-every real run writes a `journal/runs/` training record (Skill Foundry AGENTS.md "Run capture").
+> **⏱ STATUS UPDATES TO CHAT — the launch pattern (2026-07-11 fix).** A Shark-Tank stage loop runs
+> 20-40 min; a driving session that calls a stage FOREGROUND is frozen and CANNOT post updates — the
+> silent-cadence bug. So when a session drives Crucible:
+> 1. **Pass `statusLog: '<outputDir>/_crucible-status.log'`** into `runStage1`/`runStage2` — the loop
+>    then writes the LOCKED Status table there at t=0, every ~10 min, and on stop (`bin/status-heartbeat.mjs`;
+>    OFF when `statusLog` is omitted, so tests/dogfood stay silent). Crucible had NO emitter before this.
+> 2. **Run the stage in the BACKGROUND** (Bash `run_in_background: true`), never a blocking foreground call.
+> 3. **Arm the cadence at launch** (`ScheduleWakeup` ~600s or `/loop 10m`) and **each tick READ the tail
+>    of `_crucible-status.log` (shell-free) and POST the latest `[HH:MM] Crucible Stage … ` table to chat.**
+> 4. **Stop** at the stage's user-approval HALT (the loop's `stop()` fires the final table automatically).
+> The chat window is the PRIMARY channel; the log is the data source. Only a session reaches chat.
+
+Every real run writes a `journal/runs/` training record (Skill Foundry AGENTS.md "Run capture").
 
 ## Usage journal (sleep-loop feed — append after every REAL run)
 

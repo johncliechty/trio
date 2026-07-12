@@ -69,7 +69,11 @@ try {
 } catch { /* no config or no models block — env-only routing */ }
 
 function emit(line) {
-  const stamp = new Date().toISOString().slice(11, 19);
+  // LOCAL wall-clock (2026-07-11 fix): the log-line prefix used UTC while the
+  // Status-table header used local time, so a run read as two clocks 6h apart.
+  // The locked global format is human wall-clock — one clock, local, everywhere.
+  const d = new Date();
+  const stamp = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
   const out = `[${stamp}] ${line}\n`;
   process.stdout.write(out);
   try { fs.appendFileSync(STATUS_FILE, out); } catch { /* never crash on logging */ }

@@ -402,6 +402,7 @@ export async function runStage2({
   roundCap = undefined,
   depth = null,
   artifactsDir = null,
+  statusLog = null,
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runStage2');
@@ -438,6 +439,7 @@ export async function runStage2({
       agent, northStar, criteria,
       draft: plan, research, acceptanceCriteria, roundCap, artifactsDir, log,
       capPendingAction: 'stage2-round-cap',
+      statusLog, statusLabel: 'Crucible Stage 2 (Implementation Plan)',
     });
   } catch (e) {
     if (e && e.halt_for_human && e.pending_action === 'stage2-round-cap') {

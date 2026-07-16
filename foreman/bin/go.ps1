@@ -60,7 +60,7 @@ if (Test-Path $cfgPath) {
 }
 if ($Cap -le 0) { $Cap = 3 }
 
-$cliArgs = @($engine, $proj, '--reviewers', $Reviewers, '--cap', $Cap) + $gitArgs
+$cliArgs = @("`"$engine`"", "`"$proj`"", '--reviewers', $Reviewers, '--cap', $Cap) + $gitArgs
 if ($MaxWaves -gt 0)   { $cliArgs += @('--max-waves', $MaxWaves) }
 if ($MaxWallMin -gt 0) { $cliArgs += @('--max-wallclock-min', $MaxWallMin) }
 
@@ -102,5 +102,6 @@ if ($Resume) {
 }
 
 Write-Host "Foreman (headless, subscription) -> node $($cliArgs -join ' ')"
-& node @cliArgs
+$proc = Start-Process -FilePath "node" -ArgumentList $cliArgs -NoNewWindow -RedirectStandardOutput "_foreman-output.log" -RedirectStandardError "_foreman-error.log" -PassThru -Wait
+$LASTEXITCODE = $proc.ExitCode
 exit $LASTEXITCODE

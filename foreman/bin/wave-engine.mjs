@@ -602,10 +602,10 @@ export function runGate({ projectDir, testCommand, foremanDir, wave, iteration }
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
   // 2026-07: the gate timeout is CONFIGURABLE (FOREMAN_GATE_TIMEOUT_MS; default
-  // unchanged at 120s). The old hardcoded 120s KILLED any suite that takes
+  // increased to 20m/1200s). The old hardcoded 120s KILLED any suite that takes
   // longer, which read as a spurious RED the fix loop then chased — on a big
   // target that is pure vacuous churn. A killed gate is still RED (never GREEN).
-  let gateTimeout = 120000;
+  let gateTimeout = 1200000;
   const _t = Number(process.env.FOREMAN_GATE_TIMEOUT_MS);
   if (Number.isFinite(_t) && _t > 0) gateTimeout = _t;
   const _gateT0 = Date.now(); // SPIKE(foreman-parallel): gate wall-clock

@@ -129,6 +129,7 @@ function fixPrompt(ctx, gate, findings) {
     `The orchestrator gate is at ${gate.artifact_path}. Make the minimal change that`,
     `turns the gate GREEN; the orchestrator — not you — re-runs the gate to verify.`,
     `Do NOT run any git commands, terminal commands, or tests yourself. The orchestrator owns all testing and version control.`,
+    `TESTS ARE FROZEN. Do not modify test files to force a pass. You may NEVER use pytest.skip, @pytest.mark.skip, or pytest.importorskip on failing tests. Solve the root cause in the product code.`,
   ].join(' ');
 }
 

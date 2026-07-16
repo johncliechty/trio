@@ -101,6 +101,13 @@ Never flatter, never hallucinate a source, never count popularity as truth, neve
 ## Reserved / HALT-worthy
 
 The attested-lineage enum membership, the pre-registered thresholds (G / X% / C_min / N / K / M / T / N_min), and any change to the locked North Star / invariants are human calls — HALT for a human.
+> **⏱ STATUS UPDATES TO CHAT:** When running a long research phase in the background, you MUST arm a 10-minute cadence (`ScheduleWakeup` ~600s) and provide scheduled updates to the user using the STRICT 5-BULLET FORMAT:
+> * **Precise Timestamp:** [ISO timestamp]
+> * **Current Status:** [1-2 sentences on current task]
+> * **Current Step:** [1-2 sentences on granular progress]
+> * **Recent Journaling:** [Explicit recap of friction points/fixes logged in the journal since last update]
+> * **Estimated Time Remaining:** [Time estimate and rationale]
+
 ## Usage journal (sleep-loop feed — append after every REAL run)
 
 At the end of any real (non-test) run of this skill, append ONE entry to

@@ -155,7 +155,12 @@ user is the final convergence authority**.
 >    OFF when `statusLog` is omitted, so tests/dogfood stay silent). Crucible had NO emitter before this.
 > 2. **Run the stage in the BACKGROUND** (Bash `run_in_background: true`), never a blocking foreground call.
 > 3. **Arm the cadence at launch** (`ScheduleWakeup` ~600s or `/loop 10m`) and **each tick READ the tail
->    of `_crucible-status.log` (shell-free) and POST the latest `[HH:MM] Crucible Stage … ` table to chat.**
+>    of `_crucible-status.log` (shell-free) and POST the latest status to chat USING THE STRICT 5-BULLET FORMAT:**
+>    * **Precise Timestamp:** [ISO timestamp]
+>    * **Current Status:** [1-2 sentences on current task]
+>    * **Current Step:** [1-2 sentences on granular progress]
+>    * **Recent Journaling:** [Explicit recap of friction points/fixes logged in the journal since last update]
+>    * **Estimated Time Remaining:** [Time estimate and rationale]
 > 4. **Stop** at the stage's user-approval HALT (the loop's `stop()` fires the final table automatically).
 > The chat window is the PRIMARY channel; the log is the data source. Only a session reaches chat.
 

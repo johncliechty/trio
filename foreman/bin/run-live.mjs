@@ -23,7 +23,7 @@ import { resolveClaudeModel } from '../../drivers/claude.mjs';
 const argv = process.argv.slice(2);
 function flag(name, def) { const i = argv.indexOf(name); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def; }
 const PROJECT = path.resolve(argv.find((a) => !a.startsWith('--')) || process.cwd());
-const REVIEWERS = Number(flag('--reviewers', '2'));
+let REVIEWERS = Number(flag('--reviewers', '2'));
 const CAP = Number(flag('--cap', '3'));
 const MAX_WAVES = flag('--max-waves', null);
 const MAX_WALL_MIN = flag('--max-wallclock-min', null);
@@ -54,6 +54,17 @@ const CLAUDE_ARGS = ['-p', ' ', '--output-format', 'stream-json', '--verbose',
 // Pre-set env always wins (config never overrides an explicit operator choice).
 try {
   const cfg = JSON.parse(fs.readFileSync(path.join(PROJECT, 'foreman.config.json'), 'utf8'));
+  
+  // Triage Architecture: adjust reviewer fan-out based on track
+  const track = String(cfg.triage_track || '').toUpperCase();
+  if (track === 'LITE' || track === 'LIGHT') {
+    REVIEWERS = 1; // floored at 1, never 0
+  } else if (track === 'MID' || track === 'STANDARD') {
+    REVIEWERS = 1;
+  } else if (track === 'FULL' || track === 'HEAVY') {
+    REVIEWERS = 2;
+  }
+  
   for (const [role, spec] of Object.entries(cfg.models || {})) {
     const s = String(spec); const i = s.indexOf(':');
     const drv = i > 0 ? s.slice(0, i) : 'claude';

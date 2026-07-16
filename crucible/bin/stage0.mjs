@@ -125,13 +125,14 @@ export function assessComplexity(intake = {}) {
     band = COMPLEXITY_BANDS.LITE;
     rationale =
       `Small, clear, low-novelty, low-stakes intake with ${unknowns} unknown(s) ⇒ LITE: a single-pass ` +
-      `plan with minimal/no Shark rounds. The North Star is still locked and drift-checked — only the ceremony shrinks.`;
+      `plan with NO Shark rounds. The North Star is still locked and drift-checked — only the ceremony shrinks.`;
   } else {
     band = COMPLEXITY_BANDS.FULL;
     defaultedToFull = true;
     rationale =
       `No clear case for a lighter path (scope=${scope}, unknowns=${unknowns}` +
-      `${novel ? ', novel' : ''}${brownfield ? ', brownfield' : ''}) ⇒ FULL by default — when uncertain, keep full rigor.`;
+      `${novel ? ', novel' : ''}${brownfield ? ', brownfield' : ''}) ⇒ FULL by default — when uncertain, ` +
+      `the safe move is the full machinery, never a silent downgrade.`;
   }
 
   return {

@@ -110,8 +110,7 @@ function decomposePrompt({ northStar, criteria, masterPlan }) {
     `Acceptance-criteria convention (D16): EVERY wave gets a one-line done-when; a non-trivial`,
     `wave additionally gets 1–3 Given/When/Then scenarios. Order the waves so each wave's`,
     `dependsOn names the wave it builds on (null for the first).`,
-    ``,
-    `Emit: waves [{title, intent, deliverables[], dependsOn, doneWhen, nonTrivial, gwt:[{given,when,then}]}].`,
+    `Emit: waves [{title, intent, deliverables, dependsOn, doneWhen, nonTrivial, gwt:[{given,when,then}]}].`,
   ].join('\n');
 }
 
@@ -172,11 +171,56 @@ export async function decomposeIntoWaves({ agent, northStar, criteria = [], mast
   if (!northStar) throw new HaltError('decomposeIntoWaves requires a locked North Star', 'lock the North Star in Stage 0 first');
   if (!masterPlan) throw new HaltError('decomposeIntoWaves requires the approved Master Plan', 'approve the Master Plan in Stage 1 first');
 
-  const out = (await agent(decomposePrompt({ northStar, criteria, masterPlan }), { label: 'stage2:decompose', schema: WAVE_DECOMP_SCHEMA })) || {};
-  const waves = normalizeWaves(out.waves);
+  const out = await agent(decomposePrompt({ northStar, criteria, masterPlan }), { label: 'stage2:decompose', schema: WAVE_DECOMP_SCHEMA });
+  const rawWaves = out && typeof out === 'object' && Array.isArray(out.waves)
+    ? out.waves
+    // Raw-text reply — a live driver that could not escape the decomposition into
+    // valid JSON (journal 0002): recover the waves from markdown-style headers.
+    : parseWavesFromMarkdown(typeof out === 'string' ? out : '');
+
+  const waves = normalizeWaves(rawWaves);
   const nonTrivial = waves.filter((w) => w.nonTrivial).length;
   log(`stage2 decomposition: ${waves.length} wave(s), ${nonTrivial} non-trivial (with G/W/T)`);
   return waves;
+}
+
+/**
+ * Best-effort recovery of the wave decomposition from a RAW-TEXT reply (the
+ * journal-0002 fallback): `## Wave: title` blocks with `Intent:` / `Deliverables:` /
+ * `Depends On:` / `Done When:` / `Given/When/Then` lines. Returns raw waves for
+ * normalizeWaves (which still HALTs when nothing usable came back).
+ */
+function parseWavesFromMarkdown(rawText) {
+  const rawWaves = [];
+  let currentWave = null;
+  let currentGwt = null;
+  // Handle literal \n and missing newlines before keywords.
+  let normalizedText = String(rawText).replace(/\\n/g, '\n');
+  normalizedText = normalizedText.replace(/\s+(?:\*\*)?(Intent|Deliverables|Depends On|Done[\s\-]*When|Given|When|Then)(?:\*\*)?[:\-]/gi, '\n$1:');
+
+  const lines = normalizedText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  for (const line of lines) {
+    let m;
+    if ((m = line.match(/^(?:##\s*)?(?:\*\*)?Wave(?:\s+\d+)?(?:\*\*)?[:\-\s]+(.*)/i))) {
+      if (currentGwt) currentWave.gwt.push(currentGwt);
+      currentGwt = null;
+      currentWave = { title: m[1].trim(), intent: '', deliverables: [], dependsOn: null, doneWhen: '', nonTrivial: true, gwt: [] };
+      rawWaves.push(currentWave);
+    } else if (currentWave) {
+      if ((m = line.match(/^(?:\*\*)?Intent(?:\*\*)?[:\-\s]+(.*)/i))) currentWave.intent = m[1].trim();
+      else if ((m = line.match(/^(?:\*\*)?Deliverables(?:\*\*)?[:\-\s]+(.*)/i))) currentWave.deliverables = m[1].split(';').map((s) => s.trim());
+      else if ((m = line.match(/^(?:\*\*)?Depends On(?:\*\*)?[:\-\s]+(.*)/i))) currentWave.dependsOn = m[1].trim().toLowerCase() === 'null' ? null : m[1].trim();
+      else if ((m = line.match(/^(?:\*\*)?Done[\s\-]*When(?:\*\*)?[:\-\s]+(.*)/i))) currentWave.doneWhen = m[1].trim();
+      else if ((m = line.match(/^(?:\*\*)?Given(?:\*\*)?[:\-\s]+(.*)/i))) {
+        if (currentGwt) currentWave.gwt.push(currentGwt);
+        currentGwt = { given: m[1].trim(), when: '', then: '' };
+      }
+      else if ((m = line.match(/^(?:\*\*)?When(?:\*\*)?[:\-\s]+(.*)/i)) && currentGwt) currentGwt.when = m[1].trim();
+      else if ((m = line.match(/^(?:\*\*)?Then(?:\*\*)?[:\-\s]+(.*)/i)) && currentGwt) currentGwt.then = m[1].trim();
+    }
+  }
+  if (currentGwt && currentWave) currentWave.gwt.push(currentGwt);
+  return rawWaves;
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +309,7 @@ export function renderExecutionLog({ title = 'Crucible-planned project', waveCou
  * @returns {{dir:string, files:{description:string,plan:string,execution_log:string},
  *            configPath:string, fileNames:object}}
  */
-export function writeDocTrio({ outputDir, plan, description, executionLog, fileNames = DEFAULT_DOC_FILENAMES, log = () => {} } = {}) {
+export function writeDocTrio({ outputDir, plan, description, executionLog, fileNames = DEFAULT_DOC_FILENAMES, depth = 'HEAVY', log = () => {} } = {}) {
   if (!outputDir) throw new HaltError('writeDocTrio requires an outputDir', 'pass the handoff output directory');
   const dir = path.resolve(outputDir);
   fs.mkdirSync(dir, { recursive: true });
@@ -282,6 +326,7 @@ export function writeDocTrio({ outputDir, plan, description, executionLog, fileN
   // The explicit doc-resolution config (paths relative to the output dir).
   const configPath = path.join(dir, 'foreman.config.json');
   const config = {
+    triage_track: depth || 'HEAVY',
     docs: {
       description: fileNames.description,
       plan: fileNames.plan,
@@ -406,10 +451,11 @@ export async function runStage2({
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runStage2');
-  // 2026-07: consume the user-confirmed Stage-0 depth (see runStage1) — LITE
+  // 2026-07: consume the user-confirmed Stage-0 depth (see runStage1) — LIGHT
   // shrinks the default safety ceiling; an explicitly passed roundCap wins.
   if (roundCap === undefined) {
-    roundCap = String(depth || '').toUpperCase() === 'LITE' ? 2 : 5;
+    const d = String(depth || '').toUpperCase();
+    roundCap = (d === 'LITE' || d === 'SPIKE-FIRST') ? 2 : 5;
     if (depth) log(`stage2: depth=${depth} → roundCap=${roundCap}`);
   }
   if (!northStar) throw new HaltError('runStage2 requires a locked North Star', 'Stage 2 starts from the Stage-0 North-Star lock');
@@ -447,7 +493,7 @@ export async function runStage2({
       try {
         const description = renderDescriptionDoc({ title, northStar, criteria, summary });
         const executionLog = renderExecutionLog({ title, waveCount: waves.length });
-        const docTrio = writeDocTrio({ outputDir: draftDir, plan, description, executionLog, log });
+        const docTrio = writeDocTrio({ outputDir: draftDir, plan, description, executionLog, depth, log });
         const gate = runWellFormednessGate({ projectDir: docTrio.dir, artifactsDir, log });
         e.emitted = { docTrio, wellFormedness: { pass: !!gate.pass, status: gate.status ?? null } };
         e.reason += ` — the full doc-trio is EMITTED for review at ${docTrio.dir} ` +
@@ -468,7 +514,7 @@ export async function runStage2({
   // (5) Emit the doc-trio + config, then gate the handoff on the well-formedness gate.
   const description = renderDescriptionDoc({ title, northStar, criteria, summary });
   const executionLog = renderExecutionLog({ title, waveCount: waves.length });
-  const docTrio = writeDocTrio({ outputDir, plan, description, executionLog, log });
+  const docTrio = writeDocTrio({ outputDir, plan, description, executionLog, depth, log });
   const handoff = runHandoffGate({ projectDir: docTrio.dir, artifactsDir, log });
 
   return { waves, plan, loop, approval, docTrio, handoff };

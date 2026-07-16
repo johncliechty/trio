@@ -178,7 +178,7 @@ function ideationPrompt({ northStar, criteria, assumptions, premortem, research 
     `=== END FAILURE MODES ===`,
     research ? `\n=== FRESH RESEARCH INPUT ===\n${typeof research === 'string' ? research : JSON.stringify(research)}\n=== END RESEARCH ===` : '',
     ``,
-    `Emit: ideas [{id, idea, traces_to_north_star (yes|no), criterion, tag (refinement|out-of-scope)}].`,
+    `Emit: ideas (a list of objects with fields: id, idea, traces_to_north_star, criterion, tag).`,
     `An idea that does NOT trace to a criterion is out-of-scope (it will be parked in the`,
     `Grasscatcher, not absorbed) — label it honestly rather than inflating its relevance.`,
   ].join('\n');
@@ -342,7 +342,7 @@ function phasedPlanPrompt({ northStar, criteria, ideas, assumptions, premortem }
     premortem.length ? premortem.map((f, i) => `(${i + 1}) ${f.mitigation || f.mode}`).join('\n') : '(none)',
     `=== END MITIGATIONS ===`,
     ``,
-    `Emit: summary, phases [{name, rationale, nearTermSpecifics[], deferred[]}].`,
+    `Emit: summary, phases [{name, rationale, nearTermSpecifics, deferred}].`,
   ].join('\n');
 }
 
@@ -415,6 +415,7 @@ export function renderMasterPlanDraft(plan) {
 /** What the between-round draft revision returns (the "fix" step). */
 const REVISE_SCHEMA = {
   type: 'object',
+  required: ['draft', 'changelog'],
   properties: {
     draft: { type: 'string' },
     changelog: { type: 'array', items: { type: 'string' } },
@@ -445,14 +446,28 @@ function revisePrompt({ northStar, draft, verdict, direction }) {
     String(draft),
     `=== END DRAFT ===`,
     ``,
-    `Emit: draft (the full revised draft), changelog (what you changed).`,
+    `Emit ONLY the revised draft enclosed in \`\`\`markdown ... \`\`\` fences. Do NOT emit a JSON object.`,
   ].join('\n');
 }
 
 async function reviseDraft({ agent, northStar, draft, verdict, direction, round, log }) {
-  const out = (await agent(revisePrompt({ northStar, draft, verdict, direction }), { label: `stage1:revise:r${round}`, schema: REVISE_SCHEMA })) || {};
-  const revised = typeof out.draft === 'string' && out.draft.trim() ? out.draft : draft;
-  const changelog = Array.isArray(out.changelog) ? out.changelog : [];
+  const out = await agent(revisePrompt({ northStar, draft, verdict, direction }), { label: `stage1:revise:r${round}` });
+  let revised = draft;
+  let changelog;
+  if (out && typeof out === 'object' && typeof out.draft === 'string') {
+    // The structured contract: { draft, changelog } (what schema-capable seams return).
+    revised = out.draft;
+    changelog = Array.isArray(out.changelog) ? out.changelog : [];
+  } else {
+    // Raw-text reply — live drivers that cannot escape a large multi-line draft
+    // into a JSON string (journal 0002): take the ```markdown fenced block, else
+    // the trimmed text; the structured changelog is honestly unavailable here.
+    const text = typeof out === 'string' ? out : '';
+    const m = text.match(/```(?:markdown)?\s*([\s\S]*?)```/i);
+    if (m) revised = m[1].trim();
+    else if (text.trim()) revised = text.trim();
+    changelog = revised !== draft ? ['(Raw markdown parsed, changelog omitted)'] : [];
+  }
   log(`stage1 revise r${round}: draft revised (${changelog.length} change(s))`);
   // 2026-07: the changelog is no longer discarded — the next round's Sharks get
   // it (with the blocker register) so refutation focuses on new ground.
@@ -761,7 +776,8 @@ export async function runStage1({
   // SKILL.md contract), so a LITE run shrinks the safety ceiling instead of
   // always paying the FULL 5-round cap. An explicitly passed roundCap wins.
   if (roundCap === undefined) {
-    roundCap = String(depth || '').toUpperCase() === 'LITE' ? 2 : 5;
+    const d = String(depth || '').toUpperCase();
+    roundCap = (d === 'LITE' || d === 'SPIKE-FIRST') ? 2 : 5;
     if (depth) log(`stage1: depth=${depth} → roundCap=${roundCap}`);
   }
 

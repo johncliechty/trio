@@ -280,7 +280,12 @@ drive only the model steps via the `agent()` seam.
 > 2. **Arm the cadence at launch** — `ScheduleWakeup` (~600s) or `/loop 10m`, the moment the run starts.
 > 3. **Each tick, relay — shell-free:** the engine writes the LOCKED Status table to
 >    `<projectDir>/_foreman-status.log` at t=0, every ~10 min, and on halt/done. READ its tail with the
->    Read tool (never spawn a shell) and POST the latest `[HH:MM] Foreman build …` table block into chat.
+>    Read tool (never spawn a shell) and POST the latest status to chat USING THE STRICT 5-BULLET FORMAT:
+>    * **Precise Timestamp:** [ISO timestamp]
+>    * **Current Status:** [1-2 sentences on current task]
+>    * **Current Step:** [1-2 sentences on granular progress]
+>    * **Recent Journaling:** [Explicit recap of friction points/fixes logged in the journal since last update]
+>    * **Estimated Time Remaining:** [Time estimate and rationale]
 >    The chat window is the PRIMARY channel (global AGENTS.md); the log is the data source.
 > 4. **Stop the cadence** when the checkpoint `status` flips to `halted`/`done`, or the background task
 >    notifies completion. The engine's own timer is the fallback if the session misses a tick — but only

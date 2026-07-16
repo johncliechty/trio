@@ -37,6 +37,7 @@ import {
   runMasterPlanLoop,
   approveMasterPlan,
   runStage1,
+  reviseDraft,
 } from '../bin/stage1.mjs';
 
 const NORTH_STAR = 'STAGE1-NS-SENTINEL: ship a vetted, Foreman-ready plan that never drifts.';
@@ -359,4 +360,44 @@ test('Stage-1 entrypoints HALT without an agent() seam or a locked North Star', 
   await assert.rejects(() => runBrainstorm({ northStar: NORTH_STAR }), (e) => e instanceof HaltError);
   await assert.rejects(() => runStage1({ agent: () => {}, northStar: null }), (e) => e instanceof HaltError);
   assert.equal(typeof BRAINSTORM_IDEAS_SCHEMA, 'object');
+});
+
+// ---------------------------------------------------------------------------
+// reviseDraft — the schema-FIRST / raw-text-fallback contract (journal 0002).
+// The structured {draft, changelog} envelope is the primary ask (the changelog
+// briefs the next round's Sharks); raw fenced markdown is the FALLBACK ONLY.
+// ---------------------------------------------------------------------------
+
+test('reviseDraft asks schema-FIRST and keeps the structured changelog when the seam honors it', async () => {
+  let seenOpts = null;
+  const agent = async (_prompt, opts) => {
+    seenOpts = opts;
+    return { draft: 'REVISED-BY-SCHEMA', changelog: ['tightened wave 2', 'dropped the dead gate'] };
+  };
+  const out = await reviseDraft({ agent, northStar: NORTH_STAR, draft: 'OLD-DRAFT', verdict: { blockers: [] }, direction: null, round: 1 });
+  assert.ok(seenOpts && typeof seenOpts.schema === 'object', 'reviseDraft must PASS the REVISE_SCHEMA (schema-first contract)');
+  assert.equal(out.draft, 'REVISED-BY-SCHEMA');
+  assert.deepEqual(out.changelog, ['tightened wave 2', 'dropped the dead gate']);
+});
+
+test('reviseDraft raw-text fallback: a fenced-markdown reply recovers the draft, changelog honestly omitted', async () => {
+  const agent = async () => 'Sure, here is the revision:\n```markdown\n# Revised Plan\nBetter now.\n```\nDone.';
+  const out = await reviseDraft({ agent, northStar: NORTH_STAR, draft: 'OLD-DRAFT', verdict: { blockers: [] }, direction: null, round: 2 });
+  assert.equal(out.draft, '# Revised Plan\nBetter now.');
+  assert.equal(out.changelog.length, 1);
+  assert.match(out.changelog[0], /changelog omitted/i);
+});
+
+test('reviseDraft raw-text fallback: unfenced non-empty text is taken trimmed', async () => {
+  const agent = async () => '   # Revised Plan v2\nno fences here.  ';
+  const out = await reviseDraft({ agent, northStar: NORTH_STAR, draft: 'OLD-DRAFT', verdict: { blockers: [] }, direction: null, round: 2 });
+  assert.equal(out.draft, '# Revised Plan v2\nno fences here.');
+});
+
+test('reviseDraft dead-seam reply (null / empty) keeps the prior draft — a round is never lost', async () => {
+  for (const reply of [null, undefined, '']) {
+    const out = await reviseDraft({ agent: async () => reply, northStar: NORTH_STAR, draft: 'OLD-DRAFT', verdict: { blockers: [] }, direction: null, round: 3 });
+    assert.equal(out.draft, 'OLD-DRAFT');
+    assert.deepEqual(out.changelog, []);
+  }
 });

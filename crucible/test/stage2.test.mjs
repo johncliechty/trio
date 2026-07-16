@@ -35,6 +35,7 @@ import {
   runHandoffGate,
   approveImplementationPlan,
   runStage2,
+  parseWavesFromMarkdown,
 } from '../bin/stage2.mjs';
 
 const NORTH_STAR = 'STAGE2-NS-SENTINEL: emit a vetted, Foreman-ready doc-trio that locate-plan accepts.';
@@ -291,4 +292,57 @@ test('Stage-2 entrypoints HALT without an agent() seam, a North Star, a Master P
   await assert.rejects(() => runStage2({ agent: () => {}, northStar: null, masterPlan: MASTER_PLAN, outputDir: 'x' }), (e) => e instanceof HaltError);
   await assert.rejects(() => runStage2({ agent: () => {}, northStar: NORTH_STAR, masterPlan: null, outputDir: 'x' }), (e) => e instanceof HaltError);
   await assert.rejects(() => runStage2({ agent: () => {}, northStar: NORTH_STAR, masterPlan: MASTER_PLAN, outputDir: null }), (e) => e instanceof HaltError);
+});
+
+// ---------------------------------------------------------------------------
+// parseWavesFromMarkdown — the raw-text recovery fallback (journal 0002).
+// Schema stays the FIRST ask in decomposeIntoWaves; this parser only catches
+// live drivers that answered in markdown. Garbage must HALT, never invent.
+// ---------------------------------------------------------------------------
+
+test('parseWavesFromMarkdown recovers titled waves with intent/deliverables/dependsOn/doneWhen/GWT', () => {
+  const raw = [
+    '## Wave 1: Build the parser',
+    'Intent: recover waves from markdown',
+    'Deliverables: parser.mjs; tests',
+    'Depends On: null',
+    'Done When: the suite is green',
+    'Given: a markdown reply',
+    'When: it is parsed',
+    'Then: waves come back structured',
+    '## Wave 2: Wire the fallback',
+    'Intent: fallback only after schema fails',
+    'Deliverables: stage2.mjs',
+    'Depends On: Build the parser',
+    'Done When: fallback covered by tests',
+  ].join('\n');
+  const waves = parseWavesFromMarkdown(raw);
+  assert.equal(waves.length, 2);
+  assert.equal(waves[0].title, 'Build the parser');
+  assert.deepEqual(waves[0].deliverables, ['parser.mjs', 'tests']);
+  assert.equal(waves[0].dependsOn, null);
+  assert.equal(waves[0].doneWhen, 'the suite is green');
+  assert.equal(waves[0].gwt.length, 1);
+  assert.equal(waves[0].gwt[0].then, 'waves come back structured');
+  assert.equal(waves[1].dependsOn, 'Build the parser');
+  // The recovered waves survive normalizeWaves (the real gate they must pass).
+  const normalized = normalizeWaves(waves);
+  assert.equal(normalized.length, 2);
+  assert.equal(normalized[1].n, 2);
+});
+
+test('a garbage raw-text decomposition HALTs — the fallback never invents a plan', async () => {
+  const agent = async () => 'I could not produce a decomposition, sorry about that.';
+  await assert.rejects(
+    () => decomposeIntoWaves({ agent, northStar: NORTH_STAR, masterPlan: MASTER_PLAN }),
+    (e) => e instanceof HaltError && /no waves/i.test(e.message),
+  );
+});
+
+test('a markdown wave MISSING its done-when still HALTs through normalizeWaves (D16 holds on the fallback path)', async () => {
+  const agent = async () => '## Wave 1: Sloppy wave\nIntent: no done-when given\nDeliverables: x';
+  await assert.rejects(
+    () => decomposeIntoWaves({ agent, northStar: NORTH_STAR, masterPlan: MASTER_PLAN }),
+    (e) => e instanceof HaltError && /done-when/i.test(e.message),
+  );
 });

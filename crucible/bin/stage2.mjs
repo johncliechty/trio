@@ -190,7 +190,7 @@ export async function decomposeIntoWaves({ agent, northStar, criteria = [], mast
  * `Depends On:` / `Done When:` / `Given/When/Then` lines. Returns raw waves for
  * normalizeWaves (which still HALTs when nothing usable came back).
  */
-function parseWavesFromMarkdown(rawText) {
+export function parseWavesFromMarkdown(rawText) {
   const rawWaves = [];
   let currentWave = null;
   let currentGwt = null;

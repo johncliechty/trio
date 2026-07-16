@@ -446,12 +446,19 @@ function revisePrompt({ northStar, draft, verdict, direction }) {
     String(draft),
     `=== END DRAFT ===`,
     ``,
-    `Emit ONLY the revised draft enclosed in \`\`\`markdown ... \`\`\` fences. Do NOT emit a JSON object.`,
+    `Emit: draft (the full revised draft), changelog (what you changed).`,
+    `If and ONLY if you cannot escape the draft into valid JSON, emit ONLY the revised draft`,
+    `enclosed in \`\`\`markdown ... \`\`\` fences — the structured changelog is dropped that round.`,
   ].join('\n');
 }
 
-async function reviseDraft({ agent, northStar, draft, verdict, direction, round, log }) {
-  const out = await agent(revisePrompt({ northStar, draft, verdict, direction }), { label: `stage1:revise:r${round}` });
+/** Exported for tests (the schema-first / raw-text fallback contract). */
+export async function reviseDraft({ agent, northStar, draft, verdict, direction, round, log = () => {} }) {
+  // Schema-FIRST (the original contract): schema-capable seams return {draft,
+  // changelog} and the next round's Sharks get the changelog briefing. The raw-text
+  // branch below is the FALLBACK ONLY — for live drivers that cannot escape a large
+  // multi-line draft into a JSON string (journal 0002).
+  const out = await agent(revisePrompt({ northStar, draft, verdict, direction }), { label: `stage1:revise:r${round}`, schema: REVISE_SCHEMA });
   let revised = draft;
   let changelog;
   if (out && typeof out === 'object' && typeof out.draft === 'string') {
@@ -459,14 +466,15 @@ async function reviseDraft({ agent, northStar, draft, verdict, direction, round,
     revised = out.draft;
     changelog = Array.isArray(out.changelog) ? out.changelog : [];
   } else {
-    // Raw-text reply — live drivers that cannot escape a large multi-line draft
-    // into a JSON string (journal 0002): take the ```markdown fenced block, else
-    // the trimmed text; the structured changelog is honestly unavailable here.
+    // Raw-text fallback (journal 0002): take the ```markdown fenced block, else the
+    // trimmed text; the structured changelog is honestly unavailable here. A null/
+    // empty reply keeps the prior draft (never lose a round's work to a dead seam).
     const text = typeof out === 'string' ? out : '';
     const m = text.match(/```(?:markdown)?\s*([\s\S]*?)```/i);
     if (m) revised = m[1].trim();
     else if (text.trim()) revised = text.trim();
     changelog = revised !== draft ? ['(Raw markdown parsed, changelog omitted)'] : [];
+    log(`stage1 revise r${round}: structured reply unavailable — raw-text fallback (changelog omitted)`);
   }
   log(`stage1 revise r${round}: draft revised (${changelog.length} change(s))`);
   // 2026-07: the changelog is no longer discarded — the next round's Sharks get

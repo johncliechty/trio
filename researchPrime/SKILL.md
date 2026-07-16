@@ -101,12 +101,7 @@ Never flatter, never hallucinate a source, never count popularity as truth, neve
 ## Reserved / HALT-worthy
 
 The attested-lineage enum membership, the pre-registered thresholds (G / X% / C_min / N / K / M / T / N_min), and any change to the locked North Star / invariants are human calls — HALT for a human.
-> **⏱ STATUS UPDATES TO CHAT:** When running a long research phase in the background, you MUST arm a 10-minute cadence (`ScheduleWakeup` ~600s) and provide scheduled updates to the user using the STRICT 5-BULLET FORMAT:
-> * **Precise Timestamp:** [ISO timestamp]
-> * **Current Status:** [1-2 sentences on current task]
-> * **Current Step:** [1-2 sentences on granular progress]
-> * **Recent Journaling:** [Explicit recap of friction points/fixes logged in the journal since last update]
-> * **Estimated Time Remaining:** [Time estimate and rationale]
+> **⏱ STATUS UPDATES TO CHAT:** When running a long research phase in the background, you MUST arm a 10-minute cadence (`ScheduleWakeup` ~600s, AT LAUNCH) and post scheduled updates in the LOCKED Status-table format — canonical definition in ONE place: user-global `AGENTS.md` → "Long-run progress updates" (`[HH:MM]` header · Effort/Doing/Status/Tests/Blocker/Procs/**Journal** rows · ETA + To do footer). The **Journal** row (mandatory, `none` when empty) recaps everything journaled since the last tick — the SESSION composes it from this skill's `journal/`.
 
 ## Usage journal (sleep-loop feed — append after every REAL run)
 

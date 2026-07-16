@@ -132,10 +132,17 @@ user is the final convergence authority**.
    Judge's stamp derives from where the judge role ACTUALLY dispatches (T7) — the default same-model
    Judge persona is the agy-down fallback, not the normal path.
 2. **Stage 0** → `runStage0`/protocol: complexity triage HALTs for depth confirmation; frame; candidate
-   North Star. **Gate ergonomics (John's locked preferences):** present the candidate North Star
-   VERBATIM IN THE MESSAGE BODY (never clipped into a dialog preview); if the user asked for research,
-   DELIVER IT BEFORE the lock ask; present decisions ONE AT A TIME, each with 30-second plain-English
-   context and a recommendation first.
+   North Star. **Gate ergonomics (John's locked preferences):**
+   > **THE SHOW-THE-ARTIFACT RULE (locked by John, 2026-07-16): NEVER ask the user to approve/lock a
+   > North Star they have not just been SHOWN. At the moment of the ask, print the ENTIRE candidate
+   > North Star document — statement, success criteria, non-goals, risk taxonomy, foresight brief,
+   > every section, verbatim — to the screen in the message body. A file pointer is NOT showing it.
+   > A summary or paraphrase is NOT showing it. A clipped dialog preview is NOT showing it. If it was
+   > shown earlier but anything intervened since, print it again in full with the ask. The same
+   > discipline applies to every user-approval artifact (Stage-1 Master Plan, Stage-2 plan, amendment
+   > diffs): the user approves what is on the screen, never what is in a file.**
+   If the user asked for research, DELIVER IT BEFORE the lock ask; present decisions ONE AT A TIME,
+   each with 30-second plain-English context and a recommendation first.
 3. **Stage 1** → `runStage1({ agent, northStar, depth, routes, artifactsDir, statusLog, ... })` —
    brainstorm → triage → phased plan → Shark loop. On the round cap it HALTs WITH the best draft +
    open findings attached and persisted (T5) — review those, never restart from zero.

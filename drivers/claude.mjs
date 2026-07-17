@@ -33,11 +33,23 @@ const DEFAULT_ALLOWED_TOOLS = 'Bash,Edit,Write,Read,Glob,Grep';
 export function extractJson(text) {
   if (typeof text !== 'string') return null;
   let t = text.trim();
+  // Strip a leading ```json / ``` fence if the model wrapped its reply.
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) t = fence[1].trim();
-  try { return JSON.parse(t); } catch { /* try substring */ }
-  const m = t.match(/\{[\s\S]*\}/);
-  if (m) { try { return JSON.parse(m[0]); } catch { /* fall through */ } }
+  // Try, in order: the text as-is; the outermost {object} or [array] embedded in prose.
+  // Each attempt is also retried with trailing commas stripped (a common model malformation
+  // that breaks JSON.parse). Hardened 2026-07-17 to cut transient reviewer abstains.
+  const stripTrailingCommas = (s) => s.replace(/,(\s*[}\]])/g, '$1');
+  const candidates = [
+    t,
+    (t.match(/\{[\s\S]*\}/) || [])[0],
+    (t.match(/\[[\s\S]*\]/) || [])[0],
+  ];
+  for (const c of candidates) {
+    if (typeof c !== 'string' || !c) continue;
+    try { return JSON.parse(c); } catch { /* try comma-stripped */ }
+    try { return JSON.parse(stripTrailingCommas(c)); } catch { /* next candidate */ }
+  }
   return null;
 }
 

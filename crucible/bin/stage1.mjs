@@ -585,6 +585,7 @@ export async function runMasterPlanLoop({
   let lastChangelog = null;   // the reviser's own changelog, fed to the next round's Sharks
   let directed = false;       // has the Director ever spoken? (anti-anchoring spine needs one position)
   const rounds = [];
+  const SHARK_QUORUM_RETRIES = 2; // re-review a round with <2 parseable reviewers before HALTing (transient reviewer-transport failures)
 
   // 2026-07-11: the 10-min Status heartbeat — off unless the caller passes a
   // statusLog (so tests/dogfood stay silent). The supervising session tails the
@@ -617,11 +618,38 @@ export async function runMasterPlanLoop({
       analystBrief = research.forAnalyst ? research.forAnalyst() : null;
     }
 
-    const verdict = await runSharkTank({
+    let verdict = await runSharkTank({
       agent, northStar, draft: currentDraft, round, priorBlockerIds,
       research: analystBrief, artifactsDir, log,
       changelog: lastChangelog && lastChangelog.length ? lastChangelog.join('\n') : null,
     });
+    // Quorum guard (2026-07-17): a round needs >=2 parseable reviews to be trustworthy — a
+    // BLOCKER requires >=2 Sharks to agree, so <2 answering reviewers can NEVER surface one and
+    // a "dry" verdict would be a FALSE convergence. Re-review the SAME draft (no revise) on
+    // transient reviewer-transport failures, then HALT honestly rather than lock on an
+    // under-reviewed round. ONE abstain (2 answered) is tolerated — it still forms a quorum.
+    for (let q = 0; verdict.inconclusive && q < SHARK_QUORUM_RETRIES; q++) {
+      log(`shark-tank round ${round}: only ${verdict.answered}/3 reviewers parseable — re-reviewing (${q + 1}/${SHARK_QUORUM_RETRIES}) before trusting the round`);
+      verdict = await runSharkTank({
+        agent, northStar, draft: currentDraft, round, priorBlockerIds,
+        research: analystBrief, artifactsDir, log,
+        changelog: lastChangelog && lastChangelog.length ? lastChangelog.join('\n') : null,
+      });
+    }
+    if (verdict.inconclusive) {
+      if (artifactsDir) {
+        try {
+          fs.mkdirSync(artifactsDir, { recursive: true });
+          fs.writeFileSync(path.join(artifactsDir, 'BEST-DRAFT.md'), String(currentDraft));
+        } catch { /* the HALT payload still carries the draft */ }
+      }
+      const qerr = haltForHuman(
+        `shark quorum not met at round ${round}: only ${verdict.answered} of 3 reviewers returned a parseable review after ${SHARK_QUORUM_RETRIES} re-reviews — the reviewer transport (agy/Gemini) appears degraded. HALTing rather than converging on an under-reviewed round; the current draft is preserved.`,
+        'stage1-shark-quorum',
+      );
+      qerr.best_draft = { draft: currentDraft, roundsRun: rounds.length, openFindings: [] };
+      throw qerr;
+    }
 
     if (!verdict.dry) {
       // BLOCKED — the Synthesizer steers the revision (its one consumed output),

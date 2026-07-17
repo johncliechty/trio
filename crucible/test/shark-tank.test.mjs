@@ -114,6 +114,31 @@ test('REGRESSION (false-DRY, journal 0001): three reviewers, same claim_id, dive
   assert.match(t.blockers[0].id, /^claim:c3$/);
 });
 
+// --- quorum floor (2026-07-17): <2 parseable reviewers ⇒ inconclusive -------
+
+test('tallyFindings: fewer than 2 answering reviewers ⇒ inconclusive (a "dry" would be a false convergence)', () => {
+  const reviews = [
+    { reviewer: 'Skeptic', answerable: 'no', findings: [] },   // abstained (unparseable/rejected)
+    { reviewer: 'Contrarian', answerable: 'no', findings: [] },
+    { reviewer: 'Analyst', answerable: 'yes', findings: [
+      { severity: 'BLOCKER', topic: 'real issue', traces_to_north_star: 'yes', criterion: 'C1' }] },
+  ];
+  const t = tallyFindings(reviews);
+  assert.equal(t.answered, 1);
+  assert.equal(t.inconclusive, true, 'only 1 reviewer answered — cannot form a >=2 BLOCKER quorum');
+});
+
+test('tallyFindings: 2 answering reviewers ⇒ NOT inconclusive (one abstain is tolerated)', () => {
+  const reviews = [
+    { reviewer: 'Skeptic', answerable: 'no', findings: [] },
+    { reviewer: 'Contrarian', answerable: 'yes', findings: [] },
+    { reviewer: 'Analyst', answerable: 'yes', findings: [] },
+  ];
+  const t = tallyFindings(reviews);
+  assert.equal(t.answered, 2);
+  assert.equal(t.inconclusive, false, 'two answering reviewers still form a valid quorum');
+});
+
 // --- angle rotation --------------------------------------------------------
 
 test('angleForShark rotates across Sharks and rounds, always within the 8 angles', () => {

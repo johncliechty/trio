@@ -229,7 +229,13 @@ export function tallyFindings(reviews, { priorBlockerIds = [] } = {}) {
   const newBlockers = blockers.filter((f) => f.isNew);
   const demoted = findings.filter((f) => f.demoted);
   const dry = newBlockers.length === 0;
-  return { findings, blockers, newBlockers, demoted, dry, verdict: dry ? 'DRY' : 'BLOCKED' };
+  // Quorum floor (2026-07-17): a BLOCKER needs >=2 Sharks to agree, so a round where fewer
+  // than 2 reviewers returned a PARSEABLE review is INCONCLUSIVE — its "dry" would be a FALSE
+  // convergence (no blocker could ever surface). Only an explicit abstain (answerable:'no' —
+  // a rejected call or unparseable-after-retry reply) fails to count; a review present counts.
+  const answered = reviews.filter((r) => r && r.answerable !== 'no').length;
+  const inconclusive = answered < 2;
+  return { findings, blockers, newBlockers, demoted, dry, inconclusive, answered, verdict: dry ? 'DRY' : 'BLOCKED' };
 }
 
 // ---------------------------------------------------------------------------

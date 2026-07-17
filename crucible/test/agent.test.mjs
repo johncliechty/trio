@@ -58,6 +58,11 @@ test('extractJson handles bare, fenced, and embedded JSON; rejects non-JSON', ()
   assert.deepEqual(extractJson('{"a":1}'), { a: 1 });
   assert.deepEqual(extractJson('```json\n{"a":2}\n```'), { a: 2 });
   assert.deepEqual(extractJson('prose before {"a":3} prose after'), { a: 3 });
+  // Hardened 2026-07-17 (cut transient reviewer abstains): trailing commas + arrays.
+  assert.deepEqual(extractJson('{"a":4,}'), { a: 4 });
+  assert.deepEqual(extractJson('{"list":[1,2,],}'), { list: [1, 2] });
+  assert.deepEqual(extractJson('```json\n[{"a":5}]\n```'), [{ a: 5 }]);
+  assert.deepEqual(extractJson('here you go: [1,2,3]'), [1, 2, 3]);
   assert.equal(extractJson('no object at all'), null);
   assert.equal(extractJson(null), null);
 });

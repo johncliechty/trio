@@ -38,6 +38,7 @@ import {
   approveMasterPlan,
   runStage1,
   reviseDraft,
+  REVISE_MARKDOWN_BYTES,
 } from '../bin/stage1.mjs';
 
 const NORTH_STAR = 'STAGE1-NS-SENTINEL: ship a vetted, Foreman-ready plan that never drifts.';
@@ -386,6 +387,20 @@ test('reviseDraft raw-text fallback: a fenced-markdown reply recovers the draft,
   assert.equal(out.draft, '# Revised Plan\nBetter now.');
   assert.equal(out.changelog.length, 1);
   assert.match(out.changelog[0], /changelog omitted/i);
+});
+
+test('reviseDraft goes MARKDOWN-FIRST for a large draft (EI1: schema-less, raw markdown recovered)', async () => {
+  let seenOpts = null;
+  const bigDraft = '# Big Plan\n' + 'x'.repeat(REVISE_MARKDOWN_BYTES + 100);
+  const agent = async (_prompt, opts) => {
+    seenOpts = opts;
+    return '```markdown\n# Revised Big Plan\nrewritten.\n```';
+  };
+  const out = await reviseDraft({ agent, northStar: NORTH_STAR, draft: bigDraft, verdict: { blockers: [] }, direction: null, round: 4 });
+  assert.ok(seenOpts && seenOpts.schema === undefined, 'a large draft must be revised schema-LESS (markdown-first, no fragile large-JSON serialization)');
+  assert.equal(out.draft, '# Revised Big Plan\nrewritten.');
+  assert.equal(out.changelog.length, 1);
+  assert.match(out.changelog[0], /markdown-first/i);
 });
 
 test('reviseDraft raw-text fallback: unfenced non-empty text is taken trimmed', async () => {

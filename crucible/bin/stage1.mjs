@@ -422,7 +422,13 @@ const REVISE_SCHEMA = {
   },
 };
 
-function revisePrompt({ northStar, draft, verdict, direction }) {
+/** Above this draft size, revise returns raw MARKDOWN (a document need not be a JSON
+ * string — serializing a ~100KB draft into a JSON string is the fragility that stalled
+ * Item-F Stage-1c with repeated "reply was not valid JSON" retries). Small drafts stay
+ * schema-first so the structured changelog briefing survives. (EI1, 2026-07-17) */
+export const REVISE_MARKDOWN_BYTES = 20000;
+
+function revisePrompt({ northStar, draft, verdict, direction, markdownFirst = false }) {
   return [
     `You are the Crucible STAGE-1 draft-revision step. Address the BLOCKING findings from the`,
     `last Shark Tank and the Synthesizer's direction, WITHOUT drifting from the North Star.`,
@@ -446,37 +452,48 @@ function revisePrompt({ northStar, draft, verdict, direction }) {
     String(draft),
     `=== END DRAFT ===`,
     ``,
-    `Emit: draft (the full revised draft), changelog (what you changed).`,
-    `If and ONLY if you cannot escape the draft into valid JSON, emit ONLY the revised draft`,
-    `enclosed in \`\`\`markdown ... \`\`\` fences — the structured changelog is dropped that round.`,
+    markdownFirst
+      ? `Emit ONLY the full revised Master-Plan draft, enclosed in \`\`\`markdown ... \`\`\` fences —`
+        + ` no JSON, no prose outside the fences. (This draft is large; the structured changelog is`
+        + ` omitted this round to avoid fragile large-JSON serialization.)`
+      : `Emit: draft (the full revised draft), changelog (what you changed).\n`
+        + `If and ONLY if you cannot escape the draft into valid JSON, emit ONLY the revised draft`
+        + ` enclosed in \`\`\`markdown ... \`\`\` fences — the structured changelog is dropped that round.`,
   ].join('\n');
 }
 
 /** Exported for tests (the schema-first / raw-text fallback contract). */
 export async function reviseDraft({ agent, northStar, draft, verdict, direction, round, log = () => {} }) {
-  // Schema-FIRST (the original contract): schema-capable seams return {draft,
-  // changelog} and the next round's Sharks get the changelog briefing. The raw-text
-  // branch below is the FALLBACK ONLY — for live drivers that cannot escape a large
-  // multi-line draft into a JSON string (journal 0002).
-  const out = await agent(revisePrompt({ northStar, draft, verdict, direction }), { label: `stage1:revise:r${round}`, schema: REVISE_SCHEMA });
+  // EI1 (2026-07-17): a LARGE draft is revised MARKDOWN-FIRST — a document need not be a JSON
+  // string, and serializing a ~100KB draft into JSON is the fragility that stalled Stage-1c
+  // (repeated "reply was not valid JSON" retries). Small drafts stay schema-first so the
+  // structured changelog briefing survives. The raw-markdown parse below recovers the draft
+  // either way; a null/empty reply keeps the prior draft (never lose a round's work).
+  const markdownFirst = Buffer.byteLength(String(draft)) >= REVISE_MARKDOWN_BYTES;
+  const prompt = revisePrompt({ northStar, draft, verdict, direction, markdownFirst });
+  const out = markdownFirst
+    ? await agent(prompt, { label: `stage1:revise:r${round}` })                       // schema-less → raw markdown
+    : await agent(prompt, { label: `stage1:revise:r${round}`, schema: REVISE_SCHEMA });
   let revised = draft;
   let changelog;
-  if (out && typeof out === 'object' && typeof out.draft === 'string') {
-    // The structured contract: { draft, changelog } (what schema-capable seams return).
+  if (!markdownFirst && out && typeof out === 'object' && typeof out.draft === 'string') {
+    // The structured contract: { draft, changelog } (small-draft schema-first path).
     revised = out.draft;
     changelog = Array.isArray(out.changelog) ? out.changelog : [];
   } else {
-    // Raw-text fallback (journal 0002): take the ```markdown fenced block, else the
-    // trimmed text; the structured changelog is honestly unavailable here. A null/
-    // empty reply keeps the prior draft (never lose a round's work to a dead seam).
-    const text = typeof out === 'string' ? out : '';
+    // Raw-markdown parse — the PRIMARY path for large drafts (EI1), the FALLBACK for small
+    // (journal 0002): take the ```markdown fenced block, else the trimmed text. A null/empty
+    // reply keeps the prior draft (never lose a round's work to a dead seam).
+    const text = typeof out === 'string' ? out : (out && typeof out.draft === 'string' ? out.draft : '');
     const m = text.match(/```(?:markdown)?\s*([\s\S]*?)```/i);
     if (m) revised = m[1].trim();
     else if (text.trim()) revised = text.trim();
-    changelog = revised !== draft ? ['(Raw markdown parsed, changelog omitted)'] : [];
-    log(`stage1 revise r${round}: structured reply unavailable — raw-text fallback (changelog omitted)`);
+    changelog = revised !== draft
+      ? [markdownFirst ? '(large draft: markdown-first, changelog omitted)' : '(Raw markdown parsed, changelog omitted)']
+      : [];
+    if (!markdownFirst) log(`stage1 revise r${round}: structured reply unavailable — raw-text fallback (changelog omitted)`);
   }
-  log(`stage1 revise r${round}: draft revised (${changelog.length} change(s))`);
+  log(`stage1 revise r${round}: draft revised (${changelog.length} change(s))${markdownFirst ? ' [markdown-first]' : ''}`);
   // 2026-07: the changelog is no longer discarded — the next round's Sharks get
   // it (with the blocker register) so refutation focuses on new ground.
   return { draft: revised, changelog };

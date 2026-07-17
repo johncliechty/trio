@@ -385,17 +385,13 @@ export function servedModelFromCliLog(cliLogWindow, { requested = null } = {}) {
       return { served, substituted: true };
     }
   }
-  // (1b) agy update (2026-07-17): a NEWER substitution signal. When agy can't reach its model
-  // catalog (rate-limited / auth-degraded), the requested id is "not in local config" and it
-  // SILENTLY DEFAULTS to a fallback (`Model ID <X> not in local config, defaulting to CCPA` →
-  // GPT-OSS). This substitutes EVEN a catalogued label, so it MUST be caught BEFORE the clean
-  // stamp below — otherwise a fallback serve is falsely attested as a clean Gemini serve (the
-  // exact silent cross-family hole that ran the sharks on GPT-OSS).
-  if (requested) {
-    const defaultingRe = new RegExp(`Model ID\\s+${reEscape(requested)}\\s+not in local config,\\s*defaulting to\\s+(\\S+)`, 'i');
-    const dm = win.match(defaultingRe);
-    if (dm) return { served: dm[1].trim(), substituted: true };
-  }
+  // NOTE (2026-07-17): the resolver.go "Model ID <X> not in local config, defaulting to CCPA"
+  // line is BENIGN — VERIFIED LIVE by asking the served model its identity (it answered
+  // "Gemini 3.1 Pro"): agy serves the real requested model via model_resolver.go + the
+  // "Propagating selected model override" path DESPITE that line. It is NOT a substitution
+  // signal. An earlier fix that treated it as one was a FALSE POSITIVE that would fail EVERY
+  // real Gemini serve over to Claude — do not re-add it. Genuine substitution is the
+  // "Failed to resolve model flag" branch (1) above.
   // (2) Clean serve of a KNOWN label — attested by absence-of-substitution on a catalogued label.
   if (requested && KNOWN_AGY_LABELS_NORM.has(norm(requested))) {
     return { served: requested, substituted: false };

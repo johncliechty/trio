@@ -370,10 +370,14 @@ test('buildGeminiCliArgs: no promptFile ⇒ unchanged legacy shape (-p carries t
   assert.equal(args[args.indexOf('-p') + 1], 'hello world');
 });
 
-test('servedModelFromCliLog: agy-update "not in local config, defaulting to" is a SUBSTITUTION, not a clean serve (2026-07-17)', () => {
-  // The exact line the update emits when it can't reach the catalog and silently downgrades.
-  const win = 'I0717 12:00 resolver.go:85] Model ID Gemini 3.1 Pro (High) not in local config, defaulting to CCPA\nModel resolved via default';
+test('servedModelFromCliLog: the benign resolver "defaulting to CCPA" line does NOT flag a substitution (2026-07-17)', () => {
+  // VERIFIED LIVE: agy serves REAL Gemini despite this line (the model self-identified as
+  // "Gemini 3.1 Pro"). Treating the line as a substitution was a false positive that would fail
+  // every genuine Gemini serve over to Claude. A KNOWN label + this line ⇒ clean serve.
+  const win = 'I0717 resolver.go:85] Model ID Gemini 3.1 Pro (High) not in local config, defaulting to CCPA\n'
+    + 'model_resolver.go:62] Resolving model Gemini 3.1 Pro (High)\n'
+    + 'model_config_manager.go:213] Propagating selected model override to backend: label="Gemini 3.1 Pro (High)"';
   const out = servedModelFromCliLog(win, { requested: 'Gemini 3.1 Pro (High)' });
-  assert.equal(out.substituted, true, 'a fallback default must NOT be falsely attested as a clean Gemini serve');
-  assert.equal(out.served, 'CCPA');
+  assert.equal(out.substituted, false, 'the benign defaulting line must NOT be treated as a substitution');
+  assert.equal(out.served, 'Gemini 3.1 Pro (High)');
 });

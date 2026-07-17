@@ -11,9 +11,10 @@
 // HONESTY NOTE on crit-1 (the load-bearing one). The planted fixture's single-pass MISS set is
 // 12 low-severity ordinary + 24 correlated-blind-spot (CBS) = 36. By I1, a default (single-lineage)
 // run can NEVER close a CBS defect (a same-lineage fresh fetch reproduces the shared wrong consensus);
-// closing CBS requires a genuinely cross-lineage origin (G8/Enhanced), which is gated behind the
-// closed attested-lineage enum — a RESERVED HUMAN DECISION still PENDING (crit-5 HALT, lineage-enum.json
-// all-placeholder, G8 inert). So this gate asserts crit-1 HONESTLY and WITHOUT faking GREEN: the default
+// closing CBS requires a genuinely cross-lineage origin (G8/Enhanced). The closed attested-lineage enum
+// (crit-5, a RESERVED HUMAN DECISION) WAS committed at Phase 0.6 (lineage-enum.json), so Enhanced mode is
+// AVAILABLE — but default runs leave the G8 flag off, so G8 stays inert and the I1 ceiling stands in
+// default mode. So this gate asserts crit-1 HONESTLY and WITHOUT faking GREEN: the default
 // run fully closes the CLOSABLE (non-CBS) gap (≥ G), the CBS class is carried as a stamped measured
 // CEILING (never a claimed closure), the C_min floor is read and shown to BITE a claimed sub-floor
 // closure, and the residual-to-full-closure is shown to be EXACTLY the CBS class whose recovery is the

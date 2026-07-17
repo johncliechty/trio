@@ -35,11 +35,12 @@ import {
   orchestrateRound,
   makeConvergenceTracker,
   assessConvergenceHonesty,
-  loopThresholds,
   countUnresolvedHighSeverity,
 } from './round.mjs';
-import { resolveTier } from './governor.mjs';
+import { deriveGovernorContract } from './formal-governor.mjs';
 import { assembleDeliverable } from './deliverable.mjs';
+import { loadGate } from './gate-loader.mjs';
+import { HaltError } from './trio-core/contract-core.mjs';
 import {
   makeReachedFamilyTracker,
   instrumentRoundAgent,
@@ -51,15 +52,32 @@ import {
 export async function runRounds(runDir, { maxRounds = null, env = process.env, log = console.log } = {}) {
   const started = new Date().toISOString();
   const t0 = Date.now();
-  const thresholds = loopThresholds(); // { N, K, M } from the committed pre-registration
-  const cap = Number.isInteger(maxRounds) && maxRounds > 0 ? maxRounds
-    : (Number(env.RESEARCHPRIME_MAX_ROUNDS) > 0 ? Number(env.RESEARCHPRIME_MAX_ROUNDS) : 8);
+
+  let governanceRecord;
+  try {
+    governanceRecord = loadGate(runDir);
+  } catch (e) {
+    if (e && (e.name === 'HaltError' || e instanceof Error)) {
+      const haltRecord = {
+        status: 'HALTED',
+        reason: e.message,
+        timestamp: new Date().toISOString()
+      };
+      fs.writeFileSync(path.join(runDir, 'HALT-RECORD.json'), JSON.stringify(haltRecord, null, 2));
+    }
+    throw e;
+  }
 
   const allInputs = fs.readdirSync(runDir)
     .filter((f) => /^round-\d+-input\.json$/.test(f))
     .sort((a, b) => parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]))
     .map((f) => JSON.parse(fs.readFileSync(path.join(runDir, f), 'utf8')));
   if (!allInputs.length) throw new Error(`no round-*-input.json found in ${runDir}`);
+
+  const contract = governanceRecord.lockedGovernorOutput || deriveGovernorContract(allInputs[0]);
+  const thresholds = contract.thresholds;
+  const cap = contract.roundBudget;
+  const tier = contract.tier;
 
   // The HARD budget: never process past the cap; say so loudly (no silent truncation).
   const inputs = allInputs.slice(0, cap);
@@ -76,9 +94,6 @@ export async function runRounds(runDir, { maxRounds = null, env = process.env, l
     };
   }
 
-  const tier = resolveTier(
-    inputs[0].stakes ?? { declared_stakes: 'high', reversibility: 'hard-to-reverse', blast_radius: 'wide', magnitude: 'major' },
-  );
   const tracker = makeConvergenceTracker({ N: thresholds.N });
   const priorBlockerIds = new Set();
   const roundResults = [];

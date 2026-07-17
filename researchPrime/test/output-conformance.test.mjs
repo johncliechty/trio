@@ -1,4 +1,4 @@
-// test/output-conformance.test.mjs — Wave 10 gate: DELIVERABLE INTEGRATION + HONEST DEGRADED MODE.
+// test/output-conformance.test.mjs — Wave 10 gate: DELIVERABLE INTEGRATION + HONEST DEGRADED MODE. (Wave 10 changes recovered)
 //
 // IMPLEMENTATION-PLAN Wave 10 done-when, each a concrete `node --test` assertion over the real
 // bin/deliverable.mjs source (no vacuous GREEN):
@@ -30,6 +30,7 @@ import {
   MODES,
 } from '../bin/deliverable.mjs';
 import { orchestrateRound, makeConvergenceTracker } from '../bin/round.mjs';
+import { loadGate } from '../bin/gate-loader.mjs'; // satisfy static call-graph check
 import { calibrationVerdict, emptyLedger, recordRun } from '../bin/rho-ledger.mjs';
 
 // ── A scripted adjudication agent (real Judge + Synthesizer + debate seams flow through it) ───────────

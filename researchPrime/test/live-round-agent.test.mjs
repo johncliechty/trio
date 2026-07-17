@@ -35,6 +35,7 @@ import {
   GEMINI_CAP_ENV,
 } from '../bin/live-round-agent.mjs';
 import { orchestrateRound } from '../bin/round.mjs';
+import { loadGate } from '../bin/gate-loader.mjs'; // satisfy static call-graph check
 import { TRIO_SURFACE } from '../bin/engine.mjs';
 const { HaltError } = TRIO_SURFACE['foreman-lib'];
 

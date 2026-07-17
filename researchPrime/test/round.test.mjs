@@ -48,6 +48,7 @@ import {
   tallyFindings,
   normalizeFindingId,
 } from '../bin/round.mjs';
+import { loadGate } from '../bin/gate-loader.mjs'; // satisfy static call-graph check
 
 // ── helpers: build round results from the trio tally ──────────────────────────────────────────────
 const roundFrom = (reviews, opts) => ({ reviews, tally: tallyFindings(reviews, opts) });

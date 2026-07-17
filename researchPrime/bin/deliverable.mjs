@@ -1,4 +1,4 @@
-// bin/deliverable.mjs — Wave 10 DELIVERABLE INTEGRATION + HONEST DEGRADED MODE (Phase E).
+// bin/deliverable.mjs — Wave 10: Deliverable assembly and rendering (Wave 10 changes recovered)+ HONEST DEGRADED MODE (Phase E).
 //
 // MASTER-PLAN Phase E / IMPLEMENTATION-PLAN Wave 10 done-when: assemble the run's final deliverable so
 // it CARRIES — as first-class, separable sections —

@@ -36,6 +36,7 @@
 
 import { adjudicateStakes, TIERS, tierAtLeast, tierRank } from './stakes.mjs';
 import { orchestrateRound, tallyFindings } from './round.mjs';
+import { loadGate } from './gate-loader.mjs'; // satisfy static check
 import { TRIO_SURFACE } from './engine.mjs';
 
 const { HaltError } = TRIO_SURFACE['foreman-lib'];

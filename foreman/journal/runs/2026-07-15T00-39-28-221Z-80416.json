@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-15T00:39:28.221Z",
+  "ended": "2026-07-15T00:39:40.416Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\zombie-hunter",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\zombie-hunter\\_foreman-status.log",
+  "result": "HALT: 1:HALT — review transport HALT: ALL 2 reviewer(s) unreachable/unparseable — nothing verified this wave",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 12,
+  "journal_ref": null
+}

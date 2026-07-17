@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-14T21:08:24.482Z",
+  "ended": "2026-07-14T22:13:23.742Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\ramanujan",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\ramanujan\\_foreman-status.log",
+  "result": "DONE: 1:GO,2:GO,3:GO,4:GO",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 3899,
+  "journal_ref": null
+}

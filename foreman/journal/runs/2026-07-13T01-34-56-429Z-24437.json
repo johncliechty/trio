@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-13T01:34:56.429Z",
+  "ended": "2026-07-13T04:03:44.437Z",
+  "input": "C:\\dev\\Anchor-telemetry-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "8",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor-telemetry-build\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:GO,3:HALT — test-immutability HALT: fix agent modified test file tests/test_narration_auth_w3.py",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 8928,
+  "journal_ref": null
+}

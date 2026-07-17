@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-15T00:55:51.518Z",
+  "ended": "2026-07-15T01:00:02.346Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\zombie-hunter",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\zombie-hunter\\_foreman-status.log",
+  "result": "HALT: 1:HALT — test-immutability HALT: fix agent added test file test/package.json",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 251,
+  "journal_ref": null
+}

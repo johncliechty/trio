@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-16T18:08:21.176Z",
+  "ended": "2026-07-16T18:20:29.086Z",
+  "input": "C:\\dev\\trio\\researchPrime",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\trio\\researchPrime\\_foreman-status.log",
+  "result": "HALT: 9:GO,10:HALT — test-immutability HALT: fix agent modified test file test/live-round-agent.test.mjs",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 728,
+  "journal_ref": null
+}

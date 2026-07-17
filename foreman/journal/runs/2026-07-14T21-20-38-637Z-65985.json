@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-14T21:20:38.637Z",
+  "ended": "2026-07-14T21:31:05.985Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\gandalf",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\gandalf\\_foreman-status.log",
+  "result": "HALT: 1:HALT — test-immutability HALT: fix agent modified test file test/package.json",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 627,
+  "journal_ref": null
+}

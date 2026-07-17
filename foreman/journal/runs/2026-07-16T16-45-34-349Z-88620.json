@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-16T16:45:34.349Z",
+  "ended": "2026-07-16T16:59:48.620Z",
+  "input": "C:\\dev\\trio\\researchPrime",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\trio\\researchPrime\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:GO,3:HALT — PLAN-AMENDMENT-PROPOSAL HALT: the frozen plan is wrong/incomplete for wave 3",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 854,
+  "journal_ref": null
+}

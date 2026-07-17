@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-14T00:08:07.960Z",
+  "ended": "2026-07-14T00:37:29.664Z",
+  "input": "C:\\dev\\Anchor-telemetry-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "8",
+    "git": true,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor-telemetry-build\\_foreman-status.log",
+  "result": "HALT: 7:HALT — test-integrity HALT: skip/xfail markers rose 126 -> 129 and the gate actually skipped 7 test(s) with no plan citation",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 1762,
+  "journal_ref": null
+}

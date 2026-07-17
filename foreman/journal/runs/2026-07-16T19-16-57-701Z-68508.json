@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-16T19:16:57.701Z",
+  "ended": "2026-07-16T19:24:28.508Z",
+  "input": "C:\\dev\\trio\\researchPrime",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\trio\\researchPrime\\_foreman-status.log",
+  "result": "DONE: 11:GO",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 451,
+  "journal_ref": null
+}

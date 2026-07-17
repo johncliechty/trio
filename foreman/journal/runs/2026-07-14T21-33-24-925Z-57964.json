@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-14T21:33:24.925Z",
+  "ended": "2026-07-14T22:17:37.964Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\gandalf",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\gandalf\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:GO,3:GO,4:HALT — vacuous-GREEN HALT: wave changed only test files (test/w4-conflict-resolution.test.mjs) but the test-only evidence bar did not pass: declared tests 323 -> 333, green gate executed 331 — a test-only wa",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 2653,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-12T00:34:18.870Z",
+  "ended": "2026-07-12T01:07:47.228Z",
+  "input": "C:\\dev\\Anchor-telemetry-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "8",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor-telemetry-build\\_foreman-status.log",
+  "result": "HALT: 1:HALT — test-immutability HALT: fix agent modified test file tests/test_b2_repro_telemetry_w1.py",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 2008,
+  "journal_ref": null
+}

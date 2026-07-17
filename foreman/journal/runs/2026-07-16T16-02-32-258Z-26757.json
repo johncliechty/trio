@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-16T16:02:32.258Z",
+  "ended": "2026-07-16T16:05:26.757Z",
+  "input": "C:\\dev\\trio\\researchPrime",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\trio\\researchPrime\\_foreman-status.log",
+  "result": "HALT: 1:HALT — review transport HALT: ALL 1 reviewer(s) unreachable/unparseable — nothing verified this wave",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 174,
+  "journal_ref": null
+}

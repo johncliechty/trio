@@ -428,6 +428,14 @@ const REVISE_SCHEMA = {
  * schema-first so the structured changelog briefing survives. (EI1, 2026-07-17) */
 export const REVISE_MARKDOWN_BYTES = 20000;
 
+/** A markdown-first revise must not catastrophically SHRINK the draft. Without the schema's
+ * full-`draft` field, a model may return a DELTA ("edited only Phase X; rest carried forward
+ * UNCHANGED, not reproduced here") — which the raw-markdown parse would accept as the WHOLE
+ * plan, silently losing it (observed Stage-1e r5: 111KB → 16KB). A revised draft below this
+ * fraction of the prior is treated as a non-compliant partial and REJECTED — keep the prior
+ * draft (the round makes no change rather than losing the plan). (EI1 guard, 2026-07-17) */
+export const REVISE_MIN_KEEP_RATIO = 0.5;
+
 function revisePrompt({ northStar, draft, verdict, direction, markdownFirst = false }) {
   return [
     `You are the Crucible STAGE-1 draft-revision step. Address the BLOCKING findings from the`,
@@ -453,9 +461,13 @@ function revisePrompt({ northStar, draft, verdict, direction, markdownFirst = fa
     `=== END DRAFT ===`,
     ``,
     markdownFirst
-      ? `Emit ONLY the full revised Master-Plan draft, enclosed in \`\`\`markdown ... \`\`\` fences —`
-        + ` no JSON, no prose outside the fences. (This draft is large; the structured changelog is`
-        + ` omitted this round to avoid fragile large-JSON serialization.)`
+      ? `Emit the COMPLETE revised Master-Plan draft — EVERY phase, from the first line to the`
+        + ` last, with your edits applied INLINE — enclosed in \`\`\`markdown ... \`\`\` fences (no JSON,`
+        + ` no prose outside the fences). Do NOT return only the changed sections, a delta, a`
+        + ` summary, or a "carried forward UNCHANGED / not reproduced here" note — reproduce the`
+        + ` ENTIRE plan in full. A partial or truncated reply is REJECTED and the round is lost.`
+        + ` (This draft is large; the structured changelog is omitted this round to avoid fragile`
+        + ` large-JSON serialization.)`
       : `Emit: draft (the full revised draft), changelog (what you changed).\n`
         + `If and ONLY if you cannot escape the draft into valid JSON, emit ONLY the revised draft`
         + ` enclosed in \`\`\`markdown ... \`\`\` fences — the structured changelog is dropped that round.`,
@@ -492,6 +504,19 @@ export async function reviseDraft({ agent, northStar, draft, verdict, direction,
       ? [markdownFirst ? '(large draft: markdown-first, changelog omitted)' : '(Raw markdown parsed, changelog omitted)']
       : [];
     if (!markdownFirst) log(`stage1 revise r${round}: structured reply unavailable — raw-text fallback (changelog omitted)`);
+  }
+  // EI1 completeness guard (2026-07-17): never let a markdown-first revise SHRINK the plan
+  // catastrophically (a model returning a delta/partial instead of the full draft — observed
+  // Stage-1e r5: 111KB→16KB). Below REVISE_MIN_KEEP_RATIO of the prior ⇒ non-compliant partial
+  // ⇒ KEEP the prior draft (no change this round rather than losing the plan).
+  if (markdownFirst && revised !== draft) {
+    const priorLen = Buffer.byteLength(String(draft));
+    const newLen = Buffer.byteLength(String(revised));
+    if (priorLen >= REVISE_MARKDOWN_BYTES && newLen < priorLen * REVISE_MIN_KEEP_RATIO) {
+      log(`stage1 revise r${round}: markdown-first reply was ${Math.round((100 * newLen) / priorLen)}% of the prior draft — NON-COMPLIANT PARTIAL, keeping prior draft (completeness guard)`);
+      revised = draft;
+      changelog = [];
+    }
   }
   log(`stage1 revise r${round}: draft revised (${changelog.length} change(s))${markdownFirst ? ' [markdown-first]' : ''}`);
   // 2026-07: the changelog is no longer discarded — the next round's Sharks get

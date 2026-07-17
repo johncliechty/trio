@@ -389,18 +389,28 @@ test('reviseDraft raw-text fallback: a fenced-markdown reply recovers the draft,
   assert.match(out.changelog[0], /changelog omitted/i);
 });
 
-test('reviseDraft goes MARKDOWN-FIRST for a large draft (EI1: schema-less, raw markdown recovered)', async () => {
+test('reviseDraft goes MARKDOWN-FIRST for a large draft (EI1: schema-less, full-size raw markdown recovered)', async () => {
   let seenOpts = null;
   const bigDraft = '# Big Plan\n' + 'x'.repeat(REVISE_MARKDOWN_BYTES + 100);
+  const revisedBody = '# Revised Big Plan\n' + 'y'.repeat(REVISE_MARKDOWN_BYTES); // full-size (passes the guard)
   const agent = async (_prompt, opts) => {
     seenOpts = opts;
-    return '```markdown\n# Revised Big Plan\nrewritten.\n```';
+    return '```markdown\n' + revisedBody + '\n```';
   };
   const out = await reviseDraft({ agent, northStar: NORTH_STAR, draft: bigDraft, verdict: { blockers: [] }, direction: null, round: 4 });
   assert.ok(seenOpts && seenOpts.schema === undefined, 'a large draft must be revised schema-LESS (markdown-first, no fragile large-JSON serialization)');
-  assert.equal(out.draft, '# Revised Big Plan\nrewritten.');
+  assert.equal(out.draft, revisedBody);
   assert.equal(out.changelog.length, 1);
   assert.match(out.changelog[0], /markdown-first/i);
+});
+
+test('reviseDraft completeness guard: a markdown-first PARTIAL/delta is REJECTED and the prior draft kept (EI1 guard)', async () => {
+  const bigDraft = '# Big Plan\n' + 'x'.repeat(REVISE_MARKDOWN_BYTES + 100);
+  // The Stage-1e failure mode: the model returns only a tiny delta instead of the full plan.
+  const agent = async () => '```markdown\n[edits ONLY Phase 9; Phases 1-8 carried forward UNCHANGED, not reproduced here]\n## Phase 9\ntweaked.\n```';
+  const out = await reviseDraft({ agent, northStar: NORTH_STAR, draft: bigDraft, verdict: { blockers: [] }, direction: null, round: 5 });
+  assert.equal(out.draft, bigDraft, 'a catastrophically-small markdown-first revise must be rejected — prior draft kept, plan not lost');
+  assert.deepEqual(out.changelog, []);
 });
 
 test('reviseDraft raw-text fallback: unfenced non-empty text is taken trimmed', async () => {

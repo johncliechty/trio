@@ -14,7 +14,7 @@
 
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { makeReliableAgent } from './reliability.mjs';
-import { claudeDriver } from './claude.mjs';
+import { claudeDriver, belowFrontierClaudeModel } from './claude.mjs';
 import { geminiCliDriver } from './gemini-cli.mjs';
 import { geminiDriver } from './gemini.mjs';
 import { openaiDriver } from './openai.mjs';
@@ -151,7 +151,33 @@ export async function runAgent(opts = {}) {
     }
   }
   const driver = getDriver(name);
-  return driver.runAgent(opts);
+  return dispatchWithFailover(driver, opts);
+}
+
+/**
+ * Dispatch to a backend, applying the universal MODEL-INTEGRITY FAILOVER (John 2026-07-17):
+ * a NON-Claude seat that cannot deliver its ATTESTED requested model — silently substituted to a
+ * fallback (e.g. GPT-OSS, how a rate-limited OR auth-degraded agy manifests) or a transport
+ * failure — fails OVER to Claude ONE-NOTCH-BELOW-FRONTIER, honestly single-family
+ * (`cross_model:false`), with a loud flag, rather than running the seat BLIND on the wrong model.
+ * Used by BOTH `runAgent` AND `makeRoleRoutedAgent`, so EVERY trio+foundry call path inherits it.
+ * A Claude seat has nowhere better to fail over to, so it re-throws.
+ */
+async function dispatchWithFailover(driver, opts) {
+  try {
+    return await driver.runAgent(opts);
+  } catch (e) {
+    if (e && e.seat_unavailable && driver.name !== 'claude') {
+      const failoverModel = belowFrontierClaudeModel();
+      const log = typeof opts.log === 'function' ? opts.log : () => {};
+      log(`⚠ ${opts.label ?? opts.role ?? 'seat'}: ${driver.name} did NOT serve its attested model (requested="${e.requested_model ?? '?'}" served="${e.served_model ?? '?'}") — FAILING OVER to Claude ${failoverModel} (cross_model:false).`);
+      return await getDriver('claude').runAgent({
+        ...opts, driver: 'claude', model: failoverModel,
+        cross_model: false, failed_over_from: { driver: driver.name, served: e.served_model ?? null },
+      });
+    }
+    throw e;
+  }
 }
 
 /**
@@ -177,7 +203,7 @@ export function makeRoleRoutedAgent({ routes = {}, ...baseOpts } = {}) {
     const role = String(o.role || o.label || '').split(/[:#.\s]/)[0].toLowerCase();
     const route = routes[role] || routes.default || {};
     const backend = getDriver(route.driver || null);
-    return backend.runAgent({
+    return dispatchWithFailover(backend, {
       ...baseOpts, prompt, schema: o.schema, label: o.label,
       role: o.role ?? role ?? null, model: o.model ?? route.model ?? null, freshContext: true,
     });

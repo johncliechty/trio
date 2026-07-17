@@ -127,3 +127,26 @@ test('foreman seam: makeForemanDriver routes an INJECTED agent through unchanged
   assert.equal(rv.answerable, 'yes');
   assert.ok(labels.some((l) => l.startsWith('execute:w2')), 'injected agent received the execute label');
 });
+
+test('belowFrontierClaudeModel is the standard (one-below-frontier) tier, not hard-coded frontier (2026-07-17)', async () => {
+  const { belowFrontierClaudeModel } = await import('../claude.mjs');
+  assert.equal(belowFrontierClaudeModel(), 'claude-opus-4-8');
+});
+
+test('runAgent: a seat_unavailable failure fails OVER to Claude (model-integrity rule, 2026-07-17)', async () => {
+  // A non-Claude backend that cannot deliver its attested model (agy silently served GPT-OSS).
+  const fake = {
+    name: 'fake-gemini-fo',
+    runAgent: async () => {
+      const e = new Error('Gemini attestation/transport failed: model_substituted');
+      e.seat_unavailable = true; e.requested_model = 'Gemini 3.1 Pro (High)'; e.served_model = 'GPT-OSS 120B';
+      throw e;
+    },
+  };
+  registerDriver(fake);
+  const out = await runAgent({
+    driver: 'fake-gemini-fo', prompt: 'review', schema: { type: 'object' }, label: 'shark:r1',
+    runClaude: async () => ({ text: '{"answerable":"yes","findings":[]}' }),
+  });
+  assert.equal(out.answerable, 'yes', 'the seat failed over to Claude and returned its result (no blind GPT-OSS, no throw)');
+});

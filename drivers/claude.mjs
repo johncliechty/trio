@@ -129,6 +129,11 @@ const TIER_CLAUDE_MODELS = {
   standard: 'claude-opus-4-8',
 };
 
+/** The Claude model ONE NOTCH BELOW frontier (the `standard` tier) — the failover target when a
+ * non-Claude verification seat can't serve its attested requested model. Symbolic so it TRACKS
+ * the ladder as frontier ships forward; never hard-coded at the call site (John 2026-07-17). */
+export function belowFrontierClaudeModel() { return TIER_CLAUDE_MODELS.standard; }
+
 export function resolveClaudeModel({ model, role, label, env = process.env } = {}) {
   if (model) return model;
   const tier = String(env.TRIO_TIER || '').trim().toLowerCase();

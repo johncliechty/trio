@@ -385,6 +385,17 @@ export function servedModelFromCliLog(cliLogWindow, { requested = null } = {}) {
       return { served, substituted: true };
     }
   }
+  // (1b) agy update (2026-07-17): a NEWER substitution signal. When agy can't reach its model
+  // catalog (rate-limited / auth-degraded), the requested id is "not in local config" and it
+  // SILENTLY DEFAULTS to a fallback (`Model ID <X> not in local config, defaulting to CCPA` →
+  // GPT-OSS). This substitutes EVEN a catalogued label, so it MUST be caught BEFORE the clean
+  // stamp below — otherwise a fallback serve is falsely attested as a clean Gemini serve (the
+  // exact silent cross-family hole that ran the sharks on GPT-OSS).
+  if (requested) {
+    const defaultingRe = new RegExp(`Model ID\\s+${reEscape(requested)}\\s+not in local config,\\s*defaulting to\\s+(\\S+)`, 'i');
+    const dm = win.match(defaultingRe);
+    if (dm) return { served: dm[1].trim(), substituted: true };
+  }
   // (2) Clean serve of a KNOWN label — attested by absence-of-substitution on a catalogued label.
   if (requested && KNOWN_AGY_LABELS_NORM.has(norm(requested))) {
     return { served: requested, substituted: false };
@@ -682,10 +693,14 @@ export function makeGeminiCliSeam({
     // (model_substituted / unattested_model / transport / timeout error) must NEVER return
     // text as a success — a non-attested cross-family result is refused here, on every path.
     if (!rec || rec.ok === false) {
-      throw new HaltError(
+      const e = new HaltError(
         `Gemini attestation/transport failed: ${rec?.status ?? 'no-rec'}`,
         `served=${JSON.stringify(rec?.model_served ?? null)} attested=${rec?.model_attested ?? false} — refuse to return a non-attested cross-family result`,
       );
+      e.seat_unavailable = true;              // failover-eligible: requested model was NOT delivered
+      e.requested_model = mdl;
+      e.served_model = rec?.model_served ?? null;
+      throw e;
     }
     if (!opts.schema) return text;
 

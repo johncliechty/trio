@@ -369,3 +369,11 @@ test('buildGeminiCliArgs: no promptFile ⇒ unchanged legacy shape (-p carries t
   const args = buildGeminiCliArgs({ prompt: 'hello world', logPath: 'L', model: 'M', readonly: true });
   assert.equal(args[args.indexOf('-p') + 1], 'hello world');
 });
+
+test('servedModelFromCliLog: agy-update "not in local config, defaulting to" is a SUBSTITUTION, not a clean serve (2026-07-17)', () => {
+  // The exact line the update emits when it can't reach the catalog and silently downgrades.
+  const win = 'I0717 12:00 resolver.go:85] Model ID Gemini 3.1 Pro (High) not in local config, defaulting to CCPA\nModel resolved via default';
+  const out = servedModelFromCliLog(win, { requested: 'Gemini 3.1 Pro (High)' });
+  assert.equal(out.substituted, true, 'a fallback default must NOT be falsely attested as a clean Gemini serve');
+  assert.equal(out.served, 'CCPA');
+});

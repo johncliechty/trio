@@ -334,3 +334,38 @@ test('B2: unknown labels and unreadable windows never stop early (conservative f
   // unreadable cli.log (null window): we cannot attest what we could not read
   assert.equal(shouldStopAttestationPoll({ cliWindow: null, requested: GEMINI_STANDARD_MODEL, elapsedMs: 9999 }), null);
 });
+
+// ---------------------------------------------------------------------------
+// Oversized-prompt file delivery (2026-07-16, journal crucible/0004): past the
+// argv-safe ceiling the FULL prompt rides in promptFile and -p carries only a
+// short pointer — live Item-F Sharks died silently past ~32KB argv without this.
+// ---------------------------------------------------------------------------
+
+test('buildGeminiCliArgs: promptFile swaps -p to a short pointer naming the file (readonly posture)', () => {
+  const big = 'X'.repeat(50000);
+  const args = buildGeminiCliArgs({
+    prompt: big, promptFile: 'C:/tmp/call-1/prompt.md', logPath: 'C:/tmp/agy.log',
+    model: 'M', readonly: true,
+  });
+  const p = args[args.indexOf('-p') + 1];
+  assert.ok(p.length < 1000, 'argv prompt is the SHORT pointer, not the payload');
+  assert.ok(p.includes('C:/tmp/call-1/prompt.md'), 'pointer names the prompt file');
+  assert.match(p, /file-read tool/i, 'pointer instructs the in-process read');
+  assert.ok(!p.includes('XXXX'), 'payload is NOT on argv');
+  assert.ok(!args.includes('--sandbox'), 'readonly posture unchanged');
+});
+
+test('buildGeminiCliArgs: sandboxed posture with promptFile adds --add-dir for the prompt file dir', () => {
+  const args = buildGeminiCliArgs({
+    prompt: 'x', promptFile: 'C:/tmp/call-2/prompt.md', logPath: 'C:/tmp/agy.log',
+    model: 'M', readonly: false, target: 'C:/proj',
+  });
+  const dirs = args.reduce((acc, a, i) => (a === '--add-dir' ? acc.concat(args[i + 1]) : acc), []);
+  assert.ok(dirs.includes('C:/proj'), 'target still added');
+  assert.ok(dirs.includes('C:/tmp/call-2'), 'prompt-file dir added so the sandbox can READ it');
+});
+
+test('buildGeminiCliArgs: no promptFile ⇒ unchanged legacy shape (-p carries the full prompt)', () => {
+  const args = buildGeminiCliArgs({ prompt: 'hello world', logPath: 'L', model: 'M', readonly: true });
+  assert.equal(args[args.indexOf('-p') + 1], 'hello world');
+});

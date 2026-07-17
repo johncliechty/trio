@@ -56,7 +56,7 @@
 // with zero subprocesses.
 
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync, readdirSync, mkdtempSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, readdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -196,12 +196,20 @@ export function resolveGeminiModel({ model, role, env = process.env } = {}) {
 // never blocks forever. Override via opts.timeoutMs (0 disables).
 export const DEFAULT_GEMINI_TIMEOUT_MS = 60 * 60 * 1000;
 
+// Argv-safe prompt ceiling: Windows caps a command line ~32KB; past ~28KB (leaving room
+// for the other args) the prompt is delivered via a per-call file instead (2026-07-16).
+export const OVERSIZE_PROMPT_ARGV_BYTES = 28000;
+
 /**
  * W0: build the live agy argv — `-p <STEER+prompt> --log-file <tmp> --model "<LABEL>"
  * --print-timeout <t>s [--sandbox --add-dir <target>]`. Prompt is delivered via ARGV
- * (stdin truncates ~4KB on agy); keep prompts small and let Gemini read files itself.
+ * (stdin truncates ~4KB on agy). An OVERSIZED prompt (2026-07-16, John-authorized fix:
+ * live Item-F Sharks died >32KB argv, journal crucible/0004) is delivered via
+ * `promptFile` instead: the file carries the FULL prompt and `-p` carries only a short
+ * pointer instructing Gemini to read it with its in-process file tool.
  * @param {object} o
  * @param {string} o.prompt      the FULL prompt to send (STEER already prepended)
+ * @param {string} [o.promptFile] when set, `prompt` was written to this path — argv gets the short pointer
  * @param {string} o.logPath     the `--log-file` temp path (source of the conversation id)
  * @param {string} [o.model]     agy LABEL
  * @param {string} [o.target]    cwd / edit scope for `--add-dir`
@@ -211,17 +219,28 @@ export const DEFAULT_GEMINI_TIMEOUT_MS = 60 * 60 * 1000;
  */
 export function buildGeminiCliArgs({
   prompt = '',
+  promptFile = null,
   logPath,
   model,
   target = process.cwd(),
   readonly = false,
   timeoutMs = DEFAULT_GEMINI_TIMEOUT_MS,
 } = {}) {
-  const args = ['-p', prompt, '--log-file', logPath, '--model', model ?? DEFAULT_GEMINI_CLI_MODEL];
+  const argvPrompt = promptFile
+    ? STEER +
+      `Your ENTIRE task prompt is in the UTF-8 file ${promptFile} — read that file NOW with your ` +
+      `in-process file-read tool and follow its contents EXACTLY as if it were this message. ` +
+      `Do not summarize it back; execute it and reply as it instructs.`
+    : prompt;
+  const args = ['-p', argvPrompt, '--log-file', logPath, '--model', model ?? DEFAULT_GEMINI_CLI_MODEL];
   // Align agy's own print-mode wait just under our kill ceiling so OUR kill is the backstop.
   const secs = timeoutMs > 0 ? Math.max(60, Math.floor((timeoutMs * 0.95) / 1000)) : 60;
   args.push('--print-timeout', `${secs}s`);
-  if (!readonly) { args.push('--sandbox', '--add-dir', target); }
+  if (!readonly) {
+    args.push('--sandbox', '--add-dir', target);
+    // The sandbox must be able to READ the prompt file (it lives in the per-call tmp dir).
+    if (promptFile) args.push('--add-dir', path.dirname(promptFile));
+  }
   return args;
 }
 
@@ -503,9 +522,6 @@ export function defaultRunGeminiCli(fullPrompt, label, {
   // W0: prompt via ARGV `-p` with the STEER prefix (mirrors agy-dispatch.mjs); the reply
   // is read from transcript.jsonl below, not stdout.
   const prompt = STEER + String(fullPrompt ?? '');
-  if (Buffer.byteLength(prompt) > 31000) {
-    log(`!! ${label}: prompt is ${Buffer.byteLength(prompt)} bytes — risks ENAMETOOLONG (~32KB argv). Trim it; let Gemini read files itself.`);
-  }
   const childEnv = Object.assign({}, env, { NO_COLOR: '1', FORCE_COLOR: '0', CI: '1' });
 
   return new Promise((resolve) => {
@@ -516,7 +532,17 @@ export function defaultRunGeminiCli(fullPrompt, label, {
     // only the region THIS call appends (a concurrent call's line is not mis-attributed).
     const cliLogBefore = cliLogSize();
 
-    const args = buildGeminiCliArgs({ prompt, logPath, model: mdl, target, readonly, timeoutMs });
+    // 2026-07-16 (John-authorized; journal crucible/0004): an oversized prompt is delivered
+    // via a per-call FILE — Windows argv caps ~32KB, and live Item-F Sharks silently died
+    // past it. The file lives in THIS call's private logDir, so no cross-call mixups.
+    let promptFile = null;
+    if (Buffer.byteLength(prompt) > OVERSIZE_PROMPT_ARGV_BYTES) {
+      promptFile = path.join(logDir, 'prompt.md');
+      writeFileSync(promptFile, prompt, 'utf8');
+      log(`${label}: prompt ${Buffer.byteLength(prompt)} bytes > ${OVERSIZE_PROMPT_ARGV_BYTES} argv-safe — delivered via file (short argv pointer)`);
+    }
+
+    const args = buildGeminiCliArgs({ prompt, promptFile, logPath, model: mdl, target, readonly, timeoutMs });
     // W0: spawn agy DIRECTLY, inheriting the (already-hidden) parent console so any pwsh/cmd
     // agy spawns for a shell tool attaches to that invisible console instead of a new VISIBLE
     // one. windowsHide keeps agy itself windowless; NEVER `detached:true` (detaching removes

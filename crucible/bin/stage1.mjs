@@ -461,13 +461,15 @@ function revisePrompt({ northStar, draft, verdict, direction, markdownFirst = fa
     `=== END DRAFT ===`,
     ``,
     markdownFirst
-      ? `Emit the COMPLETE revised Master-Plan draft — EVERY phase, from the first line to the`
-        + ` last, with your edits applied INLINE — enclosed in \`\`\`markdown ... \`\`\` fences (no JSON,`
-        + ` no prose outside the fences). Do NOT return only the changed sections, a delta, a`
-        + ` summary, or a "carried forward UNCHANGED / not reproduced here" note — reproduce the`
-        + ` ENTIRE plan in full. A partial or truncated reply is REJECTED and the round is lost.`
-        + ` (This draft is large; the structured changelog is omitted this round to avoid fragile`
-        + ` large-JSON serialization.)`
+      ? `You must use Search/Replace blocks to modify the draft. Do NOT output the entire draft.\n`
+        + `Each block must look exactly like this:\n`
+        + `<<<<\n`
+        + `[exact lines to replace, including leading whitespace]\n`
+        + `====\n`
+        + `[new lines]\n`
+        + `>>>>\n`
+        + `The lines in the top half must EXACTLY match the current draft. A partial or truncated reply is REJECTED and the round is lost.\n`
+        + `(This draft is large; the structured changelog is omitted this round to avoid fragile large-JSON serialization.)`
       : `Emit: draft (the full revised draft), changelog (what you changed).\n`
         + `If and ONLY if you cannot escape the draft into valid JSON, emit ONLY the revised draft`
         + ` enclosed in \`\`\`markdown ... \`\`\` fences — the structured changelog is dropped that round.`,
@@ -497,13 +499,44 @@ export async function reviseDraft({ agent, northStar, draft, verdict, direction,
     // (journal 0002): take the ```markdown fenced block, else the trimmed text. A null/empty
     // reply keeps the prior draft (never lose a round's work to a dead seam).
     const text = typeof out === 'string' ? out : (out && typeof out.draft === 'string' ? out.draft : '');
-    const m = text.match(/```(?:markdown)?\s*([\s\S]*?)```/i);
-    if (m) revised = m[1].trim();
-    else if (text.trim()) revised = text.trim();
-    changelog = revised !== draft
-      ? [markdownFirst ? '(large draft: markdown-first, changelog omitted)' : '(Raw markdown parsed, changelog omitted)']
-      : [];
-    if (!markdownFirst) log(`stage1 revise r${round}: structured reply unavailable — raw-text fallback (changelog omitted)`);
+    
+    if (markdownFirst) {
+      changelog = [];
+      const regex = /<<<<\r?\n([\s\S]*?)\r?\n====\r?\n([\s\S]*?)\r?\n>>>>/g;
+      let match;
+      let matchedAny = false;
+      while ((match = regex.exec(text)) !== null) {
+        matchedAny = true;
+        const search = match[1];
+        const replace = match[2];
+        if (revised.includes(search)) {
+          revised = revised.replace(search, replace);
+          changelog.push('Applied a search/replace patch');
+        } else {
+          changelog.push('FAILED patch: search text not found in draft');
+          // Try a trimmed fallback just in case
+          if (search.trim() && revised.includes(search.trim())) {
+             revised = revised.replace(search.trim(), replace.trim());
+             changelog.push('Applied patch using trimmed fallback');
+          }
+        }
+      }
+      if (!matchedAny) {
+        // Fallback in case the model ignored instructions and output the whole draft anyway
+        const m = text.match(/```(?:markdown)?\s*([\s\S]*?)```/i);
+        if (m) revised = m[1].trim();
+        else if (text.trim() && text.length > draft.length * 0.5) revised = text.trim();
+        changelog.push('(Fell back to parsing whole draft, no search/replace blocks found)');
+      }
+    } else {
+      const m = text.match(/```(?:markdown)?\s*([\s\S]*?)```/i);
+      if (m) revised = m[1].trim();
+      else if (text.trim()) revised = text.trim();
+      changelog = revised !== draft
+        ? ['(Raw markdown parsed, changelog omitted)']
+        : [];
+      log(`stage1 revise r${round}: structured reply unavailable — raw-text fallback (changelog omitted)`);
+    }
   }
   // EI1 completeness guard (2026-07-17): never let a markdown-first revise SHRINK the plan
   // catastrophically (a model returning a delta/partial instead of the full draft — observed
@@ -843,6 +876,7 @@ export async function runStage1({
   grasscatcherPath = null,
   artifactsDir = null,
   statusLog = null,
+  routes = null,
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runStage1');
@@ -883,6 +917,7 @@ export async function runStage1({
     draft: renderMasterPlanDraft(plan),
     research, acceptanceCriteria, roundCap, artifactsDir, log,
     statusLog, statusLabel: 'Crucible Stage 1 (Master Plan)',
+    routes,
   });
 
   // (5) The user-approval HALT gate (master-plan-approval).

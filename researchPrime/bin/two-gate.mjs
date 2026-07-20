@@ -47,7 +47,7 @@ export function validateExecutionState(runDir, triageHash, planHash) {
 /**
  * Runs the two-gate process.
  */
-export async function runTwoGateMachine(inputs, { runDir, promptGate1, promptGate2, maxEdits = MAX_EDITS, lockedGovernorOutput = { hash: 'mock-hash' }, skill = 'researchPrime', onEditedScope, onEditedPlan, approvalProvider } = {}) {
+export async function runTwoGateMachine(inputs, { runDir, promptGate1, promptGate2, maxEdits = MAX_EDITS, lockedGovernorOutput = { hash: 'mock-hash' }, skill = 'researchPrime', onEditedScope, onEditedPlan, approvalProvider, buildPlan } = {}) {
   let providerIdentity = 'TTY';
   if (approvalProvider) {
     providerIdentity = approvalProvider.authorize();
@@ -85,7 +85,15 @@ export async function runTwoGateMachine(inputs, { runDir, promptGate1, promptGat
     let gate2Decision;
     
     while (true) {
-      const plan = planMatrix({ objective: inputs.query || inputs.objective || 'default objective' });
+      // The artifact the human approves at Gate 2. Default = the generic deterministic
+      // scope/evidence/adversarial/synthesis matrix (back-compat). A real researchPrime run
+      // injects `buildPlan` (see bin/plan-gate.mjs) so Gate 2 approves the ACTUAL Phase-1
+      // research plan — AXIS / candidate branches / stakes vector / foresight receipt — not
+      // the boilerplate matrix. `buildPlan` MUST be a pure function of `inputs` so the same
+      // inputs serialize to the same bytes and therefore the same planHash (EDIT re-hash + replay).
+      const plan = buildPlan
+        ? buildPlan({ inputs })
+        : planMatrix({ objective: inputs.query || inputs.objective || 'default objective' });
       const planStr = JSON.stringify(plan, null, 2);
       planHash = crypto.createHash('sha256').update(planStr).digest('hex');
       const planPath = path.join(runDir, `plan-${planHash}.json`);

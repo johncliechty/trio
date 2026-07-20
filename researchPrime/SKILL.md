@@ -42,6 +42,21 @@ Emit the stakes vector + foresight receipt as the Phase-1 hand-off; the governor
 
 ---
 
+## PLAN REVIEW GATE — report the plan ONE-SHOT to the user (approve / edit / abort)
+
+Before crossing the context boundary, present the frozen Phase-1 plan to the user **in one shot** and get an explicit decision. This is the load-bearing checkpoint: execution does not begin until the user APPROVEs. Surface the whole plan in the message body (never clipped into a dialog preview): the AXIS + what would falsify a candidate, the candidate branches, the best-in-class baselines to beat, the stakes vector + projected tier, and the Oranges foresight receipt.
+
+Accept exactly one of: **APPROVE** (proceed to execution), **EDIT** (revise the plan per the user's change and re-present — bounded to 3 cycles), **ABORT** (halt the run). On EDIT, the revised plan is re-frozen and re-reported before any approval counts.
+
+**On a host with Node**, record the decision durably (hash-bound governance record, EDIT re-hash, replay binding) by driving the real engine gate:
+`node bin/plan-gate.mjs <planInputs.json> [runDir]` — where `planInputs.json` is `{ objective, axis, branches:[…], baselines:[…], stakes:{ declared_stakes:'low|medium|high', reversibility:'reversible|hard-to-reverse|irreversible', blast_radius:'narrow|moderate|wide', magnitude:'minor|moderate|major' } }` (the `adjudicateStakes` axes; `irreversible` floors the tier at `medium`). Gate 2 renders and approves the ACTUAL Phase-1 plan (AXIS/branches/baselines + stakes/tier/foresight from `runPhase1`), NOT the generic `planMatrix`. APPROVE writes `governance.json` + `gate2-record.json` bound to the plan hash; EDIT re-hashes; ABORT/EDIT-overflow HALTs before execution. The plan artifact is a pure function of the inputs, so the same plan always yields the same `planHash`.
+
+**On a host without Node**, run the same gate as prose: report the plan, capture APPROVE/EDIT/ABORT in the transcript, and only cross the boundary on APPROVE (stamp "plan-gate: prose, not hash-bound").
+
+Only after APPROVE do you cross into fresh execution.
+
+---
+
 ## CONTEXT BOUNDARY — FRESH EXECUTION (plan-only)
 
 Execution reads ONLY the frozen plan. On sub-agent hosts this is a real forget (stamp ISOLATION: real only with a recorded nonce check); on single-context hosts it is approximated — quote the plan and derive every step from the quote (stamp ISOLATION: approximated).

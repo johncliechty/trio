@@ -302,5 +302,5 @@ export async function buildLiveCrucibleAgent({
     ...(log !== undefined ? { log } : {}),
   });
   const agent = instrumentCrucibleAgent({ agent: routed, routes, tracker, geminiCap: cap });
-  return { agent, tracker };
+  return { agent, tracker, routes };
 }

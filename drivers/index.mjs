@@ -12,6 +12,8 @@
 // `runAgent` returns the model's text by default, or a schema-validated object when
 // `schema` is supplied (the Claude backend retries once then ABSTAINs).
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { makeReliableAgent } from './reliability.mjs';
 import { claudeDriver, belowFrontierClaudeModel } from './claude.mjs';
@@ -57,6 +59,63 @@ export const geminiCliNativeDriver = {
 };
 
 const DEFAULT_DRIVER = process.env.ANTIGRAVITY_AGENT ? 'gemini-cli' : 'claude';
+
+// Roles whose seats are filled by REVIEW_FAMILY (adversarial / judge / check).
+// Everything else defaults to CODING_FAMILY (code / reason / orchestrate).
+const REVIEW_ROLES = new Set([
+  'review', 'shark', 'reviewer', 'debate', 'refuter', 'gate3', 'verify',
+  'judge', 'attacker', 'analysis',
+]);
+
+/** Map a model family name (claude|gemini|grok) → registered trio driver name. */
+export function familyToDriverName(family) {
+  const f = String(family || '').trim().toLowerCase();
+  if (f === 'gemini') return 'gemini-cli';
+  if (f === 'grok') return 'grok'; // HTTP API until a tool-capable grok-cli ships
+  if (f === 'claude' || !f) return 'claude';
+  return null;
+}
+
+/**
+ * Read coding/review families from env, else ~/.anchor/model_prefs.json (Anchor
+ * mirror for non-Anchor hosts). Returns { coding, review, cross_model }.
+ */
+export function loadModelFamilies(env = process.env) {
+  let coding = String(env.CODING_FAMILY || env.ANCHOR_CODING_FAMILY || '').trim().toLowerCase();
+  let review = String(env.REVIEW_FAMILY || env.ANCHOR_REVIEW_FAMILY || '').trim().toLowerCase();
+  if (!coding || !review) {
+    try {
+      const home = env.USERPROFILE || env.HOME || '';
+      const mirror = path.join(home, '.anchor', 'model_prefs.json');
+      if (home && fs.existsSync(mirror)) {
+        const raw = JSON.parse(fs.readFileSync(mirror, 'utf8'));
+        if (!coding && raw.coding_family) coding = String(raw.coding_family).toLowerCase();
+        if (!review && raw.review_family) review = String(raw.review_family).toLowerCase();
+      }
+    } catch {
+      // best-effort — never block a seat on prefs IO
+    }
+  }
+  if (!coding) coding = 'claude';
+  if (!review) review = 'gemini';
+  return {
+    coding,
+    review,
+    cross_model: coding !== review,
+  };
+}
+
+/**
+ * Resolve driver name from Anchor coding/review family prefs for a role.
+ * Explicit TRIO_DRIVER / opts.driver still win over this (callers apply order).
+ * @returns {?string} registered driver name or null
+ */
+export function resolveDriverFromFamilies(role, env = process.env) {
+  const r = String(role || '').trim().toLowerCase();
+  const fams = loadModelFamilies(env);
+  const family = REVIEW_ROLES.has(r) ? fams.review : fams.coding;
+  return familyToDriverName(family);
+}
 
 /** name -> driver object. Seeded with the always-present Claude default. */
 const REGISTRY = new Map([[claudeDriver.name, claudeDriver]]);
@@ -136,19 +195,21 @@ export function getDriver(name = null, env = process.env) {
  * @returns {Promise<any>} model text, or the schema-validated object
  */
 export async function runAgent(opts = {}) {
-  // 2026-07-02 (John's standing 5:1 doctrine, made GLOBAL): when no explicit
-  // driver is passed, a per-role env override — TRIO_DRIVER_<ROLE>, role from
-  // opts.role else the label prefix — routes THIS call's backend. This is how
-  // verification seats (shark/review/reviewer/debate) run on Gemini machine-wide
-  // via user env, while steering/coding seats stay on frontier Claude. An
-  // explicit opts.driver always wins; no env ⇒ exactly the historical behavior.
+  // Driver selection order (2026-07-21 model-prefs + historical 5:1):
+  //   1. explicit opts.driver
+  //   2. TRIO_DRIVER_<ROLE> (per-seat setx / launch override)
+  //   3. CODING_FAMILY / REVIEW_FAMILY (or ~/.anchor/model_prefs.json) by role
+  //   4. TRIO_DRIVER / default claude
+  // An explicit opts.driver always wins. Same-family coding+review is allowed;
+  // callers should stamp cross_model from loadModelFamilies().cross_model.
   let name = opts.driver;
+  const role = String(opts.role || opts.label || '').split(/[:#.\s]/)[0];
+  if (!name && role) {
+    const key = `TRIO_DRIVER_${role.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+    name = process.env[key] || null;
+  }
   if (!name) {
-    const role = String(opts.role || opts.label || '').split(/[:#.\s]/)[0];
-    if (role) {
-      const key = `TRIO_DRIVER_${role.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
-      name = process.env[key] || null;
-    }
+    name = resolveDriverFromFamilies(role, process.env) || null;
   }
   const driver = getDriver(name);
   return dispatchWithFailover(driver, opts);
@@ -202,7 +263,9 @@ export function makeRoleRoutedAgent({ routes = {}, ...baseOpts } = {}) {
   return (prompt, o = {}) => {
     const role = String(o.role || o.label || '').split(/[:#.\s]/)[0].toLowerCase();
     const route = routes[role] || routes.default || {};
-    const backend = getDriver(route.driver || null);
+    // Explicit route.driver wins; else coding/review family prefs; else registry default.
+    const fromFamily = resolveDriverFromFamilies(role, process.env);
+    const backend = getDriver(route.driver || fromFamily || null);
     return dispatchWithFailover(backend, {
       ...baseOpts, prompt, schema: o.schema, label: o.label,
       role: o.role ?? role ?? null, model: o.model ?? route.model ?? null, freshContext: true,

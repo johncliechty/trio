@@ -62,7 +62,7 @@ const DEFAULT_DRIVER = process.env.ANTIGRAVITY_AGENT ? 'gemini-cli' : 'claude';
 
 // Roles whose seats are filled by REVIEW_FAMILY (adversarial / judge / check).
 // Everything else defaults to CODING_FAMILY (code / reason / orchestrate).
-const REVIEW_ROLES = new Set([
+export const REVIEW_ROLES = new Set([
   'review', 'shark', 'reviewer', 'debate', 'refuter', 'gate3', 'verify',
   'judge', 'attacker', 'analysis',
 ]);
@@ -115,6 +115,89 @@ export function resolveDriverFromFamilies(role, env = process.env) {
   const fams = loadModelFamilies(env);
   const family = REVIEW_ROLES.has(r) ? fams.review : fams.coding;
   return familyToDriverName(family);
+}
+
+/**
+ * Build an explicit role→{driver} route table from coding/review family prefs.
+ * Used by live Crucible / researchPrime / Gandalf builders so seats honor the
+ * dashboard knobs (and ~/.anchor/model_prefs.json) instead of hardcoding Claude.
+ *
+ * @param {object} [o]
+ * @param {string[]} [o.codingRoles]  seats on CODING_FAMILY (plus `default`)
+ * @param {string[]} [o.reviewRoles]  seats on REVIEW_FAMILY
+ * @param {object}   [o.env]
+ * @param {?string}  [o.reviewModel]  optional model pin on every review seat
+ * @returns {{ routes: object, families: object, codingDriver: string, reviewDriver: string, drafterFamily: string, refuterFamily: string }}
+ */
+export function buildRoutesFromFamilies({
+  codingRoles = ['synthesizer'],
+  reviewRoles = ['shark', 'judge', 'review', 'reviewer', 'debate', 'refuter'],
+  env = process.env,
+  reviewModel = null,
+} = {}) {
+  const families = loadModelFamilies(env);
+  const codingDriver = familyToDriverName(families.coding) || 'claude';
+  const reviewDriver = familyToDriverName(families.review) || 'gemini-cli';
+  const routes = { default: { driver: codingDriver } };
+  for (const role of codingRoles) {
+    const r = String(role || '').trim().toLowerCase();
+    if (!r || r === 'default') continue;
+    routes[r] = { driver: codingDriver };
+  }
+  for (const role of reviewRoles) {
+    const r = String(role || '').trim().toLowerCase();
+    if (!r) continue;
+    const entry = { driver: reviewDriver };
+    if (reviewModel) entry.model = reviewModel;
+    routes[r] = entry;
+  }
+  return {
+    routes: Object.freeze({ ...routes }),
+    families,
+    codingDriver,
+    reviewDriver,
+    drafterFamily: families.coding,
+    refuterFamily: families.review,
+  };
+}
+
+/**
+ * Stamp TRIO_DRIVER_<ROLE> (and CODING_FAMILY / REVIEW_FAMILY) from prefs when
+ * unset — so Foreman run-live and other env-driven seats pick up dashboard knobs
+ * without a per-project models block. Never overwrites an explicit operator env.
+ * @param {object} [env=process.env]
+ * @returns {{ coding, review, cross_model }}
+ */
+export function applyFamilyPrefsToEnv(env = process.env) {
+  const fams = loadModelFamilies(env);
+  const codingDrv = familyToDriverName(fams.coding) || 'claude';
+  const reviewDrv = familyToDriverName(fams.review) || 'gemini-cli';
+  const roleMap = {
+    EXECUTE: codingDrv,
+    FIX: codingDrv,
+    SYNTHESIZER: codingDrv,
+    DEFAULT: codingDrv,
+    REVIEW: reviewDrv,
+    SHARK: reviewDrv,
+    REVIEWER: reviewDrv,
+    JUDGE: reviewDrv,
+    DEBATE: reviewDrv,
+    REFUTER: reviewDrv,
+    GATE3: reviewDrv,
+    VERIFY: reviewDrv,
+    ATTACKER: reviewDrv,
+    ANALYSIS: reviewDrv,
+  };
+  for (const [R, drv] of Object.entries(roleMap)) {
+    const key = `TRIO_DRIVER_${R}`;
+    if (!env[key]) env[key] = drv;
+  }
+  if (!env.CODING_FAMILY) env.CODING_FAMILY = fams.coding;
+  if (!env.REVIEW_FAMILY) env.REVIEW_FAMILY = fams.review;
+  if (env.CROSS_MODEL === undefined || env.CROSS_MODEL === '') {
+    env.CROSS_MODEL = fams.cross_model ? 'true' : 'false';
+  }
+  return fams;
 }
 
 /** name -> driver object. Seeded with the always-present Claude default. */

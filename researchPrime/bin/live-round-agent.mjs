@@ -291,8 +291,12 @@ export async function buildLiveRoundAgent({
   });
   const resolvedRoutes = routes ?? built.routes;
   const resolvedDrafter = drafterFamily ?? built.drafterFamily;
-  // Behavior 4 (fail-closed): never build a self-review agent.
-  assertCrossFamilyRouting({ routes: resolvedRoutes, drafterFamily: resolvedDrafter });
+  // Fail-closed against accidental self-review, unless Anchor prefs set
+  // coding_family === review_family (honest single-family; cross_model:false).
+  const singleFamilyPrefs = !routes && built.families.coding === built.families.review;
+  if (!singleFamilyPrefs) {
+    assertCrossFamilyRouting({ routes: resolvedRoutes, drafterFamily: resolvedDrafter });
+  }
   const cap = Number.isInteger(geminiCap) ? Math.min(geminiCap, MAX_GEMINI_CAP) : resolveGeminiCap(env);
   const routed = makeRoleRoutedAgent({
     routes: resolvedRoutes,

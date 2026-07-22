@@ -39,19 +39,15 @@
 import { TRIO_SURFACE } from './engine.mjs';
 const { HaltError } = TRIO_SURFACE['foreman-lib'];
 
-/** The drafter family (who authored the drafted claims / reviews) in the reference W5 topology. */
+/** Historical default drafter family (Claude). Live runs resolve drafter from CODING_FAMILY. */
 export const DRAFTER_FAMILY = 'claude';
 
-/** The VERIFICATION roles — the seats that, under the 5:1 split, route to the cross-family (Gemini)
- *  backend. These are exactly the round's adversarial seats (bin/round.mjs): the reviewer panel, the
- *  Shark roster the panel reuses, the G9 debate, and the separate context-free Judge. The Synthesizer is
- *  the STEERING seat and stays on Claude (it steers, it never verifies). */
+/** The VERIFICATION roles — round adversarial seats (bin/round.mjs): reviewer panel, Shark roster,
+ *  G9 debate, and context-free Judge. Prefs route these to REVIEW_FAMILY; Synthesizer steers on CODING_FAMILY. */
 export const VERIFICATION_ROLES = Object.freeze(['reviewer', 'shark', 'debate', 'judge']);
 
-/** The DEFAULT live route table: verification roles → the Gemini HOST backend (`gemini-cli`, the W0 live
- *  `agy -p` driver with served-model attestation); drafter/synthesizer/default → Claude. The model is left
- *  UNPINNED so the gemini-cli ladder resolves it from TRIO_TIER (heavy → "Gemini 3.1 Pro (High)",
- *  standard → "Gemini 3.5 Flash (Medium)") — never an API-style id (agy silently degrades those to Flash). */
+/** Test/fixture only: historical Claude+Gemini 5:1 table. Live production MUST omit
+ *  routes (or call `buildDefaultRoundRoutes`) so seats follow coding/review prefs. */
 export const DEFAULT_ROUND_ROUTES = Object.freeze({
   reviewer: { driver: 'gemini-cli' },
   shark: { driver: 'gemini-cli' },
@@ -60,6 +56,19 @@ export const DEFAULT_ROUND_ROUTES = Object.freeze({
   synthesizer: { driver: 'claude' },
   default: { driver: 'claude' },
 });
+
+/**
+ * Prefs-aware researchPrime route table: verification seats → REVIEW_FAMILY; synthesizer/default → CODING_FAMILY.
+ * @param {object} [env=process.env]
+ */
+export async function buildDefaultRoundRoutes(env = process.env) {
+  const { buildRoutesFromFamilies } = await import('../../drivers/index.mjs');
+  return buildRoutesFromFamilies({
+    env,
+    codingRoles: ['synthesizer'],
+    reviewRoles: ['reviewer', 'shark', 'debate', 'judge'],
+  });
+}
 
 /** The SINGLE-FAMILY (replay / degraded) route table: every role → Claude. Used by the offline replay
  *  runner so its `substrateFamilies` is DERIVED (['claude']) from the reached backend, not hard-coded. */
@@ -249,16 +258,15 @@ export function instrumentRoundAgent({
 }
 
 /**
- * Build the LIVE role-routed round agent (the reference W5 topology: reviewer/shark/debate/judge → Gemini
- * `agy -p`, synthesizer/default → Claude), instrumented with the reached-family tracker + the live-Gemini
- * concurrency cap. LAZY dynamic import of the trio registry so importing this module never loads the trio.
- * Runs the routing guard FIRST so a self-review route can never even be built. ENV: forces
- * CRUCIBLE_AGENT_LIVE=1 (the trio-wide live gate the gemini-cli driver requires). NOT called by the
- * deterministic test (which injects a stub through instrumentRoundAgent instead).
+ * Build the LIVE role-routed round agent from coding/review family prefs
+ * (reviewer/shark/debate/judge → REVIEW_FAMILY, synthesizer/default → CODING_FAMILY).
+ * Omit `routes` to honor prefs; pass an explicit table to pin. Instrumented with the
+ * reached-family tracker + live-Gemini concurrency cap. LAZY dynamic import of the trio
+ * registry. Runs the routing guard FIRST so a self-review route can never be built.
  * @param {object} o
- * @param {object}   [o.routes=DEFAULT_ROUND_ROUTES]
+ * @param {object}   [o.routes]                     omit → prefs; pass to pin
  * @param {object}   o.tracker                      a makeReachedFamilyTracker() (its families() become substrateFamilies)
- * @param {string}   [o.drafterFamily='claude']
+ * @param {string}   [o.drafterFamily]              omit → CODING_FAMILY from prefs
  * @param {object}   [o.env=process.env]
  * @param {number}   [o.geminiCap]                  override the env-resolved cap
  * @param {string}   [o.target]                     cwd / edit scope threaded to the backend
@@ -266,24 +274,35 @@ export function instrumentRoundAgent({
  * @returns {Promise<(prompt:string, opts?:object)=>Promise<any>>}
  */
 export async function buildLiveRoundAgent({
-  routes = DEFAULT_ROUND_ROUTES,
+  routes,
   tracker,
-  drafterFamily = DRAFTER_FAMILY,
+  drafterFamily,
   env = process.env,
   geminiCap,
   target,
   log,
 } = {}) {
   if (!tracker) throw new TypeError('buildLiveRoundAgent: a reached-family tracker is required (its families() → substrateFamilies)');
-  // Behavior 4 (fail-closed): never build a self-review agent.
-  assertCrossFamilyRouting({ routes, drafterFamily });
+  const { makeRoleRoutedAgent, buildRoutesFromFamilies } = await import('../../drivers/index.mjs');
+  const built = buildRoutesFromFamilies({
+    env,
+    codingRoles: ['synthesizer'],
+    reviewRoles: ['reviewer', 'shark', 'debate', 'judge'],
+  });
+  const resolvedRoutes = routes ?? built.routes;
+  const resolvedDrafter = drafterFamily ?? built.drafterFamily;
+  // Fail-closed against accidental self-review, unless Anchor prefs set
+  // coding_family === review_family (honest single-family; cross_model:false).
+  const singleFamilyPrefs = !routes && built.families.coding === built.families.review;
+  if (!singleFamilyPrefs) {
+    assertCrossFamilyRouting({ routes: resolvedRoutes, drafterFamily: resolvedDrafter });
+  }
   const cap = Number.isInteger(geminiCap) ? Math.min(geminiCap, MAX_GEMINI_CAP) : resolveGeminiCap(env);
-  const { makeRoleRoutedAgent } = await import('../../drivers/index.mjs');
   const routed = makeRoleRoutedAgent({
-    routes,
+    routes: resolvedRoutes,
     env: { ...env, CRUCIBLE_AGENT_LIVE: '1' },
     ...(target !== undefined ? { target } : {}),
     ...(log !== undefined ? { log } : {}),
   });
-  return instrumentRoundAgent({ agent: routed, routes, tracker, geminiCap: cap });
+  return instrumentRoundAgent({ agent: routed, routes: resolvedRoutes, tracker, geminiCap: cap });
 }

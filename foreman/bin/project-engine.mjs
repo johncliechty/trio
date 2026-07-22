@@ -142,12 +142,34 @@ export function clearHaltedCheckpoint(checkpointPath, { log = () => {} } = {}) {
   }
   const clearedHalt = cp.pending_action ?? null;
   cp.status = 'budget_stopped';
-  cp.intra_wave_step = 'gate';
-  cp.pending_action = `halt cleared by human (--clear-halt)${clearedHalt ? ` — was: ${clearedHalt}` : ''}`;
+  // Phase A (2026-07-22): PLAN-AMENDMENT clear-halt re-enters at EXECUTE (iteration 0)
+  // so the wave does not gate-only on already-applied code and false-vacuous-GREEN
+  // (journals 0040, 0045). Other halts still re-enter at the gate and re-prove GREEN.
+  const isPlanAmendment = typeof clearedHalt === 'string' &&
+    /PLAN-AMENDMENT/i.test(clearedHalt);
+  if (isPlanAmendment) {
+    cp.intra_wave_step = 'execute';
+    cp.iteration = 0;
+    cp.pending_action =
+      `halt cleared by human (--clear-halt) after PLAN-AMENDMENT — re-enter EXECUTE ` +
+      `(iteration reset); gate still re-proves GREEN before GO` +
+      (clearedHalt ? ` — was: ${clearedHalt}` : '');
+    log(`clear-halt: wave ${cp.current_wave} PLAN-AMENDMENT halt cleared -> budget_stopped @ execute ` +
+      `(iteration 0); resume will re-run EXECUTE then re-prove GREEN`);
+  } else {
+    cp.intra_wave_step = 'gate';
+    cp.pending_action = `halt cleared by human (--clear-halt)${clearedHalt ? ` — was: ${clearedHalt}` : ''}`;
+    log(`clear-halt: wave ${cp.current_wave} halt cleared -> budget_stopped @ gate (iteration ${cp.iteration} preserved); ` +
+      `resume will re-prove GREEN through the orchestrator gate`);
+  }
   writeCheckpointAtomic(checkpointPath, cp);
-  log(`clear-halt: wave ${cp.current_wave} halt cleared -> budget_stopped @ gate (iteration ${cp.iteration} preserved); ` +
-    `resume will re-prove GREEN through the orchestrator gate`);
-  return { cleared: true, status: cp.status, wave: cp.current_wave, clearedHalt };
+  return {
+    cleared: true,
+    status: cp.status,
+    wave: cp.current_wave,
+    clearedHalt,
+    reentry: isPlanAmendment ? 'execute' : 'gate',
+  };
 }
 
 /**

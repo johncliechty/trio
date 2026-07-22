@@ -79,6 +79,13 @@ try {
   }
 } catch { /* no config or no models block — env-only routing */ }
 
+// Dashboard / ~/.anchor/model_prefs.json → TRIO_DRIVER_<ROLE> when unset (never overrides
+// explicit env or foreman.config.json models block above).
+try {
+  const { applyFamilyPrefsToEnv } = await import('../../drivers/index.mjs');
+  applyFamilyPrefsToEnv(process.env);
+} catch { /* registry optional at this load point — env-only */ }
+
 function emit(line) {
   // LOCAL wall-clock (2026-07-11 fix): the log-line prefix used UTC while the
   // Status-table header used local time, so a run read as two clocks 6h apart.

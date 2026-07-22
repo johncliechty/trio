@@ -102,9 +102,11 @@ export async function runRounds(runDir, { maxRounds = null, env = process.env, l
   const reached = makeReachedFamilyTracker();
   const LIVE_ROUND = env.RESEARCHPRIME_LIVE_ROUND === '1';
   const liveAgent = LIVE_ROUND
-    ? await buildLiveRoundAgent({ routes: DEFAULT_ROUND_ROUTES, tracker: reached, env })
+    ? await buildLiveRoundAgent({ tracker: reached, env }) // prefs-aware (CODING/REVIEW_FAMILY)
     : null;
-  if (LIVE_ROUND) log('LIVE cross-family round: reviewer/debate/judge → gemini-cli, synthesizer/default → claude (5:1).');
+  if (LIVE_ROUND) {
+    log('LIVE cross-family round: seats from coding/review family prefs (omit routes → ~/.anchor/model_prefs.json).');
+  }
 
   for (const inp of inputs) {
     const agent = LIVE_ROUND

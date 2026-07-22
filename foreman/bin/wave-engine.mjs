@@ -46,12 +46,14 @@ import { HaltError, newCheckpoint, writeCheckpointAtomic, renderDashboard } from
 // ---------------------------------------------------------------------------
 
 const IGNORE_DIRS = new Set([
-  'node_modules', '.git', 'docs', '.foreman',
+  'node_modules', '.git', 'docs', '.foreman', '.anchor',
   // Python build/test caches: created by the pytest gate run itself, never part
   // of the wave's deliverable, so they must not pollute the changed-file diff or
   // the test inventory (a stray `.pytest_cache/...` file would otherwise look
   // like an unreached "source" change and falsely trip the vacuous-GREEN guard).
   '__pycache__', '.pytest_cache',
+  // Build output directories (e.g. from Wave 9 of Anchor shareable build)
+  'bundle', 'bundle_staging',
 ]);
 
 /** Recursively list project files, skipping noise + the foreman state dir. */
@@ -450,11 +452,23 @@ function checkVacuousGreen(root, foremanDir, changedFiles, extra = {}) {
         `— a test-only wave auto-passes when the inventory ROSE and the green gate ran the ` +
         `larger suite (or tag the wave title [test-only] for a modify-only test wave)`;
     }
+    // Phase A (2026-07-22): credit a PRIOR same-wave attempt that already left
+    // code on disk + a proven ledger entry (resume / clear-halt / re-enter after
+    // plan amendment). Journals 0010, 0015, 0043, 0045: hashStart-at-resume makes
+    // a second pass look like a no-op while the deliverable is still there and
+    // still exercised. NEVER credits without a ledger + live files + exercise.
+    const prior = creditPriorWaveAttempt(root, foremanDir, extra.waveN, {
+      reach,
+      exercisedByName,
+    });
+    if (prior.ok) return null;
+
     // F2-9: the wave changed no source file at all (a no-op wave, or one that
     // touched only tests/non-source). An already-green suite proves nothing.
     return `wave reached green without proving its own deliverable was exercised ` +
       `— the wave changed no source file reachable by an executed test, so an ` +
-      `already-green suite proves nothing about this wave's deliverable`;
+      `already-green suite proves nothing about this wave's deliverable` +
+      (prior.note ? ` (${prior.note})` : '');
   }
   if (code.length === 0) {
     return `wave changed only doc/data artifacts (${sources.join(', ')}) — such files ` +
@@ -1081,6 +1095,7 @@ export async function runWave(o) {
         invNow: inventory(projectDir, foremanDir),
         gateTap: lastGate.tap,
         waveTitle: wave.title || '',
+        waveN: wave.n,
       });
       if (vac) {
         const reason = `vacuous-GREEN HALT: ${vac}`;
@@ -1088,6 +1103,15 @@ export async function runWave(o) {
         return finishHalt({ reason, recommend:
           `add/keep a test that exercises the changed code, then re-invoke wave ${wave.n}` });
       }
+      // Record proven deliverable for resume/clear-halt credit (Phase A).
+      try {
+        writeWaveProvenLedger(foremanDir, wave.n, {
+          changed: lastChanged.filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f)),
+          tests: lastGate.tap?.tests ?? null,
+          pass: lastGate.tap?.pass ?? null,
+          at: new Date().toISOString(),
+        });
+      } catch { /* best-effort */ }
       steps.push(`✓ wave ${wave.n} converged (${iteration} fix iter${iteration === 1 ? '' : 's'}) · ` +
         `gate ${lastGate.tap.pass}/${lastGate.tap.tests} (orchestrator-run)`);
       log(`CONVERGED: ${verdict.reason}`);
@@ -1254,6 +1278,68 @@ export async function runWave(o) {
   }
 }
 
+/** Path of the per-wave proven-attempt ledger under .foreman/ */
+export function waveProvenPath(foremanDir, waveN) {
+  return path.join(foremanDir, `wave-${waveN}-proven.json`);
+}
+
+/**
+ * Write ledger after a real GO so a later resume with empty hash-diff can credit
+ * prior same-wave code that is still on disk and still exercised.
+ */
+export function writeWaveProvenLedger(foremanDir, waveN, payload) {
+  if (!foremanDir || !waveN) return null;
+  fs.mkdirSync(foremanDir, { recursive: true });
+  const p = waveProvenPath(foremanDir, waveN);
+  const body = {
+    version: 1,
+    wave: waveN,
+    ...payload,
+  };
+  fs.writeFileSync(p, `${JSON.stringify(body, null, 2)}\n`, 'utf8');
+  return p;
+}
+
+export function readWaveProvenLedger(foremanDir, waveN) {
+  try {
+    return JSON.parse(fs.readFileSync(waveProvenPath(foremanDir, waveN), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Credit a prior same-wave attempt when this invocation's hash-diff is empty
+ * but the ledger lists code that still exists and is still test-reachable.
+ * North-Star-safe: never skips the orchestrator gate (caller already has GREEN);
+ * only avoids a false "no deliverable" HALT after re-prove.
+ */
+export function creditPriorWaveAttempt(root, foremanDir, waveN, { reach, exercisedByName } = {}) {
+  if (!waveN || !foremanDir) {
+    return { ok: false, note: 'no wave ledger context' };
+  }
+  const led = readWaveProvenLedger(foremanDir, waveN);
+  if (!led || !Array.isArray(led.changed) || !led.changed.length) {
+    return { ok: false, note: 'no prior-attempt ledger for this wave' };
+  }
+  const live = [];
+  for (const f of led.changed) {
+    const rel = String(f).replace(/\\/g, '/');
+    if (rel.endsWith(' (deleted)') || isTestFile(rel)) continue;
+    const abs = path.join(root, rel);
+    if (!fs.existsSync(abs)) {
+      return { ok: false, note: `prior deliverable missing: ${rel}` };
+    }
+    live.push(rel);
+  }
+  if (!live.length) return { ok: false, note: 'prior ledger had no live code paths' };
+  const exercised = live.some((f) => (reach && reach.has(f)) || (exercisedByName && exercisedByName(f)));
+  if (!exercised) {
+    return { ok: false, note: `prior code still on disk but not exercised by tests: ${live.join(', ')}` };
+  }
+  return { ok: true, note: `credited prior wave-${waveN} attempt (${live.length} path(s))`, paths: live };
+}
+
 export const _internals = {
   inventory, checkTestWeakening, checkVacuousGreen, reachableFromTests,
   changedSince, snapshotHashes, parseCount, hasRealTestEvents, countTestEvents, findingId,
@@ -1261,4 +1347,6 @@ export const _internals = {
   testHashSnapshot, checkTestImmutability,
   // Phase 3d (Python/pytest generalization) internals:
   isTestFile, looksLikePytest, parsePytestCount, extractImports, resolveImportTargets,
+  // Phase A (2026-07-22): prior-attempt credit
+  creditPriorWaveAttempt, writeWaveProvenLedger, readWaveProvenLedger, waveProvenPath,
 };

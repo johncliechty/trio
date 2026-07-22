@@ -8,9 +8,10 @@
 // router, never a bespoke per-module backend). It was ALSO never wired into the live
 // path (only its own test imported it). Wave W6 RETIRES it: this file is now a thin shim
 // over the trio's shared `makeRoleRoutedAgent` (drivers/index.mjs) + the gemini-cli tier
-// ladder (`resolveGeminiModel`), building Crucible's live agent with the machine-wide 5:1
-// split — verification seats (shark / judge) on a real Gemini `agy -p` seat, steering /
-// drafting (synthesizer / stage authors / default) on Claude.
+// ladder (`resolveGeminiModel`), building Crucible's live agent from coding/review family
+// prefs (CODING_FAMILY / REVIEW_FAMILY or ~/.anchor/model_prefs.json) — verification seats
+// (shark / judge) on REVIEW_FAMILY, steering / drafting (synthesizer / default) on
+// CODING_FAMILY. Historical machine default remains Claude codes + Gemini checks.
 //
 // The model for the Gemini seats is left UNPINNED so the gemini-cli driver's TRIO_TIER
 // ladder resolves it (heavy → "Gemini 3.1 Pro (High)", standard → "Gemini 3.5 Flash
@@ -41,26 +42,42 @@
 
 import { HaltError } from './crucible-lib.mjs';
 
-/** The drafter family (who AUTHORS the plan / drafts / revisions) in Crucible's topology. */
+/** Historical default drafter family (Claude). Live runs resolve drafter from CODING_FAMILY
+ *  via `buildDefaultCrucibleRoutes` / `buildLiveCrucibleAgent` — do not treat this constant
+ *  as the live seat when prefs differ. */
 export const DRAFTER_FAMILY = 'claude';
 
-/** The VERIFICATION roles — the seats that, under the 5:1 split, route to the cross-family
- *  (Gemini) backend. In Crucible these are exactly the adversarial seats: the Shark roster
- *  (bin/shark-tank.mjs, role:'shark') and the context-free deciding Judge (bin/judge.mjs,
- *  role:'judge'). The Synthesizer is the STEERING seat and stays on Claude (it steers +
- *  runs the anti-anchoring fresh-eyes pass; it never verifies). */
+/** The VERIFICATION roles — adversarial seats: Shark roster (role:'shark') and context-free
+ *  Judge (role:'judge'). Under family prefs these route to REVIEW_FAMILY; the Synthesizer is
+ *  the STEERING seat on CODING_FAMILY (it steers + anti-anchoring fresh-eyes; it never verifies). */
 export const VERIFICATION_ROLES = Object.freeze(['shark', 'judge']);
 
-/** The DEFAULT live route table: verification roles → the Gemini HOST backend (`gemini-cli`,
- *  the W0 live `agy -p` driver with served-model attestation); synthesizer/default → Claude.
- *  The model is left UNPINNED so the gemini-cli ladder resolves it from TRIO_TIER — never an
- *  API-style id (agy silently degrades those to Flash). */
+/** Test/fixture only: historical Claude+Gemini 5:1 table. Live production MUST omit
+ *  routes (or call `buildDefaultCrucibleRoutes`) so seats follow coding/review prefs —
+ *  never hardcode Claude in launchers. */
 export const DEFAULT_CRUCIBLE_ROUTES = Object.freeze({
   shark: { driver: 'gemini-cli' },
   judge: { driver: 'gemini-cli' },
   synthesizer: { driver: 'claude' },
   default: { driver: 'claude' },
 });
+
+/**
+ * Prefs-aware Crucible route table: shark/judge → REVIEW_FAMILY driver; synthesizer/default
+ * → CODING_FAMILY driver. Lazy-imports the trio registry so this module stays trio-free at
+ * import time for pure unit tests that never call it.
+ * @param {object} [env=process.env]
+ * @returns {Promise<{ routes: object, families: object, drafterFamily: string }>}
+ */
+export async function buildDefaultCrucibleRoutes(env = process.env) {
+  const { buildRoutesFromFamilies } = await import('../../drivers/index.mjs');
+  const built = buildRoutesFromFamilies({
+    env,
+    codingRoles: ['synthesizer'],
+    reviewRoles: ['shark', 'judge'],
+  });
+  return built;
+}
 
 /** The SINGLE-FAMILY (replay / Gemini-absent) route table: every role → Claude. A run wired
  *  with this honestly reaches only ['claude']; the routing guard REJECTS it for verification
@@ -102,7 +119,7 @@ export function familyFromDriver(driver) {
   if (t.startsWith('gemini')) return 'gemini';
   if (t.startsWith('claude')) return 'claude';
   if (t.startsWith('openai') || t.startsWith('gpt')) return 'openai';
-  if (t.startsWith('grok')) return 'grok';
+  if (t.startsWith('grok')) return 'grok'; // grok + grok-cli
   return t.split(/[\s\-_]/)[0] || null;
 }
 
@@ -266,41 +283,66 @@ export async function resolveGeminiModel({ role = 'judge', env = process.env } =
 }
 
 /**
- * Build the LIVE role-routed Crucible agent (the 5:1 split: shark/judge → Gemini `agy -p`,
- * synthesizer/default → Claude), instrumented with the reached-family tracker + the live-Gemini
- * concurrency cap. LAZY dynamic import of the trio registry so importing this module never loads
- * the trio. Runs the routing guard FIRST so a self-review route can never even be built. ENV:
- * forces CRUCIBLE_AGENT_LIVE=1 (the trio-wide live gate the gemini-cli driver requires). NOT
- * called by the deterministic test (which injects a stub through instrumentCrucibleAgent).
+ * Build the LIVE role-routed Crucible agent from coding/review family prefs
+ * (shark/judge → REVIEW_FAMILY, synthesizer/default → CODING_FAMILY), instrumented with the
+ * reached-family tracker + live-Gemini concurrency cap. Omit `routes` to honor prefs; pass
+ * an explicit table (e.g. DEFAULT_CRUCIBLE_ROUTES) to pin. LAZY dynamic import of the trio
+ * registry. Runs the routing guard FIRST so a self-review route can never be built. ENV:
+ * forces CRUCIBLE_AGENT_LIVE=1. NOT called by the deterministic test (stub via instrumentCrucibleAgent).
  * @param {object} o
- * @param {object}   [o.routes=DEFAULT_CRUCIBLE_ROUTES]
+ * @param {object}   [o.routes]                     omit → prefs; pass to pin
  * @param {object}   [o.tracker]                    a makeReachedFamilyTracker() (built if omitted)
- * @param {string}   [o.drafterFamily='claude']
+ * @param {string}   [o.drafterFamily]              omit → CODING_FAMILY from prefs
  * @param {object}   [o.env=process.env]
  * @param {number}   [o.geminiCap]                  override the env-resolved cap
  * @param {string}   [o.target]                     cwd / edit scope threaded to the backend
  * @param {Function} [o.log]
- * @returns {Promise<{agent:Function, tracker:object}>}
+ * @returns {Promise<{agent:Function, tracker:object, routes:object, families:object, drafterFamily:string}>}
  */
 export async function buildLiveCrucibleAgent({
-  routes = DEFAULT_CRUCIBLE_ROUTES,
-  tracker = makeReachedFamilyTracker([DRAFTER_FAMILY]),
-  drafterFamily = DRAFTER_FAMILY,
+  routes,
+  tracker,
+  drafterFamily,
   env = process.env,
   geminiCap,
   target,
   log,
 } = {}) {
-  // Behavior 4 (fail-closed): never build a self-review agent.
-  assertCrossFamilyRouting({ routes, drafterFamily });
+  const { makeRoleRoutedAgent, buildRoutesFromFamilies } = await import('../../drivers/index.mjs');
+  const built = buildRoutesFromFamilies({
+    env,
+    codingRoles: ['synthesizer'],
+    reviewRoles: ['shark', 'judge'],
+  });
+  const resolvedRoutes = routes ?? built.routes;
+  const resolvedDrafter = drafterFamily ?? built.drafterFamily;
+  const resolvedTracker = tracker ?? makeReachedFamilyTracker([resolvedDrafter]);
+  // Behavior 4: fail-closed against accidental self-review. When the user sets
+  // coding_family === review_family (honest single-family prefs), allow same
+  // family on every seat and stamp cross_model:false via loadModelFamilies.
+  // Explicit caller-supplied routes still go through the hard guard.
+  const singleFamilyPrefs = !routes && built.families.coding === built.families.review;
+  if (!singleFamilyPrefs) {
+    assertCrossFamilyRouting({ routes: resolvedRoutes, drafterFamily: resolvedDrafter });
+  }
   const cap = Number.isInteger(geminiCap) ? Math.min(geminiCap, MAX_GEMINI_CAP) : resolveGeminiCap(env);
-  const { makeRoleRoutedAgent } = await import('../../drivers/index.mjs');
   const routed = makeRoleRoutedAgent({
-    routes,
+    routes: resolvedRoutes,
     env: { ...env, CRUCIBLE_AGENT_LIVE: '1' },
     ...(target !== undefined ? { target } : {}),
     ...(log !== undefined ? { log } : {}),
   });
-  const agent = instrumentCrucibleAgent({ agent: routed, routes, tracker, geminiCap: cap });
-  return { agent, tracker, routes };
+  const agent = instrumentCrucibleAgent({
+    agent: routed,
+    routes: resolvedRoutes,
+    tracker: resolvedTracker,
+    geminiCap: cap,
+  });
+  return {
+    agent,
+    tracker: resolvedTracker,
+    routes: resolvedRoutes,
+    families: built.families,
+    drafterFamily: resolvedDrafter,
+  };
 }

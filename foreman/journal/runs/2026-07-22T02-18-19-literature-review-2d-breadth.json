@@ -1,0 +1,23 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-22T02:18:19.000Z",
+  "ended": "2026-07-22T02:55:03.000Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\literature-review",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "git": false,
+    "resume": false,
+    "clearHalt": false,
+    "routing": "execute/review/fix=grok-cli (Anchor prefs, cross_model:false)"
+  },
+  "result": "HALT at wave 5/6 PLAN-AMENDMENT-PROPOSAL (dual-suite vs single test-command); waves 1-4 GO (398→422 tests); W5 gate had been 452/452 before halt",
+  "resume_result": "2026-07-22T11:09:15 clear-halt resume → vacuous-GREEN HALT (deliverables already on disk)",
+  "cross_model": false,
+  "models": { "coding_family": "grok", "review_family": "grok" },
+  "duration_s": 2204,
+  "journal_ref": "0045-plan-amendment-then-vacuous-green-after-clear-halt.md",
+  "crucible_journal_ref": "0018-dual-suite-plan-vs-foreman-single-gate.md",
+  "product_ship": "operator SHIP-RECEIPT 2026-07-22; Foundry commit 4503108; trio main bd5af7f facet-coverage"
+}

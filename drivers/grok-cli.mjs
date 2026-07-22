@@ -17,27 +17,29 @@ import path from 'node:path';
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { extractJson } from './claude.mjs';
 
-export const GROK_CLI_HEAVY_MODEL = process.env.GROK_CLI_HEAVY_MODEL || 'grok-4';
-export const GROK_CLI_STANDARD_MODEL = process.env.GROK_CLI_STANDARD_MODEL || 'grok-4';
+// Live catalog (this host, 2026-07-22): `grok models` → default grok-4.5.
+// Prefer null (omit --model) so the logged-in CLI default always wins unless env pins.
+export const GROK_CLI_HEAVY_MODEL = process.env.GROK_CLI_HEAVY_MODEL || 'grok-4.5';
+export const GROK_CLI_STANDARD_MODEL = process.env.GROK_CLI_STANDARD_MODEL || 'grok-4.5';
 export const DEFAULT_GROK_CLI_TIMEOUT_MS = 20 * 60 * 1000;
 
 /**
- * Resolve model for a Grok CLI call. TRIO_TIER heavy/standard → labels if set;
- * else GROK_MODEL / XAI_MODEL / null (CLI session default).
+ * Resolve model for a Grok CLI call.
+ * Default: null → do not pass --model (subscription CLI default, currently grok-4.5).
+ * Explicit model / GROK_MODEL / TRIO_MODEL_* / TRIO_TIER pins still apply when set.
  */
 export function resolveGrokCliModel({ model, role, env = process.env } = {}) {
   if (model) return model;
-  const tier = String(env.TRIO_TIER || '').trim().toLowerCase();
-  if (tier === 'heavy') return env.GROK_CLI_HEAVY_MODEL || GROK_CLI_HEAVY_MODEL;
-  if (tier === 'standard') return env.GROK_CLI_STANDARD_MODEL || GROK_CLI_STANDARD_MODEL;
   const roleKey = role ? `TRIO_MODEL_${String(role).toUpperCase().replace(/[^A-Z0-9]+/g, '_')}` : null;
-  return (
-    (roleKey && env[roleKey]) ||
-    env.TRIO_MODEL ||
-    env.GROK_MODEL ||
-    env.XAI_MODEL ||
-    null
-  );
+  if (roleKey && env[roleKey]) return env[roleKey];
+  if (env.TRIO_MODEL) return env.TRIO_MODEL;
+  if (env.GROK_MODEL) return env.GROK_MODEL;
+  // Only force a slug when TRIO_TIER is set AND env wants an explicit pin; otherwise
+  // leave null so `grok -p` uses the account default (avoids unknown-id hard fails).
+  const tier = String(env.TRIO_TIER || '').trim().toLowerCase();
+  if (tier === 'heavy' && env.GROK_CLI_HEAVY_MODEL) return env.GROK_CLI_HEAVY_MODEL;
+  if (tier === 'standard' && env.GROK_CLI_STANDARD_MODEL) return env.GROK_CLI_STANDARD_MODEL;
+  return null;
 }
 
 /**

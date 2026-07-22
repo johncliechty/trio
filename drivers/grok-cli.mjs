@@ -23,23 +23,34 @@ export const GROK_CLI_HEAVY_MODEL = process.env.GROK_CLI_HEAVY_MODEL || 'grok-4.
 export const GROK_CLI_STANDARD_MODEL = process.env.GROK_CLI_STANDARD_MODEL || 'grok-4.5';
 export const DEFAULT_GROK_CLI_TIMEOUT_MS = 20 * 60 * 1000;
 
+/** True only for ids the Grok CLI will accept — reject stale Gemini/Claude setx pins. */
+export function isPlausibleGrokModelId(m) {
+  const s = String(m ?? '').trim().toLowerCase();
+  if (!s) return false;
+  if (/gemini|claude|gpt|flash|opus|sonnet|fable|anthropic/.test(s)) return false;
+  return s.startsWith('grok');
+}
+
 /**
  * Resolve model for a Grok CLI call.
  * Default: null → do not pass --model (subscription CLI default, currently grok-4.5).
- * Explicit model / GROK_MODEL / TRIO_MODEL_* / TRIO_TIER pins still apply when set.
+ * Explicit model / GROK_MODEL / TRIO_MODEL_* apply ONLY when they look like Grok ids
+ * (stale TRIO_MODEL_SHARK="Gemini 3.1 Pro (High)" must not be forwarded to grok.exe).
  */
 export function resolveGrokCliModel({ model, role, env = process.env } = {}) {
-  if (model) return model;
+  const candidates = [];
+  if (model) candidates.push(model);
   const roleKey = role ? `TRIO_MODEL_${String(role).toUpperCase().replace(/[^A-Z0-9]+/g, '_')}` : null;
-  if (roleKey && env[roleKey]) return env[roleKey];
-  if (env.TRIO_MODEL) return env.TRIO_MODEL;
-  if (env.GROK_MODEL) return env.GROK_MODEL;
-  // Only force a slug when TRIO_TIER is set AND env wants an explicit pin; otherwise
-  // leave null so `grok -p` uses the account default (avoids unknown-id hard fails).
+  if (roleKey && env[roleKey]) candidates.push(env[roleKey]);
+  if (env.TRIO_MODEL) candidates.push(env.TRIO_MODEL);
+  if (env.GROK_MODEL) candidates.push(env.GROK_MODEL);
   const tier = String(env.TRIO_TIER || '').trim().toLowerCase();
-  if (tier === 'heavy' && env.GROK_CLI_HEAVY_MODEL) return env.GROK_CLI_HEAVY_MODEL;
-  if (tier === 'standard' && env.GROK_CLI_STANDARD_MODEL) return env.GROK_CLI_STANDARD_MODEL;
-  return null;
+  if (tier === 'heavy' && env.GROK_CLI_HEAVY_MODEL) candidates.push(env.GROK_CLI_HEAVY_MODEL);
+  if (tier === 'standard' && env.GROK_CLI_STANDARD_MODEL) candidates.push(env.GROK_CLI_STANDARD_MODEL);
+  for (const c of candidates) {
+    if (isPlausibleGrokModelId(c)) return String(c).trim();
+  }
+  return null; // CLI account default
 }
 
 /**

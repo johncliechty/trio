@@ -23,7 +23,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  HaltError, locateDocs, parseWaves, discoverTestCommand, projectDoneDefinition,
+  HaltError, locateDocs, parseWaves, discoverTestCommand, preflightTestCommand,
+  projectDoneDefinition,
 } from './foreman-lib.mjs';
 
 function main(argv) {
@@ -36,7 +37,9 @@ function main(argv) {
   // 2 + 3 read the plan once
   const planText = fs.readFileSync(docs.plan, 'utf8');
   const waves = parseWaves(planText);
-  const testCmd = discoverTestCommand(planText, dir);
+  const rawCmd = discoverTestCommand(planText, dir);
+  // cf-slick: same honesty as runProject (broken test/ + under-gate + dual-root)
+  const testCmd = preflightTestCommand(rawCmd, dir);
   const done = projectDoneDefinition(waves);
 
   const report = {

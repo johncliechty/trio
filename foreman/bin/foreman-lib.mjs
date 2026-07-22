@@ -369,7 +369,87 @@ export function preflightTestCommand(discovered, projectDir = '') {
     // best-effort only for I/O/parse noise
   }
 
+  // Dual-root / outside-tree test imports (journal 0048): if project tests import
+  // source outside projectDir, vacuous-GREEN will never see deliverables.
+  try {
+    const dual = preflightDualRootImports(projectDir, command);
+    if (dual.outside.length) {
+      throw new HaltError(
+        'tests import sources outside the Foreman project root',
+        `projectDir=${path.resolve(projectDir || '.')} · outside imports: ${dual.outside.slice(0, 8).join('; ')}` +
+          (dual.outside.length > 8 ? ` (+${dual.outside.length - 8} more)` : '') +
+          `. Point projectDir at the package that owns the code (journal 0048), or keep tests inside the root.`,
+      );
+    }
+  } catch (e) {
+    if (e instanceof HaltError) throw e;
+  }
+
   return { command, source, warnings };
+}
+
+/**
+ * Scan project test files for relative imports that resolve outside projectDir.
+ * @returns {{checked:number, outside:string[]}}
+ */
+export function preflightDualRootImports(projectDir, testCommand = '') {
+  const root = path.resolve(projectDir || '.');
+  const outside = [];
+  let checked = 0;
+  const candidates = [];
+
+  // Prefer explicit files named in the gate command
+  const named = String(testCommand || '').match(/[\w./\\-]+\.test\.\w+/g) || [];
+  for (const n of named) {
+    const abs = path.resolve(root, n);
+    if (fs.existsSync(abs)) candidates.push(abs);
+  }
+  // Also walk test/ for *.test.mjs|js
+  const walk = (dir, depth = 0) => {
+    if (depth > 4 || !fs.existsSync(dir)) return;
+    let ents;
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name === '.git') continue;
+        walk(abs, depth + 1);
+      } else if (/\.test\.(mjs|js|cjs|ts)$/i.test(e.name)) {
+        candidates.push(abs);
+      }
+    }
+  };
+  walk(path.join(root, 'test'));
+
+  const seen = new Set();
+  for (const file of candidates) {
+    const key = path.resolve(file);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let txt;
+    try { txt = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    checked += 1;
+    const re = /\bfrom\s*['"](\.\.?\/[^'"]+)['"]|\bimport\s*\(\s*['"](\.\.?\/[^'"]+)['"]\s*\)/g;
+    let m;
+    while ((m = re.exec(txt))) {
+      const spec = m[1] || m[2];
+      if (!spec) continue;
+      let resolved = path.resolve(path.dirname(file), spec);
+      // try .mjs/.js extensions
+      if (!fs.existsSync(resolved)) {
+        for (const ext of ['.mjs', '.js', '/index.mjs', '/index.js']) {
+          if (fs.existsSync(resolved + ext)) { resolved = resolved + ext; break; }
+        }
+      }
+      const rel = path.relative(root, resolved);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        // Ignore node_modules and missing optional paths
+        if (/node_modules/i.test(resolved)) continue;
+        outside.push(`${path.relative(root, file) || file} → ${spec}`);
+      }
+    }
+  }
+  return { checked, outside: [...new Set(outside)] };
 }
 
 // ---------------------------------------------------------------------------

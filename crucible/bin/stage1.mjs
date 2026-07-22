@@ -655,11 +655,13 @@ export async function runMasterPlanLoop({
   judge = null,
   routes = null,
   acceptanceCriteria = [],
-  roundCap = 5,
+  roundCap = undefined,
   startRound = 1,
   additionalRounds = null,
   humanLockableAfterDry = 2,
-  sharkRoles = 3,
+  sharkRoles = undefined,
+  /** When set, applies band profile defaults for roundCap/sharkRoles (cf-slick). */
+  depth = null,
   artifactsDir = null,
   capPendingAction = 'stage1-round-cap',
   statusLog = null,
@@ -667,6 +669,15 @@ export async function runMasterPlanLoop({
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runMasterPlanLoop');
+  // If callers still pass depth into the loop (legacy launchers), honor band profile.
+  if (depth != null) {
+    const band = resolveBandProfile(depth);
+    if (roundCap === undefined) roundCap = band.roundCap;
+    if (sharkRoles === undefined) sharkRoles = band.sharkRoles;
+    log(`loop band from depth=${band.depth}: roundCap=${roundCap} sharks=${sharkRoles}`);
+  }
+  if (roundCap === undefined) roundCap = 5;
+  if (sharkRoles === undefined) sharkRoles = 3;
   const synth = synthesizer || makeSynthesizer({ agent, northStar, log });
   // T7 (2026-07-11): when the caller supplies the run's ROUTES, the Judge's
   // selection/stamp is DERIVED from where the judge role actually dispatches —

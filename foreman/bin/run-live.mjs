@@ -22,6 +22,10 @@ import { resolveClaudeModel } from '../../drivers/claude.mjs';
 
 const argv = process.argv.slice(2);
 function flag(name, def) { const i = argv.indexOf(name); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def; }
+function trackWantsLean(d) {
+  const t = String(d || '').toUpperCase();
+  return t === 'LITE' || t === 'LIGHT' || t === 'MID' || t === 'STANDARD';
+}
 const PROJECT = path.resolve(argv.find((a) => !a.startsWith('--')) || process.cwd());
 let REVIEWERS = Number(flag('--reviewers', '2'));
 const CAP = Number(flag('--cap', '3'));
@@ -54,17 +58,31 @@ const CLAUDE_ARGS = ['-p', ' ', '--output-format', 'stream-json', '--verbose',
 // Pre-set env always wins (config never overrides an explicit operator choice).
 try {
   const cfg = JSON.parse(fs.readFileSync(path.join(PROJECT, 'foreman.config.json'), 'utf8'));
-  
-  // Triage Architecture: adjust reviewer fan-out based on track
-  const track = String(cfg.triage_track || '').toUpperCase();
-  if (track === 'LITE' || track === 'LIGHT') {
-    REVIEWERS = 1; // floored at 1, never 0
-  } else if (track === 'MID' || track === 'STANDARD') {
-    REVIEWERS = 1;
-  } else if (track === 'FULL' || track === 'HEAVY') {
-    REVIEWERS = 2;
+
+  // cf-slick: inherit process depth from handoff → band profile reviewer default
+  // (never re-triage; never LITE → 0). Explicit --reviewers still wins if set on CLI
+  // before this block... REVIEWERS already set from --reviewers flag above.
+  const depthPin = cfg.triage?.depth || cfg.triage_track || process.env.FOREMAN_DEPTH || '';
+  try {
+    const { resolveBandProfile } = await import(
+      new URL('../../crucible/bin/band-profile.mjs', import.meta.url)
+    );
+    const band = resolveBandProfile(depthPin);
+    // Explicit --reviewers always wins; else inherit band default (LITE→1, never 0).
+    if (!argv.includes('--reviewers')) {
+      REVIEWERS = Math.max(1, Number(band.foremanReviewersDefault) || 1);
+    }
+    process.env.FOREMAN_BAND_DEPTH = band.depth;
+    process.env.FOREMAN_BAND_LABEL = band.label;
+  } catch {
+    // Fallback if band-profile unavailable
+    const track = String(cfg.triage_track || cfg.triage?.depth || '').toUpperCase();
+    if (track === 'LITE' || track === 'LIGHT') REVIEWERS = 1;
+    else if (track === 'MID' || track === 'STANDARD' || track === 'SPIKE-FIRST' || track === 'SPIKE') {
+      REVIEWERS = Math.max(1, REVIEWERS);
+    } else if (track === 'FULL' || track === 'HEAVY') REVIEWERS = Math.max(2, REVIEWERS);
   }
-  
+
   for (const [role, spec] of Object.entries(cfg.models || {})) {
     const s = String(spec); const i = s.indexOf(':');
     const drv = i > 0 ? s.slice(0, i) : 'claude';
@@ -263,6 +281,9 @@ try { fs.writeFileSync(STATUS_FILE, ''); } catch { /* fresh log */ }
 emit(`=== FOREMAN LIVE RUN ===`);
 emit(`project: ${PROJECT}`);
 emit(`reviewers=${REVIEWERS} fixIterCap=${CAP} maxWaves=${MAX_WAVES ?? '∞'} maxWallClock=${MAX_WALL_MIN ?? '∞'}min git=${USE_GIT} branch=${BRANCH ?? 'foreman/run'}`);
+if (process.env.FOREMAN_BAND_DEPTH) {
+  emit(`band inherit: depth=${process.env.FOREMAN_BAND_DEPTH} · ${process.env.FOREMAN_BAND_LABEL || ''} · reviewers=${REVIEWERS}`);
+}
 emit(`binding: headless \`claude -p … --permission-mode acceptEdits --allowedTools ${ALLOWED}\` (cwd=project); ground truth = orchestrator gate`);
 emit(`model routing: ${['execute', 'review', 'fix'].map((r) => {
   const R = r.toUpperCase();

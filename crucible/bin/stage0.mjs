@@ -48,7 +48,7 @@ import { HaltError, haltForHuman, HALT_GATES } from './crucible-lib.mjs';
 // reads CHEAP signals available at intake (scope size, novelty/uncertainty,
 // stakes/irreversibility, count of unknowns) and RECOMMENDS a pipeline depth:
 //
-//   LITE        — a single-pass plan, minimal/no Shark rounds (Clear/small work).
+//   LITE        — single-pass plan + lean Shark pair (2 concurrent; cf-slick band-profile).
 //   FULL        — the current 3-stage + Shark-Tank machinery (the default).
 //   SPIKE-FIRST — run a probe/experiment BEFORE planning (genuinely uncertain work
 //                 where committing to a plan too early is the mistake).
@@ -125,7 +125,8 @@ export function assessComplexity(intake = {}) {
     band = COMPLEXITY_BANDS.LITE;
     rationale =
       `Small, clear, low-novelty, low-stakes intake with ${unknowns} unknown(s) ⇒ LITE: a single-pass ` +
-      `plan with NO Shark rounds. The North Star is still locked and drift-checked — only the ceremony shrinks.`;
+      `plan seed + lean concurrent Shark pair (not a full multi-round Shark Tank). North Star still locked ` +
+      `and drift-checked — ceremony shrinks via band-profile (cf-slick).`;
   } else {
     band = COMPLEXITY_BANDS.FULL;
     defaultedToFull = true;

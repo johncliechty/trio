@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-22T11:09:15.145Z",
+  "ended": "2026-07-22T11:12:51.987Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\literature-review",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\literature-review\\_foreman-status.log",
+  "result": "HALT: 5:HALT — vacuous-GREEN HALT: wave reached green without proving its own deliverable was exercised — the wave changed no source file reachable by an executed test, so an already-green suite proves nothing about",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 217,
+  "journal_ref": "0045-plan-amendment-then-vacuous-green-after-clear-halt.md"
+}

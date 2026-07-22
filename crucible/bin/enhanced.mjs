@@ -119,7 +119,7 @@ export function familyFromDriver(driver) {
   if (t.startsWith('gemini')) return 'gemini';
   if (t.startsWith('claude')) return 'claude';
   if (t.startsWith('openai') || t.startsWith('gpt')) return 'openai';
-  if (t.startsWith('grok')) return 'grok';
+  if (t.startsWith('grok')) return 'grok'; // grok + grok-cli
   return t.split(/[\s\-_]/)[0] || null;
 }
 
@@ -317,8 +317,14 @@ export async function buildLiveCrucibleAgent({
   const resolvedRoutes = routes ?? built.routes;
   const resolvedDrafter = drafterFamily ?? built.drafterFamily;
   const resolvedTracker = tracker ?? makeReachedFamilyTracker([resolvedDrafter]);
-  // Behavior 4 (fail-closed): never build a self-review agent.
-  assertCrossFamilyRouting({ routes: resolvedRoutes, drafterFamily: resolvedDrafter });
+  // Behavior 4: fail-closed against accidental self-review. When the user sets
+  // coding_family === review_family (honest single-family prefs), allow same
+  // family on every seat and stamp cross_model:false via loadModelFamilies.
+  // Explicit caller-supplied routes still go through the hard guard.
+  const singleFamilyPrefs = !routes && built.families.coding === built.families.review;
+  if (!singleFamilyPrefs) {
+    assertCrossFamilyRouting({ routes: resolvedRoutes, drafterFamily: resolvedDrafter });
+  }
   const cap = Number.isInteger(geminiCap) ? Math.min(geminiCap, MAX_GEMINI_CAP) : resolveGeminiCap(env);
   const routed = makeRoleRoutedAgent({
     routes: resolvedRoutes,

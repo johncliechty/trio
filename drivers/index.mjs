@@ -21,6 +21,7 @@ import { geminiCliDriver } from './gemini-cli.mjs';
 import { geminiDriver } from './gemini.mjs';
 import { openaiDriver } from './openai.mjs';
 import { grokDriver } from './grok.mjs';
+import { grokCliDriver } from './grok-cli.mjs';
 import { defaultRunGemini, extractJson } from '../foreman/bin/drivers/driver-gemini.mjs';
 
 export const geminiCliNativeDriver = {
@@ -71,7 +72,8 @@ export const REVIEW_ROLES = new Set([
 export function familyToDriverName(family) {
   const f = String(family || '').trim().toLowerCase();
   if (f === 'gemini') return 'gemini-cli';
-  if (f === 'grok') return 'grok'; // HTTP API until a tool-capable grok-cli ships
+  // Subscription Grok Build CLI (`grok -p`) — NOT the raw xAI HTTP API (`grok` driver).
+  if (f === 'grok') return 'grok-cli';
   if (f === 'claude' || !f) return 'claude';
   return null;
 }
@@ -188,15 +190,13 @@ export function applyFamilyPrefsToEnv(env = process.env) {
     ATTACKER: reviewDrv,
     ANALYSIS: reviewDrv,
   };
+  // Always stamp from Anchor prefs (overwrite stale setx TRIO_DRIVER_* pins).
   for (const [R, drv] of Object.entries(roleMap)) {
-    const key = `TRIO_DRIVER_${R}`;
-    if (!env[key]) env[key] = drv;
+    env[`TRIO_DRIVER_${R}`] = drv;
   }
-  if (!env.CODING_FAMILY) env.CODING_FAMILY = fams.coding;
-  if (!env.REVIEW_FAMILY) env.REVIEW_FAMILY = fams.review;
-  if (env.CROSS_MODEL === undefined || env.CROSS_MODEL === '') {
-    env.CROSS_MODEL = fams.cross_model ? 'true' : 'false';
-  }
+  env.CODING_FAMILY = fams.coding;
+  env.REVIEW_FAMILY = fams.review;
+  env.CROSS_MODEL = fams.cross_model ? 'true' : 'false';
   return fams;
 }
 
@@ -224,7 +224,8 @@ export function registerDriver(driver) {
 registerDriver(geminiCliDriver);
 registerDriver(geminiDriver);
 registerDriver(openaiDriver);
-registerDriver(grokDriver);
+registerDriver(grokDriver); // optional API-key HTTP backend (name: 'grok')
+registerDriver(grokCliDriver); // subscription CLI backend (name: 'grok-cli') — coding/review family default
 registerDriver(geminiCliNativeDriver);
 
 /** The backend names currently registered (default `claude` always present). */
@@ -278,21 +279,21 @@ export function getDriver(name = null, env = process.env) {
  * @returns {Promise<any>} model text, or the schema-validated object
  */
 export async function runAgent(opts = {}) {
-  // Driver selection order (2026-07-21 model-prefs + historical 5:1):
-  //   1. explicit opts.driver
-  //   2. TRIO_DRIVER_<ROLE> (per-seat setx / launch override)
-  //   3. CODING_FAMILY / REVIEW_FAMILY (or ~/.anchor/model_prefs.json) by role
+  // Driver selection order (2026-07-22 — Anchor prefs are universal source of truth):
+  //   1. explicit opts.driver (per-call pin)
+  //   2. CODING_FAMILY / REVIEW_FAMILY or ~/.anchor/model_prefs.json by role
+  //   3. TRIO_DRIVER_<ROLE> (legacy setx — only if prefs did not resolve)
   //   4. TRIO_DRIVER / default claude
-  // An explicit opts.driver always wins. Same-family coding+review is allowed;
-  // callers should stamp cross_model from loadModelFamilies().cross_model.
+  // Stale TRIO_DRIVER_SHARK=gemini-cli setx must NOT outrank Anchor coding/review knobs.
+  // Same-family coding+review is allowed; stamp cross_model from loadModelFamilies().
   let name = opts.driver;
   const role = String(opts.role || opts.label || '').split(/[:#.\s]/)[0];
+  if (!name) {
+    name = resolveDriverFromFamilies(role, process.env) || null;
+  }
   if (!name && role) {
     const key = `TRIO_DRIVER_${role.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
     name = process.env[key] || null;
-  }
-  if (!name) {
-    name = resolveDriverFromFamilies(role, process.env) || null;
   }
   const driver = getDriver(name);
   return dispatchWithFailover(driver, opts);
@@ -346,7 +347,10 @@ export function makeRoleRoutedAgent({ routes = {}, ...baseOpts } = {}) {
   return (prompt, o = {}) => {
     const role = String(o.role || o.label || '').split(/[:#.\s]/)[0].toLowerCase();
     const route = routes[role] || routes.default || {};
-    // Explicit route.driver wins; else coding/review family prefs; else registry default.
+    // Prefs-first: coding/review family (Anchor) wins unless the route table was
+    // deliberately prefs-built (route.driver matches family) or caller pins model only.
+    // Explicit empty routes {} → pure prefs. Explicit routes with drivers (tests / same-family
+    // tables) still honor route.driver when present.
     const fromFamily = resolveDriverFromFamilies(role, process.env);
     const backend = getDriver(route.driver || fromFamily || null);
     return dispatchWithFailover(backend, {

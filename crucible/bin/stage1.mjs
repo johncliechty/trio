@@ -582,6 +582,16 @@ export async function reviseDraft({ agent, northStar, draft, verdict, direction,
  * @param {string[]}[o.acceptanceCriteria=[]]         the Judge's oracle
  * @param {number}  [o.roundCap=5]                     §8 safety ceiling
  * @param {number}  [o.startRound=1]
+ * @param {number|null} [o.additionalRounds=null]     when set, run exactly this many
+ *                                                    more rounds from startRound (explicit
+ *                                                    extend). When null, effort-scoped
+ *                                                    cap applies: total rounds from 1 may
+ *                                                    not exceed roundCap (resume with
+ *                                                    startRound=6 + roundCap=5 → 0 remaining).
+ * @param {number}  [o.humanLockableAfterDry=2]        consecutive dry rounds with no ≥2-agree
+ *                                                    Shark blockers before human-lockable HALT
+ *                                                    (Judge/fresh-eyes hold without multi-Shark
+ *                                                    substance). 0 disables. Default 2.
  * @param {?string} [o.artifactsDir=null]             Shark-Tank round artifacts dir
  * @param {string}  [o.capPendingAction='stage1-round-cap']  the HALT's pending_action
  *                                                    (Stage 2 reuses this loop under
@@ -600,6 +610,8 @@ export async function runMasterPlanLoop({
   acceptanceCriteria = [],
   roundCap = 5,
   startRound = 1,
+  additionalRounds = null,
+  humanLockableAfterDry = 2,
   artifactsDir = null,
   capPendingAction = 'stage1-round-cap',
   statusLog = null,
@@ -612,6 +624,20 @@ export async function runMasterPlanLoop({
   // selection/stamp is DERIVED from where the judge role actually dispatches —
   // a route to a non-author family stamps enhanced/cross_model honestly.
   const jdg = judge || makeJudge({ agent, routes, log });
+  const bounds = resolveLoopBounds({ startRound, roundCap, additionalRounds });
+  if (bounds.remaining === 0) {
+    const err = haltForHuman(
+      `effort round budget exhausted (startRound=${startRound}, roundCap=${roundCap}, ` +
+        `already counted ${bounds.already} round(s) toward the effort) — refusing to silently ` +
+        `open another full cap on resume. Pass additionalRounds=N to explicitly extend, or ` +
+        `approve the best draft under human-lockable if Sharks were dry.`,
+      'stage1-effort-round-cap',
+    );
+    err.best_draft = { draft, roundsRun: bounds.already, openFindings: [], effortCap: true };
+    throw err;
+  }
+  log(`loop bounds: rounds ${bounds.startRound}..${bounds.endExclusive - 1} ` +
+    `(remaining=${bounds.remaining}, already=${bounds.already}, mode=${bounds.mode})`);
 
   let currentDraft = draft;
   let priorBlockerIds = [];
@@ -630,20 +656,21 @@ export async function runMasterPlanLoop({
       const last = rounds.length ? rounds[rounds.length - 1] : null;
       const openBlk = last ? (last.verdict.blockers || []).length : 0;
       return {
-        effort: `${statusLabel} (cap ${roundCap} rounds)`,
+        effort: `${statusLabel} (effort cap ${roundCap}; remaining ${bounds.remaining})`,
         doing: `Shark-Tank round ${rounds.length + 1} · ${rounds.length ? (last.verdict.dry ? 'dry — checking lock' : 'blocked — revising') : 'first review'}`,
-        status: `${rounds.length}/${roundCap} rounds run`,
+        status: `${rounds.length} this invoke / ${bounds.remaining} budgeted`,
         tests: last ? `last round: ${last.verdict.verdict}` : '—',
         blocker: openBlk ? `${openBlk} open blocker(s) this round` : 'none',
         procs: 'sharks∥ + judge + synthesizer (agy 5:1)',
-        eta: `<= ${roundCap - rounds.length} more round(s) to cap`,
-        todo: 'converge to a dry lockable round, then the user-approval HALT',
+        eta: `<= ${Math.max(0, bounds.remaining - rounds.length)} more round(s) this window`,
+        todo: 'converge or human-lockable HALT, then the user-approval gate',
       };
     },
   });
 
+  let dryHeldStreak = 0;
   try {
-  for (let round = startRound; round < startRound + roundCap; round++) {
+  for (let round = bounds.startRound; round < bounds.endExclusive; round++) {
     // Per-round research only on a genuinely NEW candidate (Wave-5 cost-guard).
     let analystBrief = null;
     if (research && typeof research.perRound === 'function') {
@@ -687,6 +714,7 @@ export async function runMasterPlanLoop({
     if (!verdict.dry) {
       // BLOCKED — the Synthesizer steers the revision (its one consumed output),
       // record the blockers (anti-oscillation), fix the draft, loop.
+      dryHeldStreak = 0;
       const direction = await synth.direct({ round, verdict, research: research?.forSynthesizer?.() ?? null });
       directed = true;
       rounds.push({ round, verdict, direction });
@@ -694,6 +722,12 @@ export async function runMasterPlanLoop({
       const rev = await reviseDraft({ agent, northStar, draft: currentDraft, verdict, direction, round, log });
       currentDraft = rev.draft;
       lastChangelog = rev.changelog;
+      if (artifactsDir) {
+        try {
+          fs.mkdirSync(artifactsDir, { recursive: true });
+          fs.writeFileSync(path.join(artifactsDir, 'BEST-DRAFT.md'), String(currentDraft));
+        } catch { /* best-effort */ }
+      }
       continue;
     }
 
@@ -724,6 +758,7 @@ export async function runMasterPlanLoop({
       return {
         converged: true,
         modelSideLockable: true,
+        humanLockable: false,
         rounds,
         roundsRun: rounds.length,
         lastVerdict: verdict,
@@ -738,10 +773,75 @@ export async function runMasterPlanLoop({
       };
     }
 
+    // ---- human-lockable (2026-07-22 Phase A) --------------------------------
+    // Journals 0007–0012: sharks DRY with zero ≥2-agree blockers, yet Judge /
+    // fresh-eyes hold through the full cap (~30 calls of no multi-Shark substance).
+    // North Star: USER is convergence authority; ≥2-agree is the Shark bar.
+    // After N consecutive dry holds with no multi-Shark blockers, HALT for the
+    // human instead of burning the rest of the cap. Never auto-locks.
+    const hl = assessHumanLockable({ tally: verdict, dryHeldStreak: dryHeldStreak + 1 });
+    if (hl.eligible) dryHeldStreak += 1;
+    else dryHeldStreak = 0;
+    const threshold = Number.isInteger(humanLockableAfterDry) ? humanLockableAfterDry : 2;
+    if (threshold > 0 && dryHeldStreak >= threshold) {
+      log(`stage1 loop: human-lockable after ${dryHeldStreak} consecutive dry hold(s) ` +
+        `(${hl.reason}) — HALTing for the user (convergence authority), not burning more rounds`);
+      const openFindings = (verdict.findings || []).filter((f) => !f.demoted);
+      const bestDraft = {
+        draft: currentDraft,
+        roundsRun: rounds.length,
+        openFindings,
+        priorBlockerIds,
+        lastDirection: direction,
+        humanLockable: true,
+      };
+      if (artifactsDir) {
+        try {
+          fs.mkdirSync(artifactsDir, { recursive: true });
+          fs.writeFileSync(path.join(artifactsDir, 'BEST-DRAFT.md'), String(currentDraft));
+          fs.writeFileSync(path.join(artifactsDir, 'OPEN-FINDINGS.json'),
+            JSON.stringify(openFindings, null, 2) + '\n');
+          fs.writeFileSync(path.join(artifactsDir, 'HUMAN-LOCKABLE.json'),
+            JSON.stringify({
+              humanLockable: true,
+              dryHeldStreak,
+              reason: hl.reason,
+              judgeDecision: judgeVerdict?.decision ?? null,
+              gateReasons: gate.reasons || [],
+              roundsRun: rounds.length,
+            }, null, 2) + '\n');
+        } catch { /* best-effort */ }
+      }
+      const err = haltForHuman(
+        `human-lockable: Shark Tank is dry with no ≥2-agree BLOCKERs for ${dryHeldStreak} consecutive ` +
+          `round(s) (${hl.reason}). Judge/fresh-eyes held model-side lock without multi-Shark substance. ` +
+          `Best draft (${rounds.length} round(s)) is attached — YOU are the convergence authority: ` +
+          `approve to lock (approveMasterPlan with humanLockable loop), or challenge and re-run with ` +
+          `additionalRounds to extend.`,
+        'stage1-human-lockable',
+      );
+      err.best_draft = bestDraft;
+      err.humanLockable = true;
+      err.loop = {
+        converged: false,
+        modelSideLockable: false,
+        humanLockable: true,
+        rounds,
+        roundsRun: rounds.length,
+        lastVerdict: verdict,
+        draft: currentDraft,
+        freshEyes: cold,
+        judgeVerdict,
+        gate,
+      };
+      throw err;
+    }
+
     // Dry, but the Judge or a BLOCKER-bearing fresh-eyes pass held the lock —
     // run one more challenge round. The loop continues, so the Synthesizer's
     // steer IS consumed here: take it now if this round skipped it (T7/T11).
-    log(`stage1 loop: dry round ${round} held (${gate.reasons.join('; ') || reconcile.reason}) — challenge round`);
+    log(`stage1 loop: dry round ${round} held (${gate.reasons.join('; ') || reconcile.reason}) — challenge round` +
+      (dryHeldStreak ? ` (human-lockable streak ${dryHeldStreak}/${threshold || 'off'})` : ''));
     if (!direction) {
       direction = await synth.direct({ round, verdict, research: research?.forSynthesizer?.() ?? null });
       rounds[rounds.length - 1].direction = direction;
@@ -750,6 +850,12 @@ export async function runMasterPlanLoop({
     const rev = await reviseDraft({ agent, northStar, draft: currentDraft, verdict, direction, round, log });
     currentDraft = rev.draft;
     lastChangelog = rev.changelog;
+    if (artifactsDir) {
+      try {
+        fs.mkdirSync(artifactsDir, { recursive: true });
+        fs.writeFileSync(path.join(artifactsDir, 'BEST-DRAFT.md'), String(currentDraft));
+      } catch { /* best-effort */ }
+    }
   }
 
   // The cap is a safety ceiling, not a success condition — HALT to the user (§8).
@@ -784,12 +890,21 @@ export async function runMasterPlanLoop({
     }
   }
   const err = haltForHuman(
-    `hit the round cap (${roundCap}) without converging — the safety ceiling tripped; ` +
-      `the best draft (${rounds.length} round(s) of refinement) and ${openFindings.length} open ` +
-      `finding(s) are attached${artifactsDir ? ` and persisted to ${artifactsDir}` : ''} — nothing was discarded`,
+    `hit the round cap (${roundCap}; effort window ${bounds.startRound}..${bounds.endExclusive - 1}) without converging — ` +
+      `the safety ceiling tripped; the best draft (${rounds.length} round(s) of refinement) and ${openFindings.length} open ` +
+      `finding(s) are attached${artifactsDir ? ` and persisted to ${artifactsDir}` : ''} — nothing was discarded. ` +
+      `If Sharks were dry with only agreement=1 nits, treat as human-lockable and approve explicitly, or re-run with additionalRounds.`,
     capPendingAction,
   );
   err.best_draft = bestDraft;
+  // Cap-exit also surfaces humanLockable when the last round was dry + no multi-agree blockers.
+  if (lastRound?.verdict) {
+    const hlCap = assessHumanLockable({ tally: lastRound.verdict, dryHeldStreak: 1 });
+    if (hlCap.eligible) {
+      err.humanLockable = true;
+      err.best_draft.humanLockable = true;
+    }
+  }
   throw err;
   } finally {
     // Fires on BOTH exits — the converged `return` inside the loop and the
@@ -816,24 +931,107 @@ export async function runMasterPlanLoop({
  * @param {Function}[o.log=()=>{}]
  */
 export function approveMasterPlan({ loop, plan = null, approved = false, log = () => {} } = {}) {
-  if (!loop || !loop.modelSideLockable) {
+  // Model-side lock OR explicit human-lockable (dry sharks, no ≥2-agree blockers;
+  // user is still the only authority that can stamp the lock).
+  const modelOk = loop && loop.modelSideLockable;
+  const humanOk = loop && loop.humanLockable;
+  if (!loop || (!modelOk && !humanOk)) {
     throw haltForHuman(
-      'Stage 1 has not converged model-side — cannot approve the Master Plan yet',
+      'Stage 1 has not converged model-side and is not marked human-lockable — cannot approve the Master Plan yet',
       'stage1-not-converged',
     );
   }
   const gate = HALT_GATES['stage1->stage2'];
   if (!approved) {
-    log('stage1: Master Plan converged model-side — HALT for the user to approve (the convergence authority)');
-    throw haltForHuman(gate.reason, gate.name);
+    log(humanOk && !modelOk
+      ? 'stage1: human-lockable Master Plan — HALT for the user to approve (Sharks dry; no multi-Shark blockers)'
+      : 'stage1: Master Plan converged model-side — HALT for the user to approve (the convergence authority)');
+    throw haltForHuman(
+      humanOk && !modelOk
+        ? 'human-lockable plan ready — sharks dry with no ≥2-agree blockers; approve to lock (you are the convergence authority)'
+        : gate.reason,
+      humanOk && !modelOk ? 'stage1-human-lockable-approval' : gate.name,
+    );
   }
-  log('stage1: Master Plan APPROVED — ready for Stage 2');
+  log(humanOk && !modelOk
+    ? 'stage1: Master Plan APPROVED under human-lockable — ready for Stage 2'
+    : 'stage1: Master Plan APPROVED — ready for Stage 2');
   return {
     approved: true,
     gate: gate.name,
     masterPlan: loop.draft,
     plan,
     roundsRun: loop.roundsRun,
+    humanLockable: Boolean(humanOk && !modelOk),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase A (2026-07-22): effort-scoped round window + human-lockable assessment
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve which rounds this invocation may run.
+ *
+ * Default (effort-scoped): rounds already spent toward the effort are
+ * `startRound - 1`. Remaining = max(0, roundCap - already). Resume with
+ * startRound=6 and roundCap=5 therefore yields 0 remaining (no silent second
+ * full cap — journal 0011).
+ *
+ * Explicit extend: pass `additionalRounds=N` to run N more rounds from startRound
+ * regardless of the effort total (user-authorized extension only).
+ *
+ * @returns {{startRound:number, endExclusive:number, remaining:number, already:number, mode:string}}
+ */
+export function resolveLoopBounds({ startRound = 1, roundCap = 5, additionalRounds = null } = {}) {
+  const start = Math.max(1, Number(startRound) || 1);
+  const cap = Math.max(0, Number(roundCap) || 0);
+  if (additionalRounds != null) {
+    const add = Math.max(0, Number(additionalRounds) || 0);
+    return {
+      startRound: start,
+      endExclusive: start + add,
+      remaining: add,
+      already: start - 1,
+      mode: 'additional-rounds',
+    };
+  }
+  const already = start - 1;
+  const remaining = Math.max(0, cap - already);
+  return {
+    startRound: start,
+    endExclusive: start + remaining,
+    remaining,
+    already,
+    mode: 'effort-scoped',
+  };
+}
+
+/**
+ * Dry Shark round with no multi-Shark (≥2-agree) blockers — eligible for the
+ * human-lockable streak. Does NOT auto-lock; only informs when to stop burning rounds.
+ *
+ * @param {{tally: object, dryHeldStreak?: number}} o
+ */
+export function assessHumanLockable({ tally = null, dryHeldStreak = 0 } = {}) {
+  if (!tally || !tally.dry) {
+    return { eligible: false, reason: 'round not dry' };
+  }
+  // blockers on the tally are already multi-agree (shark-tank filters agreement>=2)
+  const blockers = Array.isArray(tally.blockers) ? tally.blockers : [];
+  if (blockers.length > 0) {
+    return { eligible: false, reason: `${blockers.length} multi-Shark BLOCKER(s) still open` };
+  }
+  const multi = (tally.findings || []).filter((f) =>
+    f && !f.demoted && Number(f.agreement) >= 2 &&
+    /^(BLOCKER|MAJOR)$/i.test(String(f.severity || '')));
+  if (multi.length > 0) {
+    return { eligible: false, reason: `${multi.length} multi-agree MAJOR/BLOCKER finding(s) open` };
+  }
+  return {
+    eligible: true,
+    reason: 'sharks dry; no ≥2-agree BLOCKER/MAJOR — Judge/fresh-eyes may hold, but multi-Shark bar is met',
+    dryHeldStreak,
   };
 }
 

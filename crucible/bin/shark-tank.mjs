@@ -54,9 +54,10 @@ export const PM_CRITIQUE_ANGLES = [
  * Shark index and the round number so the same Shark sees fresh angles over a
  * multi-round loop and no angle is starved.
  */
-export function angleForShark(round, sharkIndex) {
+export function angleForShark(round, sharkIndex, roleCount = SHARK_ROLES.length) {
   const n = PM_CRITIQUE_ANGLES.length;
-  const i = ((round * SHARK_ROLES.length + sharkIndex) % n + n) % n;
+  const rc = Math.max(1, Number(roleCount) || SHARK_ROLES.length);
+  const i = ((round * rc + sharkIndex) % n + n) % n;
   return PM_CRITIQUE_ANGLES[i];
 }
 
@@ -243,7 +244,7 @@ export function tallyFindings(reviews, { priorBlockerIds = [] } = {}) {
 // ---------------------------------------------------------------------------
 
 function sharkPrompt(role, angle, northStar, draft, research = null,
-                     { priorBlockerIds = [], changelog = null } = {}) {
+                     { priorBlockerIds = [], changelog = null, markdownFirst = false } = {}) {
   // Fresh researchPrime findings flow to the ANALYST Shark only (persona = researchPrime,
   // MASTER-PLAN §6) — the other Sharks stay deliberately context-fresh.
   const isAnalyst = role.persona === 'researchPrime' || role.role === 'Analyst';
@@ -301,6 +302,22 @@ function sharkPrompt(role, angle, northStar, draft, research = null,
     `  - tag: refinement | out-of-scope`,
     `  - traces_to_north_star: yes | no, and (when yes) which criterion`,
     `  - message: the refutation`,
+    ...(markdownFirst ? [
+      ``,
+      `Because this draft is extremely large, DO NOT output a JSON object.`,
+      `Emit your review in strict Markdown format exactly like this:`,
+      `answerable: yes`,
+      `note: [optional context]`,
+      ``,
+      `## Finding 1`,
+      `severity: BLOCKER`,
+      `topic: [short phrase]`,
+      `section: [section name]`,
+      `tag: refinement`,
+      `traces_to_north_star: yes`,
+      `criterion: [criterion text]`,
+      `message: [your refutation]`,
+    ] : []),
     ``,
     `INCLUSION TEST: a finding that does not trace to a North-Star criterion`,
     `(traces_to_north_star: no) is out-of-scope and will be DEMOTED — do not inflate`,
@@ -310,6 +327,59 @@ function sharkPrompt(role, angle, northStar, draft, research = null,
     String(draft),
     `=== END DRAFT ===`,
   ].join('\n');
+}
+
+/**
+ * Best-effort recovery of Shark findings from a RAW-TEXT reply for large drafts
+ * where JSON serialization breaks.
+ */
+export function parseFindingsFromMarkdown(rawText) {
+  const findings = [];
+  let currentFinding = null;
+  let answerable = 'yes';
+  let note = '';
+
+  // Handle literal \n and missing newlines before keywords
+  let normalizedText = String(rawText).replace(/\\n/g, '\n');
+  normalizedText = normalizedText.replace(/\s+(?:\*\*)?(severity|topic|section|tag|traces_to_north_star|criterion|message|answerable|note)(?:\*\*)?[:\-]/gi, '\n$1:');
+
+  const lines = normalizedText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  for (const line of lines) {
+    let m;
+    if ((m = line.match(/^(?:##\s*)?(?:\*\*)?Finding[\s\d\:]*(.*)/i))) {
+      currentFinding = {
+        severity: 'NIT',
+        topic: m[1].trim() || 'unnamed finding',
+        section: '',
+        tag: 'refinement',
+        traces_to_north_star: 'yes',
+        criterion: null,
+        message: ''
+      };
+      findings.push(currentFinding);
+    } else if (currentFinding) {
+      if ((m = line.match(/^(?:\*\*)?(severity|topic|section|tag|traces_to_north_star|criterion|message)(?:\*\*)?[:\-\s]+(.*)/i))) {
+        const key = m[1].toLowerCase();
+        const val = m[2].trim();
+        if (key === 'severity') currentFinding.severity = val.toUpperCase();
+        else if (key === 'topic') currentFinding.topic = val;
+        else if (key === 'section') currentFinding.section = val;
+        else if (key === 'tag') currentFinding.tag = val;
+        else if (key === 'traces_to_north_star') {
+           currentFinding.traces_to_north_star = val.toLowerCase().startsWith('no') ? 'no' : 'yes';
+        }
+        else if (key === 'criterion') currentFinding.criterion = val;
+        else if (key === 'message') currentFinding.message = val;
+      }
+    } else {
+       if ((m = line.match(/^(?:\*\*)?answerable(?:\*\*)?[:\-\s]+(.*)/i))) {
+         answerable = m[1].trim().toLowerCase() === 'no' ? 'no' : 'yes';
+       } else if ((m = line.match(/^(?:\*\*)?note(?:\*\*)?[:\-\s]+(.*)/i))) {
+         note = m[1].trim();
+       }
+    }
+  }
+  return { answerable, note, findings };
 }
 
 /**
@@ -329,18 +399,34 @@ export function makeSharkDriver({ agent } = {}) {
     async review(role, { round = 0, northStar, draft, angle, research = null,
                          priorBlockerIds = [], changelog = null }) {
       const lens = angle ?? angleForShark(round, SHARK_ROLES.findIndex((r) => r.role === role.role));
+      
+      const markdownFirst = draft.length > 20000;
+      
       const out = await agent(
-        sharkPrompt(role, lens, northStar, draft, research, { priorBlockerIds, changelog }), {
+        sharkPrompt(role, lens, northStar, draft, research, { priorBlockerIds, changelog, markdownFirst }), {
           label: `shark:${role.role}:r${round}`,
           role: 'shark',
-          schema: SHARK_SCHEMA,
+          schema: markdownFirst ? undefined : SHARK_SCHEMA,
         });
+
+      let answerable, note, findings;
+      if (markdownFirst) {
+        const parsed = parseFindingsFromMarkdown(typeof out === 'string' ? out : '');
+        answerable = parsed.answerable;
+        note = parsed.note;
+        findings = parsed.findings;
+      } else {
+        answerable = out?.answerable ?? 'yes';
+        note = out?.note;
+        findings = Array.isArray(out?.findings) ? out.findings : [];
+      }
+      
       return {
         reviewer: role.role,
         angle: lens,
-        answerable: out?.answerable ?? 'yes',
-        note: out?.note,
-        findings: Array.isArray(out?.findings) ? out.findings : [],
+        answerable,
+        note,
+        findings,
       };
     },
   };
@@ -374,12 +460,16 @@ export async function runSharkTank({
   research = null,
   changelog = null,
   artifactsDir = null,
+  /** 2 = LITE concurrent pair; 3 = FULL (default). Floor 2 so ≥2-agree can still fire. */
+  sharkRoles = 3,
   log = () => {},
 }) {
   const driver = makeSharkDriver({ agent });
+  const n = Math.max(2, Math.min(SHARK_ROLES.length, Number(sharkRoles) || 3));
+  const roles = SHARK_ROLES.slice(0, n);
   const angles = {};
-  const jobs = SHARK_ROLES.map((role, i) => {
-    const angle = angleForShark(round, i);
+  const jobs = roles.map((role, i) => {
+    const angle = angleForShark(round, i, n);
     angles[role.role] = angle;
     return { role, angle };
   });

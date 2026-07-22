@@ -101,7 +101,13 @@ if ($Resume) {
   $cliArgs += @('--resume', '--clear-halt')
 }
 
+# cf-slick / journal 0027: do NOT use Start-Process -WindowStyle Hidden (parent can
+# vanish and kill mid-await children). Stay in THIS process tree with Wait.
 Write-Host "Foreman (headless, subscription) -> node $($cliArgs -join ' ')"
-$proc = Start-Process -FilePath "node" -ArgumentList $cliArgs -NoNewWindow -RedirectStandardOutput "_foreman-output.log" -RedirectStandardError "_foreman-error.log" -PassThru -Wait
+Write-Host "lifecycle: parent-owned node (no detached Hidden Start-Process)"
+$argList = @()
+foreach ($a in $cliArgs) { $argList += $a }
+# -NoNewWindow keeps console shared; -Wait keeps Job lifetime with this shell
+$proc = Start-Process -FilePath "node" -ArgumentList $argList -NoNewWindow -RedirectStandardOutput "_foreman-output.log" -RedirectStandardError "_foreman-error.log" -PassThru -Wait
 $LASTEXITCODE = $proc.ExitCode
 exit $LASTEXITCODE

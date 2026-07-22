@@ -111,6 +111,7 @@ user is the final convergence authority**.
   quality/convergence gate, and the post-lock tiered drift detector.
 - `bin/research.mjs` — researchPrime integration (once up-front + cost-guarded per round).
 - `bin/stage0.mjs` / `bin/stage1.mjs` / `bin/stage2.mjs` — the three stage protocols.
+- `bin/band-profile.mjs` — LITE / SPIKE-FIRST / FULL ceremony profiles (cf-slick; depth → real path).
 - `bin/enhanced.mjs` / `bin/remote.mjs` — the CROSS-FAMILY verification seam (builds the
   live role-routed agent: Gemini Sharks/Judge, Claude steering — the 5:1 split, via the
   shared `makeRoleRoutedAgent` + gemini-cli tier ladder) + the push-at-approval-gates
@@ -141,6 +142,7 @@ user is the final convergence authority**.
    > shown earlier but anything intervened since, print it again in full with the ask. The same
    > discipline applies to every user-approval artifact (Stage-1 Master Plan, Stage-2 plan, amendment
    > diffs): the user approves what is on the screen, never what is in a file.**
+   > **PROTOTYPE RULE (locked by John, 2026-07-18):** If the stage involves generating GUI prototypes or images, you MUST physically open them in the user's local browser (e.g. via an HTML wrapper and `Start-Process chrome`) BEFORE asking for their approval. Asking for approval before they have seen the prototypes on their screen is strictly forbidden.
    If the user asked for research, DELIVER IT BEFORE the lock ask; present decisions ONE AT A TIME,
    each with 30-second plain-English context and a recommendation first.
 3. **Stage 1** → `runStage1({ agent, northStar, depth, routes, artifactsDir, statusLog, ... })` —
@@ -150,9 +152,14 @@ user is the final convergence authority**.
    — decompose → loop → approval → emit + well-formedness gate → Foreman handoff. A cap HALT emits the
    unapproved doc-trio to `<outputDir>/_unapproved-cap-draft` (gated, clearly not the handoff).
 5. **Dogfood deterministically** (no model, no billing): `node bin/self-run.mjs [outputDir]`.
-6. **LITE honesty note:** the user-confirmed LITE depth currently shrinks the round cap (5→2) only —
-   it does NOT yet collapse stages (a small task still pays ~18-20 calls + 4 gates). The stage-merged
-   LITE (≤6 calls, 2 gates) is planned, not built; do not promise it.
+6. **LITE / SPIKE / FULL bands (cf-slick 2026-07-22):** locked Stage-0 depth is resolved by
+   `bin/band-profile.mjs` into a real ceremony profile — **not** label-only.
+   - **LITE:** single-pass brainstorm (no full assumption→premortem→wide ideation), roundCap 1,
+     2 concurrent Sharks, research-upfront off by default, low call budget. Still NS-embedded +
+     inclusion test + user approval + locate-plan.
+   - **SPIKE-FIRST:** probe required (`spikeProbe=`) before Stage-1 plan ceremony; then re-band.
+   - **FULL:** full Oranges order, roundCap 5, 3 concurrent Sharks, effort-scoped caps + human-lockable.
+   Explicit `roundCap` still wins over the profile default.
 
 > **⏱ STATUS UPDATES TO CHAT — the launch pattern (2026-07-11 fix).** A Shark-Tank stage loop runs
 > 20-40 min; a driving session that calls a stage FOREGROUND is frozen and CANNOT post updates — the

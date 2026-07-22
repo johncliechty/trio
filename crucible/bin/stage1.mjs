@@ -46,10 +46,13 @@ import {
 } from './synthesizer.mjs';
 import { makeJudge } from './judge.mjs';
 import { evaluateConvergenceGate } from './gates.mjs';
+import { resolveBandProfile, bandProfileStamp } from './band-profile.mjs';
 
 // ---------------------------------------------------------------------------
 // (1) The Oranges brainstorm — MANDATORY order: assumption-mapping → premortem
 //     → ideation. Every prompt embeds the North Star verbatim (§9).
+//     LITE (cf-slick / journal 0022): single-pass constraints+approach instead
+//     of the full three-call Oranges stack (still NS-embedded; still inclusion).
 // ---------------------------------------------------------------------------
 
 /** The load-bearing assumptions the whole plan rests on (mapped FIRST). */
@@ -216,17 +219,60 @@ export async function runPremortem({ agent, northStar, assumptions = [], log = (
  * @param {Function}[o.log=()=>{}]
  * @returns {Promise<{assumptions:object[], premortem:object[], ideas:object[]}>}
  */
-export async function runBrainstorm({ agent, northStar, criteria = [], research = null, log = () => {} } = {}) {
+/**
+ * @param {object} o
+ * @param {boolean} [o.lite=false]  when true, single agent call (LITE band — journal 0022)
+ */
+export async function runBrainstorm({
+  agent, northStar, criteria = [], research = null, lite = false, log = () => {},
+} = {}) {
   requireAgent(agent, 'runBrainstorm');
   if (!northStar) throw new HaltError('runBrainstorm requires a locked North Star', 'lock the North Star in Stage 0 first');
 
-  // MANDATORY ORDER: assumption mapping → premortem → ideation.
+  if (lite) {
+    // LITE: one Oranges-aware pass — constraints + top approaches + light assumptions.
+    // Does NOT delete the North Star embed or inclusion test; collapses 3 serial
+    // multi-minute calls into 1 (journal 0026: thrash was serial Grok brainstorm).
+    const prompt = [
+      `You are Crucible STAGE-1 LITE planning (nimble path). The North Star is LOCKED.`,
+      `In ONE response: (1) list 2–5 load-bearing assumptions, (2) 1–3 failure modes,`,
+      `(3) 3–8 concrete approaches/ideas that serve the North Star (inclusion test: each`,
+      `must trace to a criterion). Think 2–3 steps ahead (Oranges) but do NOT run a full`,
+      `wide brainstorm — this is a small/clear effort.`,
+      ``,
+      `=== THE NORTH STAR (verbatim) ===`,
+      String(northStar),
+      `=== END NORTH STAR ===`,
+      criteria?.length ? `Criteria: ${criteria.join(' · ')}` : '',
+      research ? `Research brief (optional):\n${typeof research === 'string' ? research : JSON.stringify(research).slice(0, 2000)}` : '',
+      ``,
+      `Emit JSON matching the schema: assumptions[], failureModes[], ideas[]`,
+      `(each idea: idea, traces_to_north_star yes/no, criterion optional).`,
+    ].filter(Boolean).join('\n');
+    const out = (await agent(prompt, { label: 'stage1:lite-brainstorm', schema: {
+      type: 'object',
+      required: ['assumptions', 'ideas'],
+      properties: {
+        assumptions: { type: 'array', items: { type: 'object' } },
+        failureModes: { type: 'array', items: { type: 'object' } },
+        ideas: { type: 'array', items: { type: 'object' } },
+      },
+    } })) || {};
+    const assumptions = Array.isArray(out.assumptions) ? out.assumptions : [];
+    // Same shape as runPremortem: bare array of failure modes (buildPhasedPlan uses .map)
+    const premortem = Array.isArray(out.failureModes) ? out.failureModes : [];
+    const ideas = Array.isArray(out.ideas) ? out.ideas : [];
+    log(`stage1 LITE brainstorm: ${ideas.length} idea(s) · ${assumptions.length} assumption(s) · ${premortem.length} failure mode(s) (single-pass)`);
+    return { assumptions, premortem, ideas, lite: true };
+  }
+
+  // FULL / SPIKE: MANDATORY ORDER: assumption mapping → premortem → ideation.
   const assumptions = await runAssumptionMap({ agent, northStar, criteria, research, log });
   const premortem = await runPremortem({ agent, northStar, assumptions, log });
   const out = (await agent(ideationPrompt({ northStar, criteria, assumptions, premortem, research }), { label: 'stage1:ideas', schema: BRAINSTORM_IDEAS_SCHEMA })) || {};
   const ideas = Array.isArray(out.ideas) ? out.ideas : [];
   log(`stage1 brainstorm: ${ideas.length} idea(s) (after assumption-map → premortem)`);
-  return { assumptions, premortem, ideas };
+  return { assumptions, premortem, ideas, lite: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -592,6 +638,7 @@ export async function reviseDraft({ agent, northStar, draft, verdict, direction,
  *                                                    Shark blockers before human-lockable HALT
  *                                                    (Judge/fresh-eyes hold without multi-Shark
  *                                                    substance). 0 disables. Default 2.
+ * @param {number}  [o.sharkRoles=3]                   concurrent Shark seats (LITE uses 2)
  * @param {?string} [o.artifactsDir=null]             Shark-Tank round artifacts dir
  * @param {string}  [o.capPendingAction='stage1-round-cap']  the HALT's pending_action
  *                                                    (Stage 2 reuses this loop under
@@ -612,6 +659,7 @@ export async function runMasterPlanLoop({
   startRound = 1,
   additionalRounds = null,
   humanLockableAfterDry = 2,
+  sharkRoles = 3,
   artifactsDir = null,
   capPendingAction = 'stage1-round-cap',
   statusLog = null,
@@ -678,9 +726,11 @@ export async function runMasterPlanLoop({
       analystBrief = research.forAnalyst ? research.forAnalyst() : null;
     }
 
+    const nSharks = Math.max(2, Math.min(3, Number(sharkRoles) || 3));
     let verdict = await runSharkTank({
       agent, northStar, draft: currentDraft, round, priorBlockerIds,
       research: analystBrief, artifactsDir, log,
+      sharkRoles: nSharks,
       changelog: lastChangelog && lastChangelog.length ? lastChangelog.join('\n') : null,
     });
     // Quorum guard (2026-07-17): a round needs >=2 parseable reviews to be trustworthy — a
@@ -689,10 +739,11 @@ export async function runMasterPlanLoop({
     // transient reviewer-transport failures, then HALT honestly rather than lock on an
     // under-reviewed round. ONE abstain (2 answered) is tolerated — it still forms a quorum.
     for (let q = 0; verdict.inconclusive && q < SHARK_QUORUM_RETRIES; q++) {
-      log(`shark-tank round ${round}: only ${verdict.answered}/3 reviewers parseable — re-reviewing (${q + 1}/${SHARK_QUORUM_RETRIES}) before trusting the round`);
+      log(`shark-tank round ${round}: only ${verdict.answered}/${nSharks} reviewers parseable — re-reviewing (${q + 1}/${SHARK_QUORUM_RETRIES}) before trusting the round`);
       verdict = await runSharkTank({
         agent, northStar, draft: currentDraft, round, priorBlockerIds,
         research: analystBrief, artifactsDir, log,
+        sharkRoles: nSharks,
         changelog: lastChangelog && lastChangelog.length ? lastChangelog.join('\n') : null,
       });
     }
@@ -704,7 +755,7 @@ export async function runMasterPlanLoop({
         } catch { /* the HALT payload still carries the draft */ }
       }
       const qerr = haltForHuman(
-        `shark quorum not met at round ${round}: only ${verdict.answered} of 3 reviewers returned a parseable review after ${SHARK_QUORUM_RETRIES} re-reviews — the reviewer transport (agy/Gemini) appears degraded. HALTing rather than converging on an under-reviewed round; the current draft is preserved.`,
+        `shark quorum not met at round ${round}: only ${verdict.answered} of ${nSharks} reviewers returned a parseable review after ${SHARK_QUORUM_RETRIES} re-reviews — the reviewer transport (agy/Gemini) appears degraded. HALTing rather than converging on an under-reviewed round; the current draft is preserved.`,
         'stage1-shark-quorum',
       );
       qerr.best_draft = { draft: currentDraft, roundsRun: rounds.length, openFindings: [] };
@@ -1071,6 +1122,10 @@ export async function runStage1({
   approved = false,
   roundCap = undefined,
   depth = null,
+  /** SPIKE-FIRST: path or string result of the pre-plan probe (Wave D). */
+  spikeProbe = null,
+  /** When true, allow SPIKE-FIRST without probe (tests only). */
+  allowSpikeWithoutProbe = false,
   grasscatcherPath = null,
   artifactsDir = null,
   statusLog = null,
@@ -1081,24 +1136,57 @@ export async function runStage1({
   if (!northStar) {
     throw new HaltError('runStage1 requires a locked North Star', 'Stage 1 starts from the Stage-0 North-Star lock');
   }
-  // 2026-07: Stage-0's complexity triage finally has teeth. The depth arrives
-  // USER-CONFIRMED (assessComplexity HALTs for confirmation — the documented
-  // SKILL.md contract), so a LITE run shrinks the safety ceiling instead of
-  // always paying the FULL 5-round cap. An explicitly passed roundCap wins.
-  if (roundCap === undefined) {
-    const d = String(depth || '').toUpperCase();
-    roundCap = (d === 'LITE' || d === 'SPIKE-FIRST') ? 2 : 5;
-    if (depth) log(`stage1: depth=${depth} → roundCap=${roundCap}`);
+  // cf-slick 2026-07-22: depth → band profile (LITE is real ceremony collapse, not
+  // only roundCap 5→2 — journals 0022/0026/0028). Explicit roundCap still wins.
+  const band = resolveBandProfile(depth);
+  if (roundCap === undefined) roundCap = band.roundCap;
+  log(`stage1: depth=${band.depth} → ${band.label} · roundCap=${roundCap} · liteBrainstorm=${band.skipFullOrangesBrainstorm} · sharks=${band.sharkRoles}`);
+  log(`stage1: band stamp ${JSON.stringify(bandProfileStamp(band))}`);
+
+  // SPIKE-FIRST mid path: probe before plan ceremony (cf-slick Wave D).
+  if (band.requireSpikeProbe && !allowSpikeWithoutProbe) {
+    const raw = spikeProbe != null ? String(spikeProbe).trim() : '';
+    if (!raw) {
+      throw haltForHuman(
+        'SPIKE-FIRST band requires a spikeProbe (existing file path or multi-line findings, ≥40 chars) before Stage-1 — ' +
+          'run a bounded probe, record the result, then re-invoke (or re-band to LITE/FULL).',
+        'stage1-spike-probe-required',
+      );
+    }
+    // Path-like: must exist. Short string "ok" is rejected (Shark: probe theater).
+    const pathLike = /[\\/]|\.md$|\.txt$|\.json$/i.test(raw) || raw.length < 200;
+    if (pathLike && (raw.includes('\\') || raw.includes('/') || /\.(md|txt|json)$/i.test(raw))) {
+      try {
+        if (!fs.existsSync(path.resolve(raw))) {
+          throw haltForHuman(
+            `SPIKE-FIRST spikeProbe path does not exist: ${raw}`,
+            'stage1-spike-probe-required',
+          );
+        }
+      } catch (e) {
+        if (e && e.halt_for_human) throw e;
+        throw haltForHuman(`SPIKE-FIRST spikeProbe path unreadable: ${raw}`, 'stage1-spike-probe-required');
+      }
+    } else if (raw.length < 40) {
+      throw haltForHuman(
+        'SPIKE-FIRST spikeProbe string is too short to be a real probe result (min 40 chars) — refuse probe theater.',
+        'stage1-spike-probe-required',
+      );
+    }
+    log(`stage1: SPIKE probe accepted (${raw.slice(0, 120)})`);
   }
 
-  // researchPrime ONCE up-front (idempotent; the Wave-5 cost-guard owns re-invocation).
-  if (research && typeof research.upfront === 'function') {
+  // researchPrime ONCE up-front when the band asks for it (LITE skips by default).
+  if (band.researchUpfront && research && typeof research.upfront === 'function') {
     await research.upfront({ northStar });
   }
   const upfrontBrief = research?.forSynthesizer?.() ?? null;
 
-  // (1) Oranges brainstorm in the mandatory order.
-  const brainstorm = await runBrainstorm({ agent, northStar, criteria, research: upfrontBrief, log });
+  // (1) Oranges brainstorm — FULL order, or LITE single-pass.
+  const brainstorm = await runBrainstorm({
+    agent, northStar, criteria, research: upfrontBrief, log,
+    lite: !!band.skipFullOrangesBrainstorm,
+  });
 
   // (2) Batch idea-triage — the plan absorbs ONLY the integrated bucket.
   const triage = triageIdeas({ ideas: brainstorm.ideas, grasscatcherPath, log });
@@ -1114,14 +1202,15 @@ export async function runStage1({
     agent, northStar, criteria,
     draft: renderMasterPlanDraft(plan),
     research, acceptanceCriteria, roundCap, artifactsDir, log,
-    statusLog, statusLabel: 'Crucible Stage 1 (Master Plan)',
+    sharkRoles: band.sharkRoles,
+    statusLog, statusLabel: `Crucible Stage 1 (${band.depth})`,
     routes,
   });
 
   // (5) The user-approval HALT gate (master-plan-approval).
   const approval = approveMasterPlan({ loop, plan, approved, log });
 
-  return { brainstorm, triage, plan, loop, approval };
+  return { brainstorm, triage, plan, loop, approval, band: bandProfileStamp(band) };
 }
 
 // ---------------------------------------------------------------------------

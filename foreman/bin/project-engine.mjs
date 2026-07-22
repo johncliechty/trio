@@ -45,7 +45,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  HaltError, locateDocs, parseWaves, discoverTestCommand,
+  HaltError, locateDocs, parseWaves, discoverTestCommand, preflightTestCommand,
   readCheckpoint, projectDoneDefinition, newCheckpoint, writeCheckpointAtomic, makeBudget,
 } from './foreman-lib.mjs';
 import { runWave } from './wave-engine.mjs';
@@ -57,14 +57,20 @@ import { makeGitContext } from './git-hygiene.mjs';
  * non-ascending or gapped plan HALTs HERE (HaltError) before any wave runs —
  * Foreman never reorders or fills gaps (§4.3).
  *
- * @returns {{docs, planText, waves, testCmd, totalWaves}}
+ * @returns {{docs, planText, waves, testCmd, totalWaves, gateWarnings?:string[]}}
  */
 export function resolveContract(projectDir) {
   const docs = locateDocs(projectDir);
   const planText = fs.readFileSync(docs.plan, 'utf8');
   const waves = parseWaves(planText);      // ascending/contiguous 1..N or HaltError
-  const testCmd = discoverTestCommand(planText, projectDir);
-  return { docs, planText, waves, testCmd, totalWaves: waves.length };
+  const rawCmd = discoverTestCommand(planText, projectDir);
+  // cf-slick: refuse known-broken node --test test/ (journals 0038/0047)
+  const pre = preflightTestCommand(rawCmd, projectDir);
+  const testCmd = { command: pre.command, source: pre.source };
+  return {
+    docs, planText, waves, testCmd, totalWaves: waves.length,
+    gateWarnings: pre.warnings || [],
+  };
 }
 
 /**
@@ -219,8 +225,9 @@ export async function runProject(o) {
   }
 
   // ---- §4 contract (ascending/contiguous guard HALTs a bad plan here) ----
-  const { docs, waves, testCmd, totalWaves } = resolveContract(projectDir);
+  const { docs, waves, testCmd, totalWaves, gateWarnings = [] } = resolveContract(projectDir);
   log(`contract: ${totalWaves} wave(s) · gate "${testCmd.command}" (${testCmd.source})`);
+  for (const w of gateWarnings) log(`gate preflight WARNING: ${w}`);
 
   // ---- decide the starting wave (wave-level + intra-wave resume) ----
   let startWave = 1;

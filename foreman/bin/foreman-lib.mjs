@@ -306,6 +306,73 @@ export function discoverTestCommand(planText, projectDir) {
 }
 
 // ---------------------------------------------------------------------------
+// Gate honesty preflight (cf-slick 2026-07-22 — journals 0038/0039/0047/0049)
+// ---------------------------------------------------------------------------
+
+/**
+ * True when the gate string is the known-bad Win Node v26 form that treats
+ * `test/` as a single module path instead of a recursive suite.
+ * @param {string} command
+ */
+export function isBadNodeTestDirectoryCommand(command) {
+  const c = String(command || '').trim();
+  // node --test test/  OR  node --test test  OR  node --test "./test/"
+  return /^node\s+--test\s+["']?\.?\/?test\/?["']?\s*$/i.test(c);
+}
+
+/**
+ * Preflight the discovered gate command. Does not invent a command — only
+ * refuses known-broken forms so FIX does not invent illegal test harnesses.
+ *
+ * @param {{command:string, source?:string}} discovered  from discoverTestCommand
+ * @param {string} [projectDir]
+ * @returns {{command:string, source:string, warnings:string[]}}
+ * @throws HaltError on hard-refuse cases
+ */
+export function preflightTestCommand(discovered, projectDir = '') {
+  const command = discovered?.command || '';
+  const source = discovered?.source || 'unknown';
+  const warnings = [];
+
+  if (isBadNodeTestDirectoryCommand(command)) {
+    throw new HaltError(
+      'gate command is known-broken on this host',
+      `\`node --test test/\` fails on Windows Node v26 (MODULE_NOT_FOUND / non-recursive). ` +
+        `Declare explicit files, e.g. test-command: node --test test/foo.test.mjs test/bar.test.mjs ` +
+        `(journals foreman 0038, 0039, 0047). Source was: ${source}`,
+    );
+  }
+
+  // Under-gating check (journal 0049): package suite larger than plan gate → HALT.
+  // Do not swallow HaltError in the catch (Shark: empty catch was hiding the guard).
+  try {
+    const dir = path.resolve(projectDir || '.');
+    const pkgPath = path.join(dir, 'package.json');
+    if (fs.existsSync(pkgPath) && source === 'plan declaration') {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+      const scr = pkg?.scripts?.test || '';
+      if (typeof scr === 'string' && scr.includes('--test') && command.includes('--test')) {
+        const planFiles = (command.match(/[\w./\\-]+\.test\.\w+/g) || []).length;
+        const pkgFiles = (scr.match(/[\w./\\-]+\.test\.\w+/g) || []).length;
+        if (pkgFiles > planFiles && planFiles > 0) {
+          throw new HaltError(
+            'plan gate under-gates the package test suite',
+            `package.json scripts.test names ${pkgFiles} test file(s) but plan test-command names ${planFiles} ` +
+              `(journal 0049). Expand plan test-command to the full suite or shrink package scripts.test — ` +
+              `refusing to risk PROJECT DONE on a narrow frozen gate.`,
+          );
+        }
+      }
+    }
+  } catch (e) {
+    if (e instanceof HaltError) throw e;
+    // best-effort only for I/O/parse noise
+  }
+
+  return { command, source, warnings };
+}
+
+// ---------------------------------------------------------------------------
 // §4.5  Project-DONE definition.
 // ---------------------------------------------------------------------------
 

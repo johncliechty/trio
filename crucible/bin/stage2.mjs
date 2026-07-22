@@ -44,7 +44,17 @@ import path from 'node:path';
 
 import { HaltError, haltForHuman, HALT_GATES } from './crucible-lib.mjs';
 import { runMasterPlanLoop } from './stage1.mjs';
+import { resolveBandProfile, bandProfileStamp } from './band-profile.mjs';
 import { runWellFormednessGate } from './gates.mjs';
+
+// NS-01 Wave 3: handoff emit shape from shared triage (pinned home).
+import {
+  buildHandoffTriageEmit,
+  createLockRecord,
+  legacyBandToDepth,
+  MODEL_TIERS,
+  DEPTH_BANDS,
+} from 'file:///C:/dev/Skill%20Foundry/foundry/triage/crucible-wire.mjs';
 
 // ---------------------------------------------------------------------------
 // (1) Wave decomposition — PM heuristics over the approved Master Plan.
@@ -306,10 +316,25 @@ export function renderExecutionLog({ title = 'Crucible-planned project', waveCou
  * ambiguous *.md heuristic, which would HALT if a project has more than one plan-ish
  * filename). Returns the written paths.
  *
+ * Wave 3 (NS-01): `triage_track` is the process-depth pin (FULL|LITE|SPIKE-FIRST)
+ * for the Foreman consumer; `triage: { tier, depth, … }` carries both axes.
+ * Prefer a Stage-0 `handoffTriage` / `triageLock`; fall back to confirmed depth/tier.
+ *
  * @returns {{dir:string, files:{description:string,plan:string,execution_log:string},
- *            configPath:string, fileNames:object}}
+ *            configPath:string, fileNames:object, handoffTriage:?object}}
  */
-export function writeDocTrio({ outputDir, plan, description, executionLog, fileNames = DEFAULT_DOC_FILENAMES, depth = 'HEAVY', log = () => {} } = {}) {
+export function writeDocTrio({
+  outputDir,
+  plan,
+  description,
+  executionLog,
+  fileNames = DEFAULT_DOC_FILENAMES,
+  depth = null,
+  tier = null,
+  triageLock = null,
+  handoffTriage = null,
+  log = () => {},
+} = {}) {
   if (!outputDir) throw new HaltError('writeDocTrio requires an outputDir', 'pass the handoff output directory');
   const dir = path.resolve(outputDir);
   fs.mkdirSync(dir, { recursive: true });
@@ -323,10 +348,39 @@ export function writeDocTrio({ outputDir, plan, description, executionLog, fileN
   fs.writeFileSync(files.plan, plan);
   fs.writeFileSync(files.execution_log, executionLog);
 
+  // Handoff triage emit (Wave 3) — Foreman reads triage_track as a string depth band.
+  let emit = handoffTriage && typeof handoffTriage === 'object' && handoffTriage.triage_track
+    ? handoffTriage
+    : null;
+  if (!emit && triageLock) {
+    emit = buildHandoffTriageEmit(triageLock);
+  }
+  if (!emit) {
+    // Confirmed depth/tier from Stage-0, or safe FULL+Heavy when callers still pass
+    // only a depth string (legacy Stage-2 call sites / dogfood). Never emit bare
+    // "HEAVY" as triage_track (that was a model-tier mis-label).
+    const depthPin = legacyBandToDepth(depth) || DEPTH_BANDS.FULL;
+    const tierPin =
+      tier === 'Standard' || tier === 'standard' || tier === MODEL_TIERS.STANDARD
+        ? MODEL_TIERS.STANDARD
+        : MODEL_TIERS.HEAVY;
+    emit = buildHandoffTriageEmit(
+      createLockRecord({
+        tier: tierPin,
+        depth: depthPin,
+        rationale: depth
+          ? `Stage-2 handoff from confirmed depth=${depthPin} tier=${tierPin}`
+          : `Stage-2 handoff default FULL+Heavy (no Stage-0 triageLock passed — prefer wiring handoffTriage)`,
+        source: 'inherit',
+      }),
+    );
+  }
+
   // The explicit doc-resolution config (paths relative to the output dir).
   const configPath = path.join(dir, 'foreman.config.json');
   const config = {
-    triage_track: depth || 'HEAVY',
+    triage_track: emit.triage_track,
+    triage: emit.triage,
     docs: {
       description: fileNames.description,
       plan: fileNames.plan,
@@ -335,8 +389,8 @@ export function writeDocTrio({ outputDir, plan, description, executionLog, fileN
   };
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
 
-  log(`stage2 emit: doc-trio + foreman.config.json → ${dir}`);
-  return { dir, files, configPath, fileNames };
+  log(`stage2 emit: doc-trio + foreman.config.json → ${dir} (triage_track=${emit.triage_track})`);
+  return { dir, files, configPath, fileNames, handoffTriage: emit };
 }
 
 // ---------------------------------------------------------------------------
@@ -427,6 +481,9 @@ export function approveImplementationPlan({ loop, approved = false, log = () => 
  * @param {number}  [o.roundCap=5]
  * @param {?string} [o.depth=null]            the user-CONFIRMED Stage-0 triage depth
  *                                            ('LITE' → default roundCap 2; explicit wins)
+ * @param {?string} [o.tier=null]             the user-CONFIRMED Stage-0 model tier
+ * @param {?object} [o.triageLock=null]       Stage-0 validating lock (preferred for emit)
+ * @param {?object} [o.handoffTriage=null]    Stage-0 buildHandoffTriageEmit result
  * @param {?string} [o.artifactsDir=null]     Shark-Tank + gate artifacts dir
  * @param {Function}[o.log=()=>{}]
  * @returns {Promise<{waves:object[], plan:string, loop:object, approval:object,
@@ -446,18 +503,20 @@ export async function runStage2({
   approved = false,
   roundCap = undefined,
   depth = null,
+  tier = null,
+  triageLock = null,
+  handoffTriage = null,
   artifactsDir = null,
   statusLog = null,
+  routes = null,
   log = () => {},
 } = {}) {
   requireAgent(agent, 'runStage2');
-  // 2026-07: consume the user-confirmed Stage-0 depth (see runStage1) — LIGHT
-  // shrinks the default safety ceiling; an explicitly passed roundCap wins.
-  if (roundCap === undefined) {
-    const d = String(depth || '').toUpperCase();
-    roundCap = (d === 'LITE' || d === 'SPIKE-FIRST') ? 2 : 5;
-    if (depth) log(`stage2: depth=${depth} → roundCap=${roundCap}`);
-  }
+  // cf-slick: band profile from locked depth (same as Stage 1). Explicit roundCap wins.
+  const band = resolveBandProfile(depth);
+  if (roundCap === undefined) roundCap = band.roundCap;
+  if (depth) log(`stage2: depth=${band.depth} → roundCap=${roundCap} · sharks=${band.sharkRoles}`);
+  log(`stage2: band stamp ${JSON.stringify(bandProfileStamp(band))}`);
   if (!northStar) throw new HaltError('runStage2 requires a locked North Star', 'Stage 2 starts from the Stage-0 North-Star lock');
   if (!masterPlan) throw new HaltError('runStage2 requires the approved Master Plan', 'Stage 2 starts from the Stage-1 Master-Plan approval');
   if (!outputDir) throw new HaltError('runStage2 requires an outputDir', 'pass the handoff output directory');
@@ -484,8 +543,10 @@ export async function runStage2({
     loop = await runMasterPlanLoop({
       agent, northStar, criteria,
       draft: plan, research, acceptanceCriteria, roundCap, artifactsDir, log,
+      sharkRoles: band.sharkRoles,
       capPendingAction: 'stage2-round-cap',
-      statusLog, statusLabel: 'Crucible Stage 2 (Implementation Plan)',
+      statusLog, statusLabel: `Crucible Stage 2 (${band.depth})`,
+      routes,
     });
   } catch (e) {
     if (e && e.halt_for_human && e.pending_action === 'stage2-round-cap') {
@@ -493,7 +554,10 @@ export async function runStage2({
       try {
         const description = renderDescriptionDoc({ title, northStar, criteria, summary });
         const executionLog = renderExecutionLog({ title, waveCount: waves.length });
-        const docTrio = writeDocTrio({ outputDir: draftDir, plan, description, executionLog, depth, log });
+        const docTrio = writeDocTrio({
+          outputDir: draftDir, plan, description, executionLog,
+          depth, tier, triageLock, handoffTriage, log,
+        });
         const gate = runWellFormednessGate({ projectDir: docTrio.dir, artifactsDir, log });
         e.emitted = { docTrio, wellFormedness: { pass: !!gate.pass, status: gate.status ?? null } };
         e.reason += ` — the full doc-trio is EMITTED for review at ${docTrio.dir} ` +
@@ -514,7 +578,10 @@ export async function runStage2({
   // (5) Emit the doc-trio + config, then gate the handoff on the well-formedness gate.
   const description = renderDescriptionDoc({ title, northStar, criteria, summary });
   const executionLog = renderExecutionLog({ title, waveCount: waves.length });
-  const docTrio = writeDocTrio({ outputDir, plan, description, executionLog, depth, log });
+  const docTrio = writeDocTrio({
+    outputDir, plan, description, executionLog,
+    depth, tier, triageLock, handoffTriage, log,
+  });
   const handoff = runHandoffGate({ projectDir: docTrio.dir, artifactsDir, log });
 
   return { waves, plan, loop, approval, docTrio, handoff };

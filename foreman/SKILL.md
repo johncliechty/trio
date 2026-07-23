@@ -14,6 +14,8 @@ description: >-
   subscription.
 ---
 
+> **Humans:** read `HUMAN.md` first. This file is the agent/engine protocol.
+
 # Foreman
 
 Autonomous multi-wave build orchestrator (working title "code-execution-organizer").

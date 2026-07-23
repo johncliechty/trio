@@ -18,6 +18,8 @@ description: >-
   zero-HALT doc-trio, and the 5-gate Skill Productionization Checklist passes.
 ---
 
+> **Humans:** read `HUMAN.md` first. This file is the agent/engine protocol.
+
 # Crucible
 
 Crucible is the **planning brain** of John's skill trio: **researchPrime** (research)

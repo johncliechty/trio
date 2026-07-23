@@ -56,6 +56,50 @@ const IGNORE_DIRS = new Set([
   'bundle', 'bundle_staging',
 ]);
 
+/**
+ * Runtime noise that is never a wave deliverable (0078/0079 sleep).
+ * Excluded from hash-diff and from proven-ledger `changed`.
+ * @param {string} rel  project-relative path (posix or win)
+ */
+export function isRuntimeNoisePath(rel) {
+  const r = String(rel || '').replace(/\\/g, '/').toLowerCase();
+  if (!r || r.endsWith(' (deleted)')) {
+    const base = r.replace(/\s*\(deleted\)\s*$/, '');
+    return isRuntimeNoisePath(base);
+  }
+  const base = r.split('/').pop() || r;
+  if (base === 'foreman-checkpoint.json') return true;
+  if (base.startsWith('_foreman-status') || base.startsWith('_crucible-status')) return true;
+  if (base === 'crucible-run.log' || base === 'heartbeat.json') return true;
+  // schtask / launch logs
+  if (/^_out-/.test(base) || /^_err-/.test(base) || /^_schtask-/.test(base)) return true;
+  if (/^_detached-/.test(base) || /^_breakaway-/.test(base) || /^_launch-/.test(base)) return true;
+  if (base.endsWith('.log') && (/^_/.test(base) || base.includes('status') || base.includes('watchdog'))) {
+    return true;
+  }
+  // plain *.log at project root often runtime
+  if (/^[^/]+\.log$/.test(r) && !r.includes('test')) return true;
+  return false;
+}
+
+/**
+ * Paths eligible as proven-attempt deliverables (must be code-like, not logs/docs-only).
+ * @param {string} rel
+ */
+export function isProvenDeliverablePath(rel) {
+  const r = String(rel || '').replace(/\\/g, '/');
+  if (!r || r.endsWith(' (deleted)')) return false;
+  if (isRuntimeNoisePath(r)) return false;
+  if (isTestFile(r)) return false;
+  // doc/data alone cannot prove a wave (same as vacuous DOC_DATA_RE spirit)
+  if (/\.(md|txt|csv|yml|yaml|toml|ini|cfg|lock)$/i.test(r) && !/\.(mjs|js|cjs|ts|py)$/i.test(r)) {
+    // allow .json only under src/ or explicit code-ish dirs — not root logs disguised
+    if (/\.json$/i.test(r) && !/(^|\/)(src|lib|bin|scripts)\//i.test(r)) return false;
+    if (!/\.json$/i.test(r)) return false;
+  }
+  return true;
+}
+
 /** Recursively list project files, skipping noise + the foreman state dir. */
 function listFiles(root, foremanDir) {
   const out = [];
@@ -72,6 +116,8 @@ function listFiles(root, foremanDir) {
       } else if (e.isFile()) {
         if (e.name.endsWith('.tmp')) continue;
         if (e.name === 'foreman-checkpoint.json') continue;
+        const rel = path.relative(root, abs).split(path.sep).join('/');
+        if (isRuntimeNoisePath(rel)) continue;
         out.push(abs);
       }
     }
@@ -873,7 +919,10 @@ export async function runWave(o) {
   const log = o.log || (() => {});
   const steps = []; // dashboard step lines
 
-  const ctx = { projectDir, wave, foremanDir, testCommand, log };
+  // Plan text for execute contract injection (0076 package 1). Best-effort read.
+  let planText = '';
+  try { planText = fs.readFileSync(planPath, 'utf8'); } catch { /* missing plan is a higher-level HALT */ }
+  const ctx = { projectDir, wave, foremanDir, testCommand, log, planPath, planText };
 
   // §5 anti-test-weakening: snapshot inventory + file hashes BEFORE any change.
   const invBefore = inventory(projectDir, foremanDir);
@@ -896,13 +945,27 @@ export async function runWave(o) {
 
   // EXECUTE (single-threaded; model-driven). May be a no-op if the wave's code
   // is already in place; it must never weaken tests.
-  const exec = await driver.execute(ctx);
-  steps.push(`▸ execute… ${exec?.note || 'done'}`);
-  log(`execute: ${exec?.note || 'done'}`);
+  // F-H sleep fix (0072): skip long execute ONLY when resume stamped **review**
+  // after a prior GREEN gate in the same wave. Resume at **gate** (clear-halt /
+  // vacuous-GREEN fix path) must re-run execute so new deliverables + tests land
+  // and the coverage graph can see this wave's sources (else already-green suite
+  // vacuous-GREENs).
+  const resumeStep = resumeFrom?.intraStep ? String(resumeFrom.intraStep) : '';
+  const skipExecute = resumeStep === 'review';
+  let exec = { note: 'done', citation: null };
+  if (skipExecute) {
+    steps.push(`▸ execute… skipped (resume at ${resumeStep}; re-prove GREEN at gate)`);
+    log(`execute: skipped — resume at ${resumeStep} (crash-resilience; gate re-proves truth)`);
+  } else {
+    exec = await driver.execute(ctx);
+    steps.push(`▸ execute… ${exec?.note || 'done'}`);
+    log(`execute: ${exec?.note || 'done'}`);
+  }
 
   // Wave 7 test-immutability baseline: tests are EXECUTE's deliverable, so snapshot
   // them NOW (post-execute); the fix loop below must not modify/add/delete any of
   // them (checked each iteration). A genuine plan-authorized change rides `citation`.
+  // When execute was skipped, baseline still reflects current disk (idempotent).
   const testBaseline = testHashSnapshot(projectDir, foremanDir);
 
   let iteration = seededIteration;
@@ -956,6 +1019,30 @@ export async function runWave(o) {
       return finishHalt({ reason, recommend:
         `the fix loop edited a test file — FIX may only change non-test code (tests are EXECUTE's deliverable). ` +
         `Revert the test change, or cite the plan line that authorizes it, then re-invoke wave ${wave.n}` });
+    }
+
+    // F-H sleep fix (0072): after GREEN gate, stamp checkpoint at review BEFORE the
+    // long review agent call(s). If the process dies mid-review (empty stderr deaths
+    // observed live), --resume re-enters with intraStep=review, skips execute, re-proves
+    // gate, then retries review — never re-spends a full execute agent turn.
+    if (lastGate.green) {
+      try {
+        const midCp = buildCheckpoint({
+          planPath, totalWaves, wave, iteration, verdict: null,
+          findings: findings.filter((f) => f.status === 'open'),
+          status: 'running',
+          reviewerCount,
+          intraWaveStep: 'review',
+          pendingAction:
+            `wave ${wave.n}/${totalWaves} gate GREEN — entering review ` +
+            `(if interrupted, --resume re-proves gate then review; never auto-GO)`,
+          budgetRemaining: budget ? budget.snapshotForCheckpoint() : undefined,
+        });
+        writeCheckpointAtomic(checkpointPath, midCp);
+        log(`checkpoint: stamped intra_wave_step=review after GREEN gate (crash-resilience)`);
+      } catch (e) {
+        log(`!! checkpoint stamp after GREEN failed (non-fatal): ${e?.message || e}`);
+      }
     }
 
     // ----- REVIEW: REVIEWER_COUNT independent reviewers (§3) -----
@@ -1100,10 +1187,17 @@ export async function runWave(o) {
       if (vac) {
         const reason = `vacuous-GREEN HALT: ${vac}`;
         steps.push(`✗ ${reason}`);
-        return finishHalt({ reason, recommend:
-          `add/keep a test that exercises the changed code, then re-invoke wave ${wave.n}` });
+        const vacuousRecommend =
+          /vacuous-GREEN/i.test(reason)
+            ? `vacuous-GREEN: do NOT --clear-halt alone — that re-enters the same empty execute ` +
+              `(journals 0076/0078/0079). Land import-tested source for this wave (or a valid ` +
+              `source-only wave-${wave.n}-proven.json), then --resume. ` +
+              `add/keep a test that exercises the changed code, then re-invoke wave ${wave.n}`
+            : `add/keep a test that exercises the changed code, then re-invoke wave ${wave.n}`;
+        return finishHalt({ reason, recommend: vacuousRecommend });
       }
       // Record proven deliverable for resume/clear-halt credit (Phase A).
+      // Filter via writeWaveProvenLedger (never logs — 0078/0079 package 6).
       try {
         writeWaveProvenLedger(foremanDir, wave.n, {
           changed: lastChanged.filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f)),
@@ -1284,17 +1378,37 @@ export function waveProvenPath(foremanDir, waveN) {
 }
 
 /**
- * Write ledger after a real GO so a later resume with empty hash-diff can credit
- * prior same-wave code that is still on disk and still exercised.
+ * Filter + write ledger after a real GO so a later resume with empty hash-diff
+ * can credit prior same-wave code. Never stores runtime logs as deliverables
+ * (0078/0079 — Track D log-poison). Skips write when no code paths remain
+ * (does not overwrite a prior source-rich ledger with an empty/log-only set).
  */
-export function writeWaveProvenLedger(foremanDir, waveN, payload) {
+export function writeWaveProvenLedger(foremanDir, waveN, payload = {}) {
   if (!foremanDir || !waveN) return null;
   fs.mkdirSync(foremanDir, { recursive: true });
   const p = waveProvenPath(foremanDir, waveN);
+  const rawChanged = Array.isArray(payload.changed) ? payload.changed : [];
+  const filtered = rawChanged
+    .map((f) => String(f).replace(/\\/g, '/'))
+    .filter((f) => isProvenDeliverablePath(f));
+
+  if (!filtered.length) {
+    // Prefer keeping an existing source-rich ledger over writing log-only poison.
+    try {
+      const prev = JSON.parse(fs.readFileSync(p, 'utf8'));
+      if (Array.isArray(prev.changed) && prev.changed.some((f) => isProvenDeliverablePath(f))) {
+        return p; // leave prior good ledger in place
+      }
+    } catch { /* none */ }
+    // No good prior and nothing to store — do not write a log-only ledger.
+    return null;
+  }
+
   const body = {
     version: 1,
     wave: waveN,
     ...payload,
+    changed: filtered,
   };
   fs.writeFileSync(p, `${JSON.stringify(body, null, 2)}\n`, 'utf8');
   return p;
@@ -1325,14 +1439,16 @@ export function creditPriorWaveAttempt(root, foremanDir, waveN, { reach, exercis
   const live = [];
   for (const f of led.changed) {
     const rel = String(f).replace(/\\/g, '/');
-    if (rel.endsWith(' (deleted)') || isTestFile(rel)) continue;
+    if (rel.endsWith(' (deleted)') || isTestFile(rel) || !isProvenDeliverablePath(rel)) continue;
     const abs = path.join(root, rel);
     if (!fs.existsSync(abs)) {
       return { ok: false, note: `prior deliverable missing: ${rel}` };
     }
     live.push(rel);
   }
-  if (!live.length) return { ok: false, note: 'prior ledger had no live code paths' };
+  if (!live.length) {
+    return { ok: false, note: 'prior ledger had no live code paths (logs/noise filtered)' };
+  }
   const exercised = live.some((f) => (reach && reach.has(f)) || (exercisedByName && exercisedByName(f)));
   if (!exercised) {
     return { ok: false, note: `prior code still on disk but not exercised by tests: ${live.join(', ')}` };
@@ -1343,6 +1459,7 @@ export function creditPriorWaveAttempt(root, foremanDir, waveN, { reach, exercis
 export const _internals = {
   inventory, checkTestWeakening, checkVacuousGreen, reachableFromTests,
   changedSince, snapshotHashes, parseCount, hasRealTestEvents, countTestEvents, findingId,
+  isRuntimeNoisePath, isProvenDeliverablePath,
   // Wave 7 test-immutability guard:
   testHashSnapshot, checkTestImmutability,
   // Phase 3d (Python/pytest generalization) internals:

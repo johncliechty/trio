@@ -69,11 +69,59 @@ export const REVIEW_SCHEMA = {
   },
 };
 
+/**
+ * Extract the markdown body for wave N from a frozen plan (## Wave N … until next ## Wave).
+ * Sleep 0076 package 1 — execute must see deliverables/done-when, not only the title.
+ * @param {string} planText
+ * @param {number} waveN
+ * @returns {string}
+ */
+export function extractWaveSection(planText, waveN) {
+  const text = String(planText || '');
+  if (!text || !waveN) return '';
+  // Two-step parse: JS has no Python \Z, and /$/m matches every line end (would
+  // truncate the body to the first line). Find this wave's header, then cut at the
+  // next ## Wave/Sprint/Section or EOF.
+  const header = new RegExp(
+    String.raw`^##\s+(?:Wave|Sprint|Section)\s+${Number(waveN)}\b[^\n]*\n`,
+    'im',
+  );
+  const hm = header.exec(text);
+  if (!hm) return '';
+  const start = hm.index + hm[0].length;
+  const rest = text.slice(start);
+  const next = rest.search(/^##\s+(?:Wave|Sprint|Section)\s+\d+\b/im);
+  const body = (next >= 0 ? rest.slice(0, next) : rest).trim();
+  // Cap so the agent prompt stays within argv/context comfort (full plan stays on disk).
+  const max = 6000;
+  return body.length > max ? `${body.slice(0, max)}\n\n…[wave section truncated; read plan file for remainder]` : body;
+}
+
 function executePrompt(ctx) {
+  const planPath = ctx.planPath || path.join(ctx.projectDir || '.', 'IMPLEMENTATION-PLAN.md');
+  const testCommand = ctx.testCommand || '(see plan test-command:)';
+  const section = extractWaveSection(ctx.planText || '', ctx.wave?.n);
+  const contractBlock = section
+    ? [
+        `FROZEN PLAN PATH: ${planPath}`,
+        `ORCHESTRATOR GATE (you do NOT run it): ${testCommand}`,
+        `THIS WAVE'S CONTRACT (from the frozen plan — implement ALL of it; do not invent scope):`,
+        '----- BEGIN WAVE CONTRACT -----',
+        section,
+        '----- END WAVE CONTRACT -----',
+      ]
+    : [
+        `FROZEN PLAN PATH: ${planPath}`,
+        `ORCHESTRATOR GATE (you do NOT run it): ${testCommand}`,
+        `WARNING: could not extract ## Wave ${ctx.wave?.n} body from plan text — open the plan file and implement that wave's Deliverables and done-when only.`,
+      ];
   return [
     `You are the EXECUTE agent for Foreman wave ${ctx.wave.n} ("${ctx.wave.title}").`,
     `Project: ${ctx.projectDir}. Implement ONLY this wave's work as specified in the`,
     `frozen plan. Do not refactor outside the plan; do not weaken or delete tests.`,
+    ...contractBlock,
+    `Ship real source that NEW tests import and exercise (or keep/extend tests that import your source).`,
+    `A green suite that does not exercise this wave's files is a failed execute — the orchestrator will vacuous-GREEN HALT.`,
     `Do NOT run any git commands, terminal commands, or tests yourself. The orchestrator`,
     `owns all testing and version control; strictly just edit the source files.`,
     `If the wave is not answerable from the frozen docs, say so explicitly.`,
@@ -81,7 +129,7 @@ function executePrompt(ctx) {
     `missing, a prerequisite is absent) or believe it is ALREADY DONE, do NOT`,
     `quietly finish with no changes — state the blocker/claim explicitly as your`,
     `final message; the orchestrator's guards, not you, decide how to proceed.`,
-  ].join(' ');
+  ].join('\n');
 }
 
 function reviewPrompt(ctx, gate) {
@@ -173,5 +221,5 @@ export function makeAgentDriver({ agent }) {
   };
 }
 
-export const _internals = { executePrompt, reviewPrompt, fixPrompt };
+export const _internals = { executePrompt, reviewPrompt, fixPrompt, extractWaveSection };
 export default makeAgentDriver;

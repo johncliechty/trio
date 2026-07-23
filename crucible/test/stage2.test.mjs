@@ -26,6 +26,7 @@ import { runWellFormednessGate } from '../bin/gates.mjs';
 import {
   WAVE_DECOMP_SCHEMA,
   DEFAULT_DOC_FILENAMES,
+  DEFAULT_TEST_COMMAND,
   normalizeWaves,
   decomposeIntoWaves,
   renderImplementationPlan,
@@ -134,9 +135,11 @@ test('normalizeWaves re-numbers contiguously even if the model mis-numbers, and 
 
 test('renderImplementationPlan emits a test-command, contiguous ## Wave N, done-when, and G/W/T', () => {
   const waves = normalizeWaves(DEFAULT_DECOMP);
-  const md = renderImplementationPlan({ northStar: NORTH_STAR, criteria: CRITERIA, waves, testCommand: 'node --test test/' });
+  const md = renderImplementationPlan({ northStar: NORTH_STAR, criteria: CRITERIA, waves });
 
-  assert.match(md, /^test-command: node --test test\/$/m, 'a single early test-command line');
+  assert.match(md, new RegExp(`^test-command: ${DEFAULT_TEST_COMMAND.replace(/\./g, '\\.')}$`, 'm'),
+    'default Windows-safe expanding gate (0076 package 4)');
+  assert.equal(DEFAULT_TEST_COMMAND, 'node scripts/run-all-tests.mjs');
   assert.match(md, /## Wave 1 — Engine skeleton/);
   assert.match(md, /## Wave 2 — Docs polish/);
   assert.match(md, /\*\*done-when:\*\* node --test test\/ passes the import smoke-test/);
@@ -145,7 +148,7 @@ test('renderImplementationPlan emits a test-command, contiguous ## Wave N, done-
   assert.match(md, /\*\*Depends on:\*\* Engine skeleton/, 'second wave records its dependency');
 });
 
-test('writeDocTrio emits the three docs + a foreman.config.json that names them', () => {
+test('writeDocTrio emits the three docs + foreman.config.json + scripts/run-all-tests.mjs', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crucible-s2-trio-'));
   try {
     const waves = normalizeWaves(DEFAULT_DECOMP);
@@ -162,6 +165,12 @@ test('writeDocTrio emits the three docs + a foreman.config.json that names them'
     assert.equal(cfg.docs.plan, DEFAULT_DOC_FILENAMES.plan);
     assert.equal(cfg.docs.description, DEFAULT_DOC_FILENAMES.description);
     assert.equal(cfg.docs.execution_log, DEFAULT_DOC_FILENAMES.execution_log);
+    // Sleep 0076 package 4: helper must exist so default test-command is runnable.
+    assert.ok(fs.existsSync(trio.files.run_all_tests), 'scripts/run-all-tests.mjs written');
+    const helper = fs.readFileSync(trio.files.run_all_tests, 'utf8');
+    assert.match(helper, /--test/);
+    assert.match(helper, /\.test\.mjs/);
+    assert.match(helper, /windowsHide:\s*true/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

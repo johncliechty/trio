@@ -72,9 +72,11 @@ function writeDocTrio(dir, { withWaves = true } = {}) {
   }, null, 2));
   fs.writeFileSync(path.join(dir, 'DESCRIPTION.md'), '# Description\nA fixture project.\n');
   fs.writeFileSync(path.join(dir, 'EXECUTION-LOG.md'), '# Execution Log\n');
+  // Sleep 0076 package 4: bare `node --test test/` hard-fails locate-plan preflight on Windows.
+  // Well-formed fixtures must use the expanding helper or explicit test files.
   const plan = withWaves
-    ? '# Plan\n\ntest-command: node --test test/\n\n## Wave 1 — Bootstrap\n\nStand it up.\n'
-    : '# Plan\n\ntest-command: node --test test/\n\n(no wave headings — malformed)\n';
+    ? '# Plan\n\ntest-command: node scripts/run-all-tests.mjs\n\n## Wave 1 — Bootstrap\n\n**done-when:** bootstrap smoke passes\n\nStand it up.\n'
+    : '# Plan\n\ntest-command: node scripts/run-all-tests.mjs\n\n(no wave headings — malformed)\n';
   fs.writeFileSync(path.join(dir, 'PLAN.md'), plan);
 }
 

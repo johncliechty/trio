@@ -244,7 +244,52 @@ export const DEFAULT_DOC_FILENAMES = {
   execution_log: 'EXECUTION-LOG.md',
 };
 
-const DEFAULT_TEST_COMMAND = 'node --test test/';
+// Windows-safe expanding gate (0076 package 4 / F053): bare `node --test test/` is
+// hard-broken on Win Node. Prefer a project helper that lists test/*.test.mjs.
+// Projects without the helper should still declare explicit files; this default
+// documents the preferred emit shape for Stage-2 handoffs. writeDocTrio also emits
+// the helper script so the handoff is runnable without a manual scaffold.
+export const DEFAULT_TEST_COMMAND = 'node scripts/run-all-tests.mjs';
+
+/** Canonical body of scripts/run-all-tests.mjs emitted with every doc-trio. */
+export const RUN_ALL_TESTS_SCRIPT = `/**
+ * Windows-safe expanding gate: list test/*.test.mjs explicitly.
+ * Bare \`node --test test/\` is hard-broken on Windows Node (Foreman isBadNodeTestDirectoryCommand).
+ * Usage (plan test-command): node scripts/run-all-tests.mjs
+ * Sleep 0076 package 4 / Crucible Stage-2 default emit.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const testDir = path.join(root, 'test');
+let files = [];
+try {
+  files = fs
+    .readdirSync(testDir)
+    .filter((f) => f.endsWith('.test.mjs') || f.endsWith('.test.js'))
+    .sort()
+    .map((f) => path.join('test', f));
+} catch {
+  console.error('run-all-tests: test/ directory missing or unreadable');
+  process.exit(2);
+}
+
+if (!files.length) {
+  console.error('run-all-tests: no test/*.test.mjs files found');
+  process.exit(2);
+}
+
+const r = spawnSync(process.execPath, ['--test', ...files], {
+  cwd: root,
+  stdio: 'inherit',
+  windowsHide: true,
+  shell: false,
+});
+process.exit(typeof r.status === 'number' ? r.status : 1);
+`;
 
 /**
  * Render the implementation plan markdown. The structure is what makes the
@@ -348,6 +393,14 @@ export function writeDocTrio({
   fs.writeFileSync(files.plan, plan);
   fs.writeFileSync(files.execution_log, executionLog);
 
+  // Sleep 0076 package 4: always emit Windows-safe expanding gate helper so
+  // DEFAULT_TEST_COMMAND (`node scripts/run-all-tests.mjs`) is runnable at handoff
+  // without a manual scaffold. Idempotent overwrite with the canonical body.
+  const scriptsDir = path.join(dir, 'scripts');
+  fs.mkdirSync(scriptsDir, { recursive: true });
+  const runAllPath = path.join(scriptsDir, 'run-all-tests.mjs');
+  fs.writeFileSync(runAllPath, RUN_ALL_TESTS_SCRIPT, 'utf8');
+
   // Handoff triage emit (Wave 3) — Foreman reads triage_track as a string depth band.
   let emit = handoffTriage && typeof handoffTriage === 'object' && handoffTriage.triage_track
     ? handoffTriage
@@ -389,8 +442,14 @@ export function writeDocTrio({
   };
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
 
-  log(`stage2 emit: doc-trio + foreman.config.json → ${dir} (triage_track=${emit.triage_track})`);
-  return { dir, files, configPath, fileNames, handoffTriage: emit };
+  log(`stage2 emit: doc-trio + foreman.config.json + scripts/run-all-tests.mjs → ${dir} (triage_track=${emit.triage_track})`);
+  return {
+    dir,
+    files: { ...files, run_all_tests: runAllPath },
+    configPath,
+    fileNames,
+    handoffTriage: emit,
+  };
 }
 
 // ---------------------------------------------------------------------------

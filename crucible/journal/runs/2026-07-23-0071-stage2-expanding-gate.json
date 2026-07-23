@@ -1,0 +1,18 @@
+{
+  "skill": "crucible",
+  "tier": "standard",
+  "started": "2026-07-23T20:00:00.000Z",
+  "ended": "2026-07-23T20:45:00.000Z",
+  "input": "Foreman sleep 0076 package 4 Stage-2 emit",
+  "params": {
+    "default_test_command": "node scripts/run-all-tests.mjs",
+    "emit_helper": true
+  },
+  "output": "journal/0071-stage2-windows-expanding-gate-emit.md",
+  "result": "fixed: DEFAULT_TEST_COMMAND + writeDocTrio scripts/run-all-tests.mjs",
+  "tests": {
+    "stage2": "pass",
+    "gates_wellformed_good_trio": "pass"
+  },
+  "related": ["foreman-0076", "foreman-0081", "F053"]
+}

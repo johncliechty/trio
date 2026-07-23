@@ -1,0 +1,15 @@
+{
+  "id": "0079",
+  "at": "2026-07-23T19:03:21.824Z",
+  "skill": "foreman",
+  "outcome": "friction",
+  "provenance": "genuine-execution",
+  "journals": [
+    "0078",
+    "0076",
+    "0079",
+    "0080"
+  ],
+  "purpose": "lock anti-patterns so Foundry skill improve does not reintroduce thrash",
+  "priority": "P0"
+}

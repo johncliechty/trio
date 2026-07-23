@@ -338,8 +338,9 @@ export function preflightTestCommand(discovered, projectDir = '') {
     throw new HaltError(
       'gate command is known-broken on this host',
       `\`node --test test/\` fails on Windows Node v26 (MODULE_NOT_FOUND / non-recursive). ` +
-        `Declare explicit files, e.g. test-command: node --test test/foo.test.mjs test/bar.test.mjs ` +
-        `(journals foreman 0038, 0039, 0047). Source was: ${source}`,
+        `Prefer test-command: node scripts/run-all-tests.mjs (lists test/*.test.mjs) ` +
+        `or explicit files, e.g. node --test test/foo.test.mjs test/bar.test.mjs ` +
+        `(journals foreman 0038, 0039, 0047, 0076). Source was: ${source}`,
     );
   }
 

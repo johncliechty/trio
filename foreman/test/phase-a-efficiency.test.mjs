@@ -138,7 +138,7 @@ test('clearHaltedCheckpoint: PLAN-AMENDMENT re-enters at execute', () => {
   }
 });
 
-test('clearHaltedCheckpoint: ordinary halt still re-enters at gate', () => {
+test('clearHaltedCheckpoint: ordinary (non-vacuous) halt still re-enters at gate', () => {
   const dir = tmpDir();
   const cpPath = path.join(dir, 'foreman-checkpoint.json');
   try {
@@ -146,9 +146,11 @@ test('clearHaltedCheckpoint: ordinary halt still re-enters at gate', () => {
     cp.status = 'halted';
     cp.current_wave = 2;
     cp.iteration = 1;
-    cp.pending_action = 'vacuous-GREEN HALT: something';
+    // Sleep 0076 package 3: vacuous-GREEN is no longer "ordinary" clear — use a transport halt.
+    cp.pending_action = 'review transport: all reviewers failed';
     writeCheckpointAtomic(cpPath, cp);
     const r = clearHaltedCheckpoint(cpPath);
+    assert.equal(r.cleared, true);
     assert.equal(r.reentry, 'gate');
     const back = readCheckpoint(cpPath);
     assert.equal(back.intra_wave_step, 'gate');

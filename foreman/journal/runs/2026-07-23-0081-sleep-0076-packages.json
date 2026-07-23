@@ -1,0 +1,20 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-23T20:00:00.000Z",
+  "ended": "2026-07-23T20:45:00.000Z",
+  "input": "journal 0076 packages 1-6 + 0078/0079 guardrails",
+  "params": {
+    "packages": [1, 2, 3, 4, 5, 6],
+    "vacuous_green_weakened": false
+  },
+  "output": "journal/0081-sleep-0076-packages-landed.md",
+  "result": "fixed: execute contract, always-inject agent, vacuous clear-halt refuse, ledger/noise hygiene, expanding-gate messaging",
+  "tests": {
+    "sleep_0076": "pass",
+    "project_engine_clear_halt": "pass",
+    "phase_a_ordinary_clear": "pass",
+    "preexisting_unrelated_fails": ["lock-lifecycle-crash-recovery", "gate-preflight dual-root"]
+  },
+  "related": ["0076", "0078", "0079", "0080", "0081", "crucible-0071"]
+}

@@ -115,8 +115,24 @@ export function planResume(checkpointPath, totalWaves) {
     };
   }
   // status === 'running'
+  // F-H sleep fix (0072): a mid-wave crash leaves status=running with
+  // intra_wave_step execute|gate|review. Previously we only returned startWave and
+  // re-ran EXECUTE from scratch — losing a GREEN gate stamp and re-spending the
+  // long execute agent call (observed: B7 W4 died post-gate then re-executed forever).
   const startWave = cp.last_verdict === 'GO' ? cp.current_wave + 1 : cp.current_wave;
-  return { startWave, alreadyDone: startWave > totalWaves, cp };
+  if (cp.last_verdict === 'GO') {
+    return { startWave, alreadyDone: startWave > totalWaves, cp };
+  }
+  return {
+    startWave,
+    alreadyDone: startWave > totalWaves,
+    cp,
+    resumeWave: startWave,
+    resumeFrom: {
+      iteration: Number.isInteger(cp.iteration) ? cp.iteration : 0,
+      intraStep: cp.intra_wave_step || 'execute',
+    },
+  };
 }
 
 /**
@@ -140,28 +156,60 @@ export function planResume(checkpointPath, totalWaves) {
  * @param {{log?:(s:string)=>void}} [o]
  * @returns {{cleared:boolean, status:string, wave?:number, clearedHalt?:?string}}
  */
-export function clearHaltedCheckpoint(checkpointPath, { log = () => {} } = {}) {
+/**
+ * @param {string} checkpointPath
+ * @param {{log?:(s:string)=>void, force?:boolean}} [o]
+ *   force: allow clear-halt on vacuous-GREEN without code-hypothesis (ops escape hatch)
+ */
+export function clearHaltedCheckpoint(checkpointPath, { log = () => {}, force = false } = {}) {
   const cp = readCheckpoint(checkpointPath); // HaltError on torn/invalid — never guess
   if (cp.status !== 'halted') {
     log(`clear-halt: checkpoint status is '${cp.status}' — nothing to clear`);
     return { cleared: false, status: cp.status };
   }
   const clearedHalt = cp.pending_action ?? null;
+  // Sleep 0076 package 3 / 0079: vacuous-GREEN clear-halt without new source is thrash.
+  const isVacuous = typeof clearedHalt === 'string' && /vacuous-GREEN/i.test(clearedHalt);
+  if (isVacuous && !force) {
+    const msg =
+      `clear-halt REFUSED for vacuous-GREEN (journals 0076/0078/0079): re-clearing alone ` +
+      `re-enters empty execute. Land import-tested source for wave ${cp.current_wave} ` +
+      `(or a source-only wave-${cp.current_wave}-proven.json), then --resume — or pass force:true / --force.`;
+    log(`clear-halt: ${msg}`);
+    // Stay halted; stamp guidance without clearing status
+    cp.pending_action = msg + (clearedHalt ? ` — was: ${clearedHalt}` : '');
+    writeCheckpointAtomic(checkpointPath, cp);
+    return {
+      cleared: false,
+      status: 'halted',
+      wave: cp.current_wave,
+      clearedHalt,
+      refused: true,
+      reason: 'vacuous-GREEN',
+      reentry: null,
+    };
+  }
   cp.status = 'budget_stopped';
   // Phase A (2026-07-22): PLAN-AMENDMENT clear-halt re-enters at EXECUTE (iteration 0)
   // so the wave does not gate-only on already-applied code and false-vacuous-GREEN
   // (journals 0040, 0045). Other halts still re-enter at the gate and re-prove GREEN.
+  // Vacuous with force re-enters EXECUTE so a newly landed delta is applied.
   const isPlanAmendment = typeof clearedHalt === 'string' &&
     /PLAN-AMENDMENT/i.test(clearedHalt);
-  if (isPlanAmendment) {
+  const reenterExecute = isPlanAmendment || (isVacuous && force);
+  if (reenterExecute) {
     cp.intra_wave_step = 'execute';
     cp.iteration = 0;
     cp.pending_action =
-      `halt cleared by human (--clear-halt) after PLAN-AMENDMENT — re-enter EXECUTE ` +
-      `(iteration reset); gate still re-proves GREEN before GO` +
-      (clearedHalt ? ` — was: ${clearedHalt}` : '');
-    log(`clear-halt: wave ${cp.current_wave} PLAN-AMENDMENT halt cleared -> budget_stopped @ execute ` +
-      `(iteration 0); resume will re-run EXECUTE then re-prove GREEN`);
+      isPlanAmendment
+        ? (`halt cleared by human (--clear-halt) after PLAN-AMENDMENT — re-enter EXECUTE ` +
+          `(iteration reset); gate still re-proves GREEN before GO` +
+          (clearedHalt ? ` — was: ${clearedHalt}` : ''))
+        : (`halt cleared by human (--clear-halt --force) after vacuous-GREEN — re-enter EXECUTE ` +
+          `(iteration reset); you MUST have landed import-tested source first` +
+          (clearedHalt ? ` — was: ${clearedHalt}` : ''));
+    log(`clear-halt: wave ${cp.current_wave} ${isPlanAmendment ? 'PLAN-AMENDMENT' : 'vacuous(force)'} ` +
+      `halt cleared -> budget_stopped @ execute (iteration 0); resume will re-run EXECUTE then re-prove GREEN`);
   } else {
     cp.intra_wave_step = 'gate';
     cp.pending_action = `halt cleared by human (--clear-halt)${clearedHalt ? ` — was: ${clearedHalt}` : ''}`;
@@ -174,7 +222,7 @@ export function clearHaltedCheckpoint(checkpointPath, { log = () => {} } = {}) {
     status: cp.status,
     wave: cp.current_wave,
     clearedHalt,
-    reentry: isPlanAmendment ? 'execute' : 'gate',
+    reentry: reenterExecute ? 'execute' : 'gate',
   };
 }
 
@@ -322,8 +370,8 @@ export async function runProject(o) {
     // default) is a fine placeholder for this transient in-progress marker.
     if (gitCtx) { const h = gitCtx.headSha(); if (h) cp.last_commit = h; }
     cp.pending_action =
-      `wave ${k}/${totalWaves} in progress (execute) — if interrupted, re-invoke with --resume to ` +
-      `re-enter at the gate (re-proves a real GREEN before any GO)`;
+      `wave ${k}/${totalWaves} in progress (execute) — if interrupted, re-invoke with --resume; ` +
+      `intra-wave seed re-enters at gate/review when stamped (always re-proves GREEN before GO)`;
     writeCheckpointAtomic(checkpointPath, cp);
     return cp;
   }

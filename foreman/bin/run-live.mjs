@@ -19,13 +19,10 @@ import { spawn } from 'node:child_process';
 import { classifyExit, makeTelemetryRecord } from './transport.mjs';
 import { spawnGuarded, makeChildRegistry, acquireLock } from './proc-guard.mjs';
 import { resolveClaudeModel } from '../../drivers/claude.mjs';
+import { installProcessLifetimeGuards } from '../../drivers/process-lifetime.mjs';
 
 const argv = process.argv.slice(2);
 function flag(name, def) { const i = argv.indexOf(name); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def; }
-function trackWantsLean(d) {
-  const t = String(d || '').toUpperCase();
-  return t === 'LITE' || t === 'LIGHT' || t === 'MID' || t === 'STANDARD';
-}
 const PROJECT = path.resolve(argv.find((a) => !a.startsWith('--')) || process.cwd());
 let REVIEWERS = Number(flag('--reviewers', '2'));
 const CAP = Number(flag('--cap', '3'));
@@ -36,6 +33,8 @@ const RESUME = argv.includes('--resume');
 // --clear-halt: human acknowledgment that a HALTED checkpoint's blocker is handled.
 // Idempotent no-op on non-halted checkpoints; resume still re-proves GREEN at the gate.
 const CLEAR_HALT = argv.includes('--clear-halt');
+// Escape hatch for vacuous-GREEN clear-halt refuse (0076 package 3) — still requires --resume.
+const CLEAR_HALT_FORCE = argv.includes('--force') || argv.includes('--clear-halt-force');
 const BRANCH = flag('--branch', null);
 const STATUS_FILE = flag('--status', path.join(PROJECT, '_foreman-status.log'));
 const ALLOWED = flag('--allowed-tools', 'Bash,Edit,Write,Read,Glob,Grep');
@@ -44,11 +43,29 @@ const CALL_TIMEOUT_MIN = flag('--call-timeout-min', '20');
 const CALL_TIMEOUT_MS = Number(CALL_TIMEOUT_MIN) > 0 ? Number(CALL_TIMEOUT_MIN) * 60000 : null;
 const LOCK_FILE = flag('--lock', path.join(PROJECT, '.foreman', 'run.lock'));
 
+// F-H sleep fix (0072): fail-loud guards + heartbeat so mid-wave deaths leave forensics
+// (uncaughtException / unhandledRejection previously could exit with empty stderr).
+const _lifetime = installProcessLifetimeGuards({
+  log: (s) => {
+    try {
+      const line = `[${new Date().toISOString().slice(11, 19)}] ${s}\n`;
+      fs.appendFileSync(STATUS_FILE, line);
+    } catch { /* never crash on logging */ }
+  },
+  crashPath: path.join(PROJECT, '.foreman', 'last-crash.json'),
+  heartbeatPath: path.join(PROJECT, '.foreman', 'heartbeat.json'),
+  label: 'foreman-run-live',
+});
+
 const CLAUDE_ARGS = ['-p', ' ', '--output-format', 'stream-json', '--verbose',
   '--permission-mode', 'acceptEdits', '--allowedTools', ALLOWED,
   // The orchestrator owns ALL git (commit-on-GO, branch, reconcile). Secondary guard
   // (the prompt is the primary one) using the documented space-form pattern.
   '--disallowedTools', 'Bash(git *)'];
+
+// Phase-1: Foreman inherit-only via @foundry/triage foreman-wire (never re-triage;
+// LITE/LIGHT never map to 0 reviewers). Explicit --reviewers still wins.
+import { inheritReviewerCount } from 'file:///C:/dev/Skill%20Foundry/foundry/triage/foreman-wire.mjs';
 
 // Declarative per-role model routing from the project's foreman.config.json "models"
 // block, e.g. {"models":{"execute":"claude:claude-fable-5","fix":"claude:claude-fable-5",
@@ -59,28 +76,23 @@ const CLAUDE_ARGS = ['-p', ' ', '--output-format', 'stream-json', '--verbose',
 try {
   const cfg = JSON.parse(fs.readFileSync(path.join(PROJECT, 'foreman.config.json'), 'utf8'));
 
-  // cf-slick: inherit process depth from handoff → band profile reviewer default
-  // (never re-triage; never LITE → 0). Explicit --reviewers still wins if set on CLI
-  // before this block... REVIEWERS already set from --reviewers flag above.
-  const depthPin = cfg.triage?.depth || cfg.triage_track || process.env.FOREMAN_DEPTH || '';
-  try {
-    const { resolveBandProfile } = await import(
-      new URL('../../crucible/bin/band-profile.mjs', import.meta.url)
-    );
-    const band = resolveBandProfile(depthPin);
-    // Explicit --reviewers always wins; else inherit band default (LITE→1, never 0).
-    if (!argv.includes('--reviewers')) {
-      REVIEWERS = Math.max(1, Number(band.foremanReviewersDefault) || 1);
+  // Inherit process depth → reviewer fan-out from Stage-0 handoff (triage / triage_track).
+  // Explicit --reviewers always wins; else inheritReviewerCount (LITE→1, FULL→2, never 0).
+  if (!argv.includes('--reviewers')) {
+    const inherited = inheritReviewerCount(cfg, { defaultCount: REVIEWERS });
+    REVIEWERS = Math.max(1, Number(inherited.reviewers) || 1);
+    if (inherited.depth) {
+      process.env.FOREMAN_BAND_DEPTH = inherited.depth;
+      process.env.FOREMAN_BAND_LABEL = inherited.depth;
+      process.env.FOREMAN_TRIAGE_INHERIT = inherited.source || 'inherit';
     }
-    process.env.FOREMAN_BAND_DEPTH = band.depth;
-    process.env.FOREMAN_BAND_LABEL = band.label;
-  } catch {
-    // Fallback if band-profile unavailable
-    const track = String(cfg.triage_track || cfg.triage?.depth || '').toUpperCase();
-    if (track === 'LITE' || track === 'LIGHT') REVIEWERS = 1;
-    else if (track === 'MID' || track === 'STANDARD' || track === 'SPIKE-FIRST' || track === 'SPIKE') {
-      REVIEWERS = Math.max(1, REVIEWERS);
-    } else if (track === 'FULL' || track === 'HEAVY') REVIEWERS = Math.max(2, REVIEWERS);
+  } else {
+    // Still stamp depth for telemetry when CLI overrides reviewer count.
+    const inherited = inheritReviewerCount(cfg, { defaultCount: REVIEWERS });
+    if (inherited.depth) {
+      process.env.FOREMAN_BAND_DEPTH = inherited.depth;
+      process.env.FOREMAN_BAND_LABEL = inherited.depth;
+    }
   }
 
   for (const [role, spec] of Object.entries(cfg.models || {})) {
@@ -355,7 +367,11 @@ if (RESUME && CLEAR_HALT) {
   const cpPath = path.join(PROJECT, 'foreman-checkpoint.json');
   if (fs.existsSync(cpPath)) {
     try {
-      clearHaltedCheckpoint(cpPath, { log: (s) => emit(s) });
+      const r = clearHaltedCheckpoint(cpPath, { log: (s) => emit(s), force: CLEAR_HALT_FORCE });
+      if (r && r.refused) {
+        emit(`!! --clear-halt refused: ${r.reason || 'policy'} — ${r.clearedHalt ? 'see checkpoint pending_action' : ''}`);
+        process.exit(3);
+      }
     } catch (e) {
       emit(`!! --clear-halt failed: ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
       process.exit(3);
@@ -367,7 +383,11 @@ let result, threw = null;
 try {
   result = await runProject({
     projectDir: PROJECT,
-    driver: await makeForemanDriver(process.env.TRIO_DRIVER ? { log: (s) => emit(s) } : { agent }),
+    // Sleep 0076 package 2: ALWAYS inject the instrumented `agent` so agent_calls /
+    // tool lines / phase-timings stay truthful. TRIO_DRIVER_<ROLE> routing still
+    // happens inside `agent()` (run-live). Never drop to {log}-only under TRIO_DRIVER
+    // (that made status tables report agent_calls:0 while claude was live — 0078).
+    driver: await makeForemanDriver({ agent, log: (s) => emit(s) }),
     reviewerCount: REVIEWERS,
     fixIterCap: CAP,
     budgetConfig,

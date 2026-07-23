@@ -95,10 +95,23 @@ function main(argv) {
       return 0;
     }
     case 'clear': {
-      const r = clearHaltedCheckpoint(file, { log: (s) => process.stdout.write(s + '\n') });
+      // Sleep 0076 package 3: vacuous-GREEN clear requires --force (else refused).
+      const force = args.includes('--force') || args.includes('--clear-halt-force');
+      const r = clearHaltedCheckpoint(file, {
+        log: (s) => process.stdout.write(s + '\n'),
+        force,
+      });
+      if (r.refused) {
+        process.stderr.write(
+          `clear-halt REFUSED (${r.reason || 'policy'}): land import-tested source or pass --force\n`,
+        );
+        return 3;
+      }
       if (r.cleared) {
-        process.stdout.write(`cleared: wave ${r.wave} halt -> budget_stopped @ gate` +
-          (r.clearedHalt ? ` (was: ${r.clearedHalt})` : '') + '\n');
+        process.stdout.write(
+          `cleared: wave ${r.wave} halt -> budget_stopped @ ${r.reentry || 'gate'}` +
+            (r.clearedHalt ? ` (was: ${r.clearedHalt})` : '') + '\n',
+        );
       }
       return 0;
     }

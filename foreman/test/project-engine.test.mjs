@@ -297,33 +297,52 @@ test('planResume unit: maps checkpoint state -> start wave', () => {
 // meant hand-editing foreman-checkpoint.json. clearHaltedCheckpoint flips
 // halted -> budget_stopped @ gate; resume then re-proves GREEN (never a backdoor).
 
-test('clearHaltedCheckpoint: halted -> budget_stopped @ gate, iteration preserved, planResume resumes at the wave', () => {
+test('clearHaltedCheckpoint: non-vacuous halt -> budget_stopped @ gate, iteration preserved, planResume resumes at the wave', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-clearhalt-'));
   try {
     const cpPath = path.join(dir, 'foreman-checkpoint.json');
     const base = newCheckpoint({ plan_path: 'p', total_waves: 3 });
     writeCheckpointAtomic(cpPath, {
       ...base, current_wave: 2, iteration: 2, intra_wave_step: 'fix',
-      last_verdict: 'HALT', status: 'halted', pending_action: 'vacuous-GREEN: wave changed no source file',
+      last_verdict: 'HALT', status: 'halted', pending_action: 'review transport: all reviewers failed',
     });
 
     const r = clearHaltedCheckpoint(cpPath);
     assert.equal(r.cleared, true);
     assert.equal(r.wave, 2);
-    assert.match(r.clearedHalt, /vacuous-GREEN/);
+    assert.match(r.clearedHalt, /review transport/);
 
     const cp = readCheckpoint(cpPath);
     assert.equal(cp.status, 'budget_stopped', 'cleared to the ordinary resumable stop state');
     assert.equal(cp.intra_wave_step, 'gate', 'resume re-enters AT THE GATE (re-proves GREEN)');
     assert.equal(cp.iteration, 2, 'remaining fix budget preserved');
     assert.match(cp.pending_action, /halt cleared by human/, 'audit trail records the human clear');
-    assert.match(cp.pending_action, /vacuous-GREEN/, '...and what the halt was');
+    assert.match(cp.pending_action, /review transport/, '...and what the halt was');
 
     // planResume now continues instead of throwing: same wave, intra-wave seed at the gate.
     const plan = _internals.planResume(cpPath, 3);
     assert.equal(plan.startWave, 2, 'resume re-enters the halted wave');
     assert.equal(plan.resumeFrom.intraStep, 'gate');
     assert.equal(plan.resumeFrom.iteration, 2);
+  } finally { cleanup(dir); }
+});
+
+// Sleep 0076 package 3 / 0079: vacuous-GREEN clear-halt without force is thrash.
+test('clearHaltedCheckpoint: vacuous-GREEN refuses without force (stays halted)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-clearhalt-vac-'));
+  try {
+    const cpPath = path.join(dir, 'foreman-checkpoint.json');
+    const base = newCheckpoint({ plan_path: 'p', total_waves: 3 });
+    writeCheckpointAtomic(cpPath, {
+      ...base, current_wave: 2, iteration: 1, intra_wave_step: 'gate',
+      last_verdict: 'HALT', status: 'halted',
+      pending_action: 'vacuous-GREEN HALT: wave reached green without proving a deliverable',
+    });
+    const r = clearHaltedCheckpoint(cpPath);
+    assert.equal(r.cleared, false);
+    assert.equal(r.refused, true);
+    assert.equal(r.status, 'halted');
+    assert.equal(readCheckpoint(cpPath).status, 'halted');
   } finally { cleanup(dir); }
 });
 

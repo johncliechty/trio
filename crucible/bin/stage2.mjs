@@ -222,6 +222,15 @@ export const WAVE_DECOMP_SCHEMA = {
 };
 
 function decomposePrompt({ northStar, criteria, masterPlan }) {
+  // 0075 input budget: truncate huge embeds so Stage-2 does not paste 40k×2.
+  // Prefer the head of each doc (criteria + architecture) over a full dump.
+  const budget = (s, max = 12000) => {
+    const t = String(s || '');
+    if (t.length <= max) return t;
+    return t.slice(0, max) +
+      `\n\n[… truncated for Stage-2 input budget; full length ${t.length} chars — ` +
+      `use the on-disk North-Star / Master Plan files for any detail past this cut …]\n`;
+  };
   return [
     `You are the Crucible STAGE-2 WAVE-DECOMPOSITION step. Decompose the APPROVED Master Plan`,
     `below into an ORDERED, dependency-respecting set of build WAVES for Foreman, applying PM`,
@@ -229,13 +238,13 @@ function decomposePrompt({ northStar, criteria, masterPlan }) {
     `REAL testable source (not docs-only), and must carry acceptance criteria. Do NOT drift`,
     `from the North Star — every wave must serve a North-Star criterion (the inclusion test).`,
     ``,
-    `=== THE NORTH STAR (verbatim) ===`,
-    String(northStar),
+    `=== THE NORTH STAR (verbatim, may be budget-truncated) ===`,
+    budget(northStar, 8000),
     `=== END NORTH STAR ===`,
     criteria.length ? `\n=== SUCCESS CRITERIA ===\n${criteria.map((c, i) => `(${i + 1}) ${c}`).join('\n')}\n=== END CRITERIA ===` : '',
     ``,
-    `=== APPROVED MASTER PLAN (decompose THIS) ===`,
-    String(masterPlan),
+    `=== APPROVED MASTER PLAN (decompose THIS; may be budget-truncated) ===`,
+    budget(masterPlan, 14000),
     `=== END MASTER PLAN ===`,
     ``,
     `Acceptance-criteria convention (D16): EVERY wave gets a one-line done-when; a non-trivial`,
@@ -697,6 +706,8 @@ export async function runStage2({
   if (roundCap === undefined) roundCap = band.roundCap;
   if (depth) log(`stage2: depth=${band.depth} → roundCap=${roundCap} · sharks=${band.sharkRoles}`);
   log(`stage2: band stamp ${JSON.stringify(bandProfileStamp(band))}`);
+  // 0075 LITE honest ETA banner
+  log(`stage2: planning typically 20-60m; if silent >15m check stage2-progress.json / heartbeat / process`);
   if (!northStar) throw new HaltError('runStage2 requires a locked North Star', 'Stage 2 starts from the Stage-0 North-Star lock');
   if (!masterPlan) throw new HaltError('runStage2 requires the approved Master Plan', 'Stage 2 starts from the Stage-1 Master-Plan approval');
   if (!outputDir) throw new HaltError('runStage2 requires an outputDir', 'pass the handoff output directory');

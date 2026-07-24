@@ -20,6 +20,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 /** A recoverable HALT-for-human (§6). CLIs map this to exit code 3. */
 export class HaltError extends Error {
@@ -213,7 +214,81 @@ export function parseWaves(planText) {
   }
 
   // Declared order is validated as a strictly-ascending, contiguous 1..N run.
+  // Per-wave optional gate-command (0082 P1.6): scan body until next wave heading.
+  for (let wi = 0; wi < waves.length; wi++) {
+    const start = waves[wi].line; // 1-based
+    const end = wi + 1 < waves.length ? waves[wi + 1].line : lines.length + 1;
+    for (let li = start; li < end - 1 && li < lines.length; li++) {
+      const body = lines[li];
+      const gm = body.match(/^\s*(?:wave[-_ ]?)?gate[-_ ]?command\s*[:=]\s*(.+)$/i);
+      if (gm) {
+        const cmd = gm[1].replace(/^`+|`+$/g, '').trim();
+        if (cmd) waves[wi].gateCommand = cmd;
+      }
+    }
+  }
   return waves;
+}
+
+/**
+ * Doctor: prove the gate command collects/runs >0 tests before wave 1 (0082 P2.13).
+ * Best-effort; returns { ok, tests, note, command }.
+ */
+export function doctorTestCommand(command, projectDir = process.cwd()) {
+  const cmd = String(command || '').trim();
+  if (!cmd) return { ok: false, tests: 0, note: 'empty test command', command: cmd };
+  let probe = cmd;
+  // pytest: --collect-only is cheap and counts without running bodies.
+  if (/(^|[\s/\\])(python(?:\d(?:\.\d+)?)?\s+-m\s+pytest|pytest|py\.test)(?=\s|$)/i.test(cmd)) {
+    if (!/--collect-only\b/.test(cmd)) probe = `${cmd} --collect-only -q`;
+  }
+  try {
+    // Strip NODE_TEST_CONTEXT so a doctor run nested under `node --test` does
+    // not inherit "skip files" (same false-green class as runGate).
+    const env = { ...process.env };
+    delete env.NODE_TEST_CONTEXT;
+    const r = spawnSync(probe, {
+      cwd: projectDir, shell: true, windowsHide: true, encoding: 'utf8',
+      timeout: 120_000, maxBuffer: 16 * 1024 * 1024,
+      env,
+    });
+    const out = `${r.stdout || ''}\n${r.stderr || ''}`;
+    // pytest: "N tests collected" or node --test pass counts
+    let n = 0;
+    const m1 = out.match(/(\d+)\s+tests?\s+collected/i);
+    const m2 = out.match(/#\s*tests\s+(\d+)/i);
+    const m3 = out.match(/(\d+)\s+passed/i);
+    const m4 = out.match(/#\s*pass\s+(\d+)/i);
+    // node --test summary: "ℹ tests 1" or plain "tests 1" (unicode info glyph varies)
+    const m5 = out.match(/(?:^|\n)\s*(?:ℹ|i)?\s*tests\s+(\d+)/im);
+    const m6 = out.match(/(?:^|\n)\s*(?:ℹ|i)?\s*pass\s+(\d+)/im);
+    if (m1) n = Number(m1[1]);
+    else if (m2) n = Number(m2[1]);
+    else if (m4) n = Number(m4[1]);
+    else if (m5) n = Number(m5[1]);
+    else if (m6 && Number(m6[1]) > 0) n = Number(m6[1]);
+    else if (m3) n = Number(m3[1]);
+    if (n > 0) return { ok: true, tests: n, note: 'collected/ran tests', command: cmd };
+    if (r.status === 0) {
+      // node --test TAP: lines like "ok 1 - name" or "# pass 1"
+      const okLines = (out.match(/^\s*ok\s+\d+/gim) || []).length;
+      if (okLines > 0) return { ok: true, tests: okLines, note: 'TAP ok events observed', command: cmd };
+      if (/#\s*pass\s+[1-9]/i.test(out)) {
+        return { ok: true, tests: 1, note: 'pass summary observed', command: cmd };
+      }
+      // Spec reporter checkmarks
+      const checks = (out.match(/✔/g) || []).length;
+      if (checks > 0) return { ok: true, tests: checks, note: 'spec pass marks observed', command: cmd };
+    }
+    return {
+      ok: false,
+      tests: n,
+      note: `gate collected 0 tests (exit ${r.status}). Fix test-command before wave 1.`,
+      command: cmd,
+    };
+  } catch (e) {
+    return { ok: false, tests: 0, note: `doctor spawn failed: ${e.message}`, command: cmd };
+  }
 }
 
 // ---------------------------------------------------------------------------

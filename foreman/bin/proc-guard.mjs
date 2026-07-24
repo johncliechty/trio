@@ -175,7 +175,12 @@ export function readLock(lockPath) {
  * @param {string} [o.label='']
  * @returns {{lockPath:string, pid:number, release:()=>void}}
  */
-export function acquireLock(lockPath, { pid = process.pid, now = Date.now, label = '' } = {}) {
+export function acquireLock(lockPath, {
+  pid = process.pid,
+  now = Date.now,
+  label = '',
+  onStale = null, // 0082 P2.10: (prevLock) => void when reclaiming a dead-pid lock
+} = {}) {
   const dest = path.resolve(lockPath);
   if (fs.existsSync(dest)) {
     const prev = readLock(dest);
@@ -187,6 +192,11 @@ export function acquireLock(lockPath, { pid = process.pid, now = Date.now, label
       );
     }
     // Stale (dead pid / unreadable / our own) — reclaim by removing it first.
+    if (prev && Number.isInteger(prev.pid) && prev.pid !== pid && !isPidAlive(prev.pid)) {
+      try {
+        if (typeof onStale === 'function') onStale(prev);
+      } catch { /* never block reclaim on forensics */ }
+    }
     fs.rmSync(dest, { force: true });
   }
 

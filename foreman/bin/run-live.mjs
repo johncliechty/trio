@@ -323,9 +323,46 @@ emit(`model routing: ${['execute', 'review', 'fix'].map((r) => {
 // reclaimed. The lock RELEASES on exit (clean OR signalled — registered below),
 // so a mid-wave kill never wedges the next --resume out.
 try { fs.mkdirSync(path.dirname(LOCK_FILE), { recursive: true }); } catch { /* dir may exist */ }
+
+// --doctor: prove gate collects >0 tests then exit (0082 P2.13)
+if (argv.includes('--doctor')) {
+  try {
+    const { resolveContract } = await import(new URL('./project-engine.mjs', import.meta.url));
+    const { doctorTestCommand } = await import(new URL('./foreman-lib.mjs', import.meta.url));
+    const c = resolveContract(PROJECT);
+    const d = doctorTestCommand(c.testCmd.command, PROJECT);
+    emit(`doctor: command=${d.command}`);
+    emit(`doctor: ${d.ok ? 'OK' : 'FAIL'} tests=${d.tests} — ${d.note}`);
+    process.exit(d.ok ? 0 : 3);
+  } catch (e) {
+    emit(`doctor: FAIL — ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
+    process.exit(3);
+  }
+}
+
 let lock;
 try {
-  lock = acquireLock(LOCK_FILE, { label: `run-live ${PROJECT}` });
+  lock = acquireLock(LOCK_FILE, {
+    label: `run-live ${PROJECT}`,
+    onStale: (prev) => {
+      // 0082 P2.10: dead-process honesty — stamp checkpoint if present.
+      emit(`[taxonomy:dead-process] reclaimed stale lock from dead pid ${prev.pid} (started ${prev.started_at ?? '?'})`);
+      try {
+        const cpPath = path.join(PROJECT, 'foreman-checkpoint.json');
+        if (!fs.existsSync(cpPath)) return;
+        const cp = JSON.parse(fs.readFileSync(cpPath, 'utf8'));
+        if (cp && cp.status === 'running') {
+          cp.status = 'halted';
+          cp.pending_action = `dead-process: previous pid ${prev.pid} gone — resume re-proves at gate`;
+          cp.last_verdict = cp.last_verdict || 'HALT';
+          const tmp = `${cpPath}.${process.pid}.tmp`;
+          fs.writeFileSync(tmp, JSON.stringify(cp, null, 2) + '\n', 'utf8');
+          fs.renameSync(tmp, cpPath);
+          emit(`checkpoint: stamped halted (dead-process) — use --resume after inspecting`);
+        }
+      } catch { /* best-effort forensics */ }
+    },
+  });
   emit(`lock: acquired ${LOCK_FILE} (pid ${process.pid})`);
 } catch (e) {
   emit(`!! could not acquire run lock: ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
@@ -356,16 +393,23 @@ function emitStatusTable(tag = '') {
   const remaining = perWave && Number.isInteger(cp?.total_waves) ? Math.max(0, cp.total_waves - doneWaves) : null;
   const eta = perWave && remaining != null ? `~${Math.round((perWave * remaining) / 60000)}m to run end (pace estimate)` : 'estimating (no completed wave yet)';
   const est = calls.reduce((a, c) => a + (c.cost_usd || 0), 0);
+  // Plain ASCII separators (0082 / crucible 0075) — unicode boxes garble on some hosts.
+  const bar = '---------------------------------';
+  const pending = cp?.pending_action || '';
+  const stuckHint = /waiting on agent/i.test(pending) ? pending
+    : (cp?.intra_wave_step && cp.intra_wave_step !== 'done'
+      ? `wave ${cp.current_wave} at ${cp.intra_wave_step}` : '');
   emit([
     `[${hhmm}] Foreman build · ${path.basename(PROJECT)}${tag ? ` · ${tag}` : ''}`,
-    `─────────────────────────────────`,
+    bar,
     `Effort   ${cp ? path.basename(cp.plan_path) : '(resolving contract)'} (${total} waves)`,
-    `Doing    wave ${cp?.current_wave ?? '?'} · ${cp?.intra_wave_step ?? 'starting'} (iter ${cp?.iteration ?? 0})`,
+    `Doing    wave ${cp?.current_wave ?? '?'} · ${cp?.intra_wave_step ?? 'starting'} (iter ${cp?.iteration ?? 0})` +
+      (stuckHint ? ` · ${stuckHint}` : ''),
     `Status   ${doneWaves}/${total} waves · elapsed ${elapsedMin}m`,
-    `Tests    last verdict ${cp?.last_verdict ?? '—'}`,
+    `Tests    last verdict ${cp?.last_verdict ?? '-'}`,
     `Blocker  ${cp?.status === 'halted' ? (cp.pending_action || 'HALTED') : 'none'}`,
     `Procs    agent_calls ${calls.length} · est $${est.toFixed(2)} (subscription equiv)`,
-    `─────────────────────────────────`,
+    bar,
     `ETA      ${eta}`,
     `To do    waves ${Math.min(doneWaves + 1, Number(total) || doneWaves + 1)}..${total}`,
   ].join('\n'));

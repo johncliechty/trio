@@ -41,6 +41,77 @@ import { spawnSync } from 'node:child_process';
 import { HaltError, newCheckpoint, writeCheckpointAtomic, renderDashboard } from './foreman-lib.mjs';
 
 // ---------------------------------------------------------------------------
+// Agent-wait heartbeat (0082 P0.3 / 2026-07-24 thrash cleanup)
+// ---------------------------------------------------------------------------
+
+/**
+ * While a long model call runs, emit `waiting on agent:<label> Nm` every minute
+ * so operators can tell hung vs working (status log / chat cadence).
+ * @template T
+ * @param {(s:string)=>void} log
+ * @param {string} label  e.g. execute | review | fix
+ * @param {() => Promise<T>} fn
+ * @param {number} [intervalMs=60000]
+ * @returns {Promise<T>}
+ */
+export async function withAgentHeartbeat(log, label, fn, intervalMs = 60_000) {
+  const t0 = Date.now();
+  const tick = setInterval(() => {
+    try {
+      const m = Math.max(0, Math.round((Date.now() - t0) / 60000));
+      log(`waiting on agent:${label} ${m}m`);
+    } catch { /* never crash the wave on logging */ }
+  }, intervalMs);
+  if (typeof tick.unref === 'function') tick.unref();
+  try {
+    return await fn();
+  } finally {
+    clearInterval(tick);
+  }
+}
+
+/**
+ * Pre-gate syntax/import smoke on changed source (0082 P3.14).
+ * Returns null if OK, else a short reason. Best-effort; never throws.
+ */
+export function preGateSyntaxSmoke(projectDir, changedFiles = []) {
+  const code = (changedFiles || [])
+    .filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f))
+    .map((f) => String(f).replace(/\\/g, '/'));
+  for (const rel of code.slice(0, 40)) {
+    const abs = path.join(projectDir, rel);
+    if (!fs.existsSync(abs)) continue;
+    if (/\.(mjs|js|cjs)$/i.test(rel)) {
+      const r = spawnSync(process.execPath, ['--check', abs], {
+        encoding: 'utf8', windowsHide: true, timeout: 15_000,
+      });
+      if (r.status !== 0) {
+        return `syntax smoke failed for ${rel}: ${(r.stderr || r.stdout || '').trim().slice(0, 300)}`;
+      }
+    } else if (/\.py$/i.test(rel)) {
+      const r = spawnSync('python', ['-m', 'py_compile', abs], {
+        encoding: 'utf8', windowsHide: true, timeout: 15_000,
+      });
+      if (r.status !== 0) {
+        return `syntax smoke failed for ${rel}: ${(r.stderr || r.stdout || '').trim().slice(0, 300)}`;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Prefer wave-local gate-command when plan declares one (0082 P1.6 wave-scoped).
+ * Falls back to project testCommand.
+ */
+export function resolveWaveGateCommand(wave, projectTestCommand) {
+  if (wave && typeof wave.gateCommand === 'string' && wave.gateCommand.trim()) {
+    return wave.gateCommand.trim();
+  }
+  return projectTestCommand;
+}
+
+// ---------------------------------------------------------------------------
 // File-set helpers (no git: C:\dev is not a repo, so we hash-diff instead of
 // `git diff`). Used for "what did this wave change" + inventory snapshots.
 // ---------------------------------------------------------------------------
@@ -945,19 +1016,25 @@ export async function runWave(o) {
 
   // EXECUTE (single-threaded; model-driven). May be a no-op if the wave's code
   // is already in place; it must never weaken tests.
-  // F-H sleep fix (0072): skip long execute ONLY when resume stamped **review**
-  // after a prior GREEN gate in the same wave. Resume at **gate** (clear-halt /
-  // vacuous-GREEN fix path) must re-run execute so new deliverables + tests land
-  // and the coverage graph can see this wave's sources (else already-green suite
-  // vacuous-GREENs).
+  // F-H sleep fix (0072): skip long execute when resume stamped **review** after
+  // a prior GREEN gate. 0082 P1.9: also skip execute on resume at **gate** when a
+  // source-rich proven ledger already exists for this wave (re-prove at gate only;
+  // no re-spend execute). Vacuous-fix path with NO ledger still runs execute so
+  // new deliverables can land.
   const resumeStep = resumeFrom?.intraStep ? String(resumeFrom.intraStep) : '';
-  const skipExecute = resumeStep === 'review';
+  const priorLedger = readWaveProvenLedger(foremanDir, wave.n);
+  const hasProvenSources = !!(priorLedger && Array.isArray(priorLedger.changed)
+    && priorLedger.changed.some((f) => isProvenDeliverablePath(String(f))));
+  const skipExecute = resumeStep === 'review'
+    || (resumeStep === 'gate' && hasProvenSources);
   let exec = { note: 'done', citation: null };
   if (skipExecute) {
-    steps.push(`▸ execute… skipped (resume at ${resumeStep}; re-prove GREEN at gate)`);
-    log(`execute: skipped — resume at ${resumeStep} (crash-resilience; gate re-proves truth)`);
+    steps.push(`▸ execute… skipped (resume at ${resumeStep}${hasProvenSources ? ' + proven ledger' : ''}; re-prove GREEN at gate)`);
+    log(`execute: skipped — resume at ${resumeStep}` +
+      (hasProvenSources ? ' with proven ledger' : '') +
+      ' (crash-resilience; gate re-proves truth)');
   } else {
-    exec = await driver.execute(ctx);
+    exec = await withAgentHeartbeat(log, 'execute', () => driver.execute(ctx));
     steps.push(`▸ execute… ${exec?.note || 'done'}`);
     log(`execute: ${exec?.note || 'done'}`);
   }
@@ -974,10 +1051,33 @@ export async function runWave(o) {
   let lastChanged = [];   // Phase 3c: the wave's changed files (for the GO commit)
   let lastCitation = exec?.citation || null;
 
+  // Wave-scoped gate when plan declares per-wave gate-command (0082 P1.6).
+  const waveTestCommand = resolveWaveGateCommand(wave, testCommand);
+  if (waveTestCommand !== testCommand) {
+    log(`gate: wave-scoped command for wave ${wave.n}: ${waveTestCommand}`);
+  }
+
   // eslint-disable-next-line no-constant-condition
   while (true) {
+    // §8: measure changed set before gate so syntax smoke can target it.
+    const changedPre = git ? git.changedVsHead() : changedSince(projectDir, foremanDir, hashStart);
+    lastChanged = changedPre;
+
+    // ----- Pre-gate syntax smoke (0082 P3.14) -----
+    const smoke = preGateSyntaxSmoke(projectDir, changedPre);
+    if (smoke) {
+      const reason = `syntax-smoke HALT: ${smoke}`;
+      steps.push(`✗ ${reason}`);
+      return finishHalt({
+        reason,
+        recommend: `fix the syntax/import error, then re-invoke wave ${wave.n} (cheaper than a full RED gate chase)`,
+      });
+    }
+
     // ----- ORCHESTRATOR GATE (ground truth) -----
-    lastGate = runGate({ projectDir, testCommand, foremanDir, wave, iteration });
+    lastGate = runGate({
+      projectDir, testCommand: waveTestCommand, foremanDir, wave, iteration,
+    });
     log(`gate (iter ${iteration}): exit ${lastGate.exit_code} · ` +
       `tests ${lastGate.tap.tests} pass ${lastGate.tap.pass} fail ${lastGate.tap.fail}`);
 
@@ -990,7 +1090,7 @@ export async function runWave(o) {
       const reason = `vacuous-GREEN HALT: ${lastGate.vacuous_reason}`;
       steps.push(`✗ ${reason}`);
       return finishHalt({ reason, recommend:
-        `the gate command (${testCommand}) exited 0 without running real passing tests; ` +
+        `[taxonomy:vacuous] the gate command (${waveTestCommand}) exited 0 without running real passing tests; ` +
         `make the discovered test command actually execute the wave's tests (a real failing→passing run), then re-invoke wave ${wave.n}` });
     }
 
@@ -1082,9 +1182,9 @@ export async function runWave(o) {
       if (effectiveReviewers < reviewerCount) {
         steps.push(`▸ review lean (${effectiveReviewers}/${reviewerCount} — ordinary mid-run wave; full panel on terminal/fix-iter waves)`);
       }
-      const settled = await Promise.allSettled(
+      const settled = await withAgentHeartbeat(log, 'review', () => Promise.allSettled(
         Array.from({ length: effectiveReviewers }, (_, r) =>
-          driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate)));
+          driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate))));
       // T10a: a REJECTED reviewer call is a transport failure, not a plan problem.
       reviews = settled.map((s, r) => s.status === 'fulfilled' ? s.value : {
         reviewer: `reviewer-${r}`, answerable: 'transport-failed', transport_failed: true,
@@ -1097,7 +1197,8 @@ export async function runWave(o) {
       }
       reviews = [];
       for (let r = 0; r < effectiveReviewers; r++) {
-        reviews.push(await driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate));
+        reviews.push(await withAgentHeartbeat(log, `review-${r}`,
+          () => driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate)));
       }
     }
 
@@ -1215,12 +1316,25 @@ export async function runWave(o) {
       }
       // Record proven deliverable for resume/clear-halt credit (Phase A).
       // Filter via writeWaveProvenLedger (never logs — 0078/0079 package 6).
+      // 0082 P0.5: if hash-diff is empty after GO, auto-fill from code reachable
+      // from tests that isProvenDeliverable (import graph) so resume credit works
+      // when parallel-land / skip-execute left no per-invocation diff.
       try {
+        let provenChanged = lastChanged.filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f));
+        if (!provenChanged.some((f) => isProvenDeliverablePath(String(f)))) {
+          const reach = reachableFromTests(projectDir, foremanDir);
+          const auto = [...reach].filter((f) => isProvenDeliverablePath(f));
+          if (auto.length) {
+            provenChanged = auto;
+            log(`proven-ledger: auto-filled ${auto.length} reachable source(s) after GREEN (empty hash-diff)`);
+          }
+        }
         writeWaveProvenLedger(foremanDir, wave.n, {
-          changed: lastChanged.filter((f) => !f.endsWith(' (deleted)') && !isTestFile(f)),
+          changed: provenChanged,
           tests: lastGate.tap?.tests ?? null,
           pass: lastGate.tap?.pass ?? null,
           at: new Date().toISOString(),
+          note: provenChanged === lastChanged ? undefined : 'auto-reachability-fill',
         });
       } catch { /* best-effort */ }
       steps.push(`✓ wave ${wave.n} converged (${iteration} fix iter${iteration === 1 ? '' : 's'}) · ` +
@@ -1257,7 +1371,8 @@ export async function runWave(o) {
 
     // ----- FIX (single-threaded; model-driven) -----
     iteration++;
-    const fix = await driver.fix({ ...ctx, iteration }, lastGate, findings);
+    const fix = await withAgentHeartbeat(log, `fix-${iteration}`,
+      () => driver.fix({ ...ctx, iteration }, lastGate, findings));
     lastCitation = fix?.citation || lastCitation;
     steps.push(`▸ fix iter ${iteration}… ${fix?.note || 'applied'}`);
     log(`fix iter ${iteration}: ${fix?.note || 'applied'}`);

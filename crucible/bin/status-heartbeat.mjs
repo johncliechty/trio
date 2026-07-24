@@ -35,18 +35,20 @@ export function startStatusHeartbeat({ logPath, snapshot, label = 'Crucible plan
       const d = new Date(now());
       const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       const elapsed = Math.round((now() - t0) / 60000);
+      // Plain ASCII only (0075 / 0082) — unicode box-drawing garbles on some hosts.
+      const bar = '---------------------------------';
       const table = [
         `[${hhmm}] ${label}${tag ? ` · ${tag}` : ''}`,
-        '─────────────────────────────────',
+        bar,
         `Effort   ${s.effort ?? label}`,
-        `Doing    ${s.doing ?? '…'}`,
-        `Status   ${s.status ?? '—'} · elapsed ${elapsed}m`,
-        `Tests    ${s.tests ?? '—'}`,
+        `Doing    ${s.doing ?? '...'}`,
+        `Status   ${s.status ?? '-'} · elapsed ${elapsed}m`,
+        `Tests    ${s.tests ?? '-'}`,
         `Blocker  ${s.blocker ?? 'none'}`,
-        `Procs    ${s.procs ?? '—'}`,
-        '─────────────────────────────────',
+        `Procs    ${s.procs ?? '-'}`,
+        bar,
         `ETA      ${s.eta ?? 'estimating'}`,
-        `To do    ${s.todo ?? '—'}`,
+        `To do    ${s.todo ?? '-'}`,
       ].join('\n');
       fs.appendFileSync(logPath, table + '\n');
     } catch { /* never crash a plan on logging */ }

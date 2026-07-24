@@ -122,6 +122,11 @@ function executePrompt(ctx) {
     ...contractBlock,
     `Ship real source that NEW tests import and exercise (or keep/extend tests that import your source).`,
     `A green suite that does not exercise this wave's files is a failed execute — the orchestrator will vacuous-GREEN HALT.`,
+    // 0082 P3.15–16 acceptance checklist
+    `ACCEPTANCE CHECKLIST (must satisfy before you stop):`,
+    `  (1) Every new module is imported by at least one test that will run under the gate command.`,
+    `  (2) No absolute host paths (C:\\Users\\..., /Users/...) in shipped strings, pointers, or docs — use relative paths or env.`,
+    `  (3) Syntax-valid sources only (no half-written files that fail node --check / py_compile).`,
     `Do NOT run any git commands, terminal commands, or tests yourself. The orchestrator`,
     `owns all testing and version control; strictly just edit the source files.`,
     `If the wave is not answerable from the frozen docs, say so explicitly.`,

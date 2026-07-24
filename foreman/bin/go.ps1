@@ -21,7 +21,9 @@ param(
   [int]$Cap = 0,          # 0 => take from foreman.config.json budget, else default 3
   [int]$MaxWaves = 0,     # 0 => take from foreman.config.json budget (unbounded if absent)
   [int]$MaxWallMin = 0,   # 0 => unbounded
-  [switch]$Resume         # continue from the on-disk checkpoint (clears a halt once its blocker is resolved)
+  [switch]$Resume,        # continue from the on-disk checkpoint (clears a halt once its blocker is resolved)
+  [switch]$Doctor,        # 0082: prove test-command collects >0 tests then exit
+  [switch]$Detached       # 0082: launch without inheriting parent stdout pipe (survives session close)
 )
 $ErrorActionPreference = 'Stop'
 
@@ -101,13 +103,34 @@ if ($Resume) {
   $cliArgs += @('--resume', '--clear-halt')
 }
 
+if ($Doctor) {
+  $cliArgs += '--doctor'
+  Write-Host "Foreman doctor -> node $($cliArgs -join ' ')"
+  $argList = @()
+  foreach ($a in $cliArgs) { $argList += $a }
+  $proc = Start-Process -FilePath "node" -ArgumentList $argList -NoNewWindow -Wait -PassThru
+  exit $proc.ExitCode
+}
+
 # cf-slick / journal 0027: do NOT use Start-Process -WindowStyle Hidden (parent can
 # vanish and kill mid-await children). Stay in THIS process tree with Wait.
+# 0082 Detached: still parent-owned for child kill-on-exit, but do NOT attach the
+# parent's console pipe as the ONLY log path -- redirect to files so EPIPE on a
+# closed session console cannot kill emit (engine also try/catchs stdout).
 Write-Host "Foreman (headless, subscription) -> node $($cliArgs -join ' ')"
-Write-Host "lifecycle: parent-owned node (no detached Hidden Start-Process)"
 $argList = @()
 foreach ($a in $cliArgs) { $argList += $a }
-# -NoNewWindow keeps console shared; -Wait keeps Job lifetime with this shell
-$proc = Start-Process -FilePath "node" -ArgumentList $argList -NoNewWindow -RedirectStandardOutput "_foreman-output.log" -RedirectStandardError "_foreman-error.log" -PassThru -Wait
+$outLog = Join-Path $proj '_foreman-output.log'
+$errLog = Join-Path $proj '_foreman-error.log'
+if ($Detached) {
+  Write-Host "lifecycle: detached-ish (redirected logs only; engine EPIPE-safe; status= _foreman-status.log)"
+  $proc = Start-Process -FilePath "node" -ArgumentList $argList -WorkingDirectory $proj `
+    -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
+  Write-Host "started pid=$($proc.Id) — tail $proj\_foreman-status.log"
+  exit 0
+}
+Write-Host "lifecycle: parent-owned node (redirected logs; Wait)"
+$proc = Start-Process -FilePath "node" -ArgumentList $argList -NoNewWindow `
+  -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru -Wait
 $LASTEXITCODE = $proc.ExitCode
 exit $LASTEXITCODE

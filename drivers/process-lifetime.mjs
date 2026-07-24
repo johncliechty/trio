@@ -18,15 +18,19 @@ import path from 'node:path';
  * @param {string} [o.crashPath]  absolute path for last-crash.json
  * @param {string} [o.heartbeatPath]  absolute path for heartbeat.json (optional)
  * @param {string} [o.label='engine']
- * @returns {{ installed: true, beat: Function, note: Function, uninstall: Function }}
+ * @param {(payload:object)=>void} [o.onFatal]  optional hook after last-crash write
+ *   (Crucible Stage-2 uses this to stamp HALT.json — 2026-07-24 wave 3)
+ * @returns {{ installed: true, beat: Function, note: Function, uninstall: Function, fatal: Function }}
  */
 export function installProcessLifetimeGuards({
   log = () => {},
   crashPath = null,
   heartbeatPath = null,
   label = 'engine',
+  onFatal = null,
 } = {}) {
   let uninstalled = false;
+  let exitArmed = false; // true after non-benign fatal schedules process.exit
   const startedAt = new Date().toISOString();
   const pid = process.pid;
 
@@ -85,12 +89,18 @@ export function installProcessLifetimeGuards({
     if (heartbeatPath) {
       writeJsonAtomic(heartbeatPath, { ...payload, dead: true });
     }
+    if (typeof onFatal === 'function') {
+      try { onFatal(payload); } catch { /* never throw from guard */ }
+    }
     // Prefer non-zero exit so supervisors see failure; avoid recursive fatal.
     try {
       uninstalled = true;
+      exitArmed = true;
       process.exitCode = code;
       // Defer exit one tick so log appends flush when possible.
       setImmediate(() => {
+        // uninstall({ disarm: true }) cancels deferred exit for unit tests.
+        if (!exitArmed) return;
         try { process.exit(code); } catch { /* */ }
       });
     } catch { /* */ }
@@ -129,15 +139,26 @@ export function installProcessLifetimeGuards({
   const hb = setInterval(() => beat({ tick: true }), 30_000);
   if (typeof hb.unref === 'function') hb.unref();
 
-  function uninstall() {
-    if (uninstalled) return;
-    uninstalled = true;
-    clearInterval(hb);
-    process.removeListener('uncaughtException', onUncaught);
-    process.removeListener('unhandledRejection', onRejection);
-    process.removeListener('SIGINT', onSigInt);
-    process.removeListener('SIGTERM', onSigTerm);
-    note('guards uninstalled (clean shutdown)');
+  /**
+   * @param {{ disarm?: boolean }} [o]  disarm:true cancels a deferred fatal exit
+   *   and clears process.exitCode (unit tests that invoke fatal() without dying).
+   */
+  function uninstall(o = {}) {
+    const disarm = !!(o && o.disarm);
+    if (disarm) {
+      exitArmed = false;
+      try { process.exitCode = 0; } catch { /* */ }
+    }
+    if (uninstalled && !disarm) return;
+    if (!uninstalled) {
+      uninstalled = true;
+      clearInterval(hb);
+      process.removeListener('uncaughtException', onUncaught);
+      process.removeListener('unhandledRejection', onRejection);
+      process.removeListener('SIGINT', onSigInt);
+      process.removeListener('SIGTERM', onSigTerm);
+      note('guards uninstalled (clean shutdown)');
+    }
   }
 
   // Clean uninstall on normal exit path (does not fire on SIGKILL).

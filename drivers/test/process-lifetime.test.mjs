@@ -78,3 +78,27 @@ test('benign EPIPE/EIO never fatal-exits (stdout closed by parent)', () => {
   // (fatal returns early before setting exitCode for benign IO).
   g.uninstall();
 });
+
+test('onFatal hook fires for non-benign fatal (Crucible HALT.json seam)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pl-'));
+  const crashPath = path.join(dir, 'last-crash.json');
+  const seen = [];
+  const g = installProcessLifetimeGuards({
+    log: () => {},
+    crashPath,
+    label: 'onfatal-unit',
+    onFatal: (p) => seen.push(p),
+  });
+  // fatal schedules process.exit — stub so the unit suite is not killed.
+  const realExit = process.exit;
+  process.exit = () => {};
+  try {
+    g.fatal('uncaughtException', new Error('real boom'), 2);
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].kind, 'uncaughtException');
+    assert.ok(fs.existsSync(crashPath));
+  } finally {
+    g.uninstall({ disarm: true });
+    process.exit = realExit;
+  }
+});

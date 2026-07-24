@@ -46,6 +46,10 @@ import { HaltError, haltForHuman, HALT_GATES } from './crucible-lib.mjs';
 import { runMasterPlanLoop } from './stage1.mjs';
 import { resolveBandProfile, bandProfileStamp } from './band-profile.mjs';
 import { runWellFormednessGate } from './gates.mjs';
+import {
+  installProcessLifetimeGuards,
+  withPhaseProgress,
+} from '../../drivers/process-lifetime.mjs';
 
 // NS-01 Wave 3: handoff emit shape from shared triage (pinned home).
 import {
@@ -55,6 +59,123 @@ import {
   MODEL_TIERS,
   DEPTH_BANDS,
 } from 'file:///C:/dev/Skill%20Foundry/foundry/triage/crucible-wire.mjs';
+
+// ---------------------------------------------------------------------------
+// Stage-2 durability (2026-07-24 wave 3 / journal 0075)
+// Never die silent: progress stamp + HALT.json + human-lockable force-emit.
+// ---------------------------------------------------------------------------
+
+/**
+ * Write HALT.json so operators can tell crash vs long agent call vs human gate.
+ * Best-effort; never throws.
+ *
+ * @param {string} dir  artifacts / .crucible dir
+ * @param {object} o
+ * @returns {object|null} payload written, or null
+ */
+export function writeStage2HaltJson(dir, {
+  reason = 'stage2 halted',
+  lastStep = null,
+  humanLockable = false,
+  artifacts = {},
+  pendingAction = 'stage2-process-death',
+  extra = {},
+} = {}) {
+  if (!dir) return null;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const payload = {
+      skill: 'crucible',
+      stage: 2,
+      reason: String(reason).slice(0, 2000),
+      last_step: lastStep,
+      human_lockable: !!humanLockable,
+      pending_action: pendingAction,
+      artifacts: artifacts && typeof artifacts === 'object' ? artifacts : {},
+      pid: process.pid,
+      ts: new Date().toISOString(),
+      ...extra,
+    };
+    const haltPath = path.join(dir, 'HALT.json');
+    const tmp = `${haltPath}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    fs.renameSync(tmp, haltPath);
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Stamp stage2-progress.json (and optional wave-decomposition.json).
+ * Best-effort; never throws.
+ */
+export function stampStage2Progress(dir, { phase, status = 'running', extra = {} } = {}) {
+  if (!dir || !phase) return;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const payload = {
+      stage: 2,
+      phase,
+      status,
+      ts: new Date().toISOString(),
+      pid: process.pid,
+      ...extra,
+    };
+    const p = path.join(dir, 'stage2-progress.json');
+    const tmp = `${p}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+    fs.renameSync(tmp, p);
+  } catch { /* never crash the plan on progress */ }
+}
+
+/**
+ * First-class force-emit when Stage-2 dies mid-challenge but wave decomp exists.
+ * Writes doc-trio under `<outputDir>/_human-lockable-draft` and stamps HALT.json
+ * with human_lockable:true. Does NOT hand off to Foreman (approval still required).
+ *
+ * @returns {{ draftDir: string, docTrio: object, halt: object|null }|null}
+ */
+export function forceEmitStage2HumanLockable({
+  waves,
+  outputDir,
+  title = 'Crucible-planned project',
+  northStar = '',
+  criteria = [],
+  summary = '',
+  testCommand = DEFAULT_TEST_COMMAND,
+  depth = null,
+  tier = null,
+  triageLock = null,
+  handoffTriage = null,
+  artifactsDir = null,
+  reason = 'Stage-2 force-emit after stall/crash — human-lockable draft (not a handoff)',
+  log = () => {},
+} = {}) {
+  if (!outputDir || !Array.isArray(waves) || !waves.length) return null;
+  const draftDir = path.join(path.resolve(outputDir), '_human-lockable-draft');
+  const plan = renderImplementationPlan({ title, northStar, criteria, waves, testCommand });
+  const description = renderDescriptionDoc({ title, northStar, criteria, summary });
+  const executionLog = renderExecutionLog({ title, waveCount: waves.length });
+  const docTrio = writeDocTrio({
+    outputDir: draftDir, plan, description, executionLog,
+    depth, tier, triageLock, handoffTriage, log,
+  });
+  const stateDir = artifactsDir || path.join(path.resolve(outputDir), '.crucible');
+  const halt = writeStage2HaltJson(stateDir, {
+    reason,
+    lastStep: 'force-emit-human-lockable',
+    humanLockable: true,
+    pendingAction: 'stage2-force-emit-review',
+    artifacts: {
+      draft_dir: docTrio.dir,
+      plan: docTrio.files?.plan || null,
+      config: docTrio.configPath || null,
+    },
+  });
+  log(`stage2 force-emit: human-lockable draft at ${docTrio.dir}`);
+  return { draftDir: docTrio.dir, docTrio, halt };
+}
 
 // ---------------------------------------------------------------------------
 // (1) Wave decomposition — PM heuristics over the approved Master Plan.
@@ -580,70 +701,181 @@ export async function runStage2({
   if (!masterPlan) throw new HaltError('runStage2 requires the approved Master Plan', 'Stage 2 starts from the Stage-1 Master-Plan approval');
   if (!outputDir) throw new HaltError('runStage2 requires an outputDir', 'pass the handoff output directory');
 
-  // (1) Decompose the approved Master Plan into waves (PM heuristics).
-  const waves = await decomposeIntoWaves({ agent, northStar, criteria, masterPlan, log });
+  // Durability root (0075): progress + last-crash + HALT.json live here.
+  const stateDir = path.resolve(artifactsDir || path.join(path.resolve(outputDir), '.crucible'));
+  try { fs.mkdirSync(stateDir, { recursive: true }); } catch { /* */ }
+  const progressPath = path.join(stateDir, 'stage2-progress.json');
+  const live = { lastStep: 'init', waves: null, plan: null };
 
-  // (2) Render the Foreman-ready plan (the loop vets THIS human-readable draft; the
-  //     final emission re-renders from the same structured waves, so well-formedness
-  //     is guaranteed by construction regardless of free-text revision).
-  const plan = renderImplementationPlan({ title, northStar, criteria, waves, testCommand });
-
-  // (3) The Shark-Tank loop to model-side convergence (Stage-1's generic loop).
-  //
-  // T5 (2026-07-11): a round-cap HALT no longer throws the run away. The emission
-  // path re-renders from the STRUCTURED waves (well-formed by construction — the
-  // same property the approved path relies on), so on cap we can honestly emit
-  // the current doc-trio to an UNMISTAKABLY-unapproved draft dir, run the machine
-  // well-formedness gate over it, and HALT with everything attached for the user
-  // to review. The user stays the convergence authority; Foreman is never handed
-  // the draft dir (handoff still requires approval on the real outputDir).
-  let loop;
-  try {
-    loop = await runMasterPlanLoop({
-      agent, northStar, criteria,
-      draft: plan, research, acceptanceCriteria, roundCap, artifactsDir, log,
-      sharkRoles: band.sharkRoles,
-      capPendingAction: 'stage2-round-cap',
-      statusLog, statusLabel: `Crucible Stage 2 (${band.depth})`,
-      routes,
-    });
-  } catch (e) {
-    if (e && e.halt_for_human && e.pending_action === 'stage2-round-cap') {
-      const draftDir = path.join(path.resolve(outputDir), '_unapproved-cap-draft');
+  const guards = installProcessLifetimeGuards({
+    log: (m) => { try { log(m); } catch { /* */ } },
+    crashPath: path.join(stateDir, 'last-crash.json'),
+    heartbeatPath: path.join(stateDir, 'heartbeat.json'),
+    label: 'crucible-stage2',
+    onFatal: (payload) => {
+      // Process death must never be silent (0075): HALT.json + force-emit if decomp exists.
       try {
-        const description = renderDescriptionDoc({ title, northStar, criteria, summary });
-        const executionLog = renderExecutionLog({ title, waveCount: waves.length });
-        const docTrio = writeDocTrio({
-          outputDir: draftDir, plan, description, executionLog,
-          depth, tier, triageLock, handoffTriage, log,
+        writeStage2HaltJson(stateDir, {
+          reason: `process death (${payload?.kind || 'fatal'}): ${String(payload?.message || '').slice(0, 400)}`,
+          lastStep: live.lastStep,
+          humanLockable: Array.isArray(live.waves) && live.waves.length > 0,
+          pendingAction: 'stage2-process-death',
+          artifacts: {
+            last_crash: path.join(stateDir, 'last-crash.json'),
+            progress: progressPath,
+            wave_decomposition: fs.existsSync(path.join(stateDir, 'wave-decomposition.json'))
+              ? path.join(stateDir, 'wave-decomposition.json') : null,
+          },
         });
-        const gate = runWellFormednessGate({ projectDir: docTrio.dir, artifactsDir, log });
-        e.emitted = { docTrio, wellFormedness: { pass: !!gate.pass, status: gate.status ?? null } };
-        e.reason += ` — the full doc-trio is EMITTED for review at ${docTrio.dir} ` +
-          `(well-formedness gate: ${gate.pass ? 'PASS' : 'FAIL'}; this draft dir is NOT the handoff)`;
-        log(`stage2 cap: unapproved doc-trio emitted to ${docTrio.dir} (well-formedness ${gate.pass ? 'PASS' : 'FAIL'})`);
-      } catch (emitErr) {
-        // Emission is best-effort on the HALT path — the HaltError still carries
-        // the best draft; never mask the cap HALT with an emission failure.
-        log(`stage2 cap: could not emit the draft doc-trio (${emitErr.reason || emitErr.message})`);
+        if (Array.isArray(live.waves) && live.waves.length) {
+          forceEmitStage2HumanLockable({
+            waves: live.waves, outputDir, title, northStar, criteria, summary, testCommand,
+            depth, tier, triageLock, handoffTriage, artifactsDir: stateDir, log,
+            reason: 'Stage-2 process death after wave decomp — human-lockable draft emitted',
+          });
+        }
+      } catch { /* never throw from onFatal */ }
+    },
+  });
+
+  try {
+    // (1) Decompose the approved Master Plan into waves (PM heuristics).
+    live.lastStep = 'decompose';
+    stampStage2Progress(stateDir, { phase: 'decompose', status: 'start' });
+    const waves = await withPhaseProgress({
+      phase: 'stage2-decompose',
+      log,
+      progressPath,
+      guards,
+      fn: () => decomposeIntoWaves({ agent, northStar, criteria, masterPlan, log }),
+    });
+    live.waves = waves;
+    try {
+      fs.writeFileSync(
+        path.join(stateDir, 'wave-decomposition.json'),
+        JSON.stringify({ waves, ts: new Date().toISOString() }, null, 2) + '\n',
+        'utf8',
+      );
+    } catch { /* best-effort */ }
+    stampStage2Progress(stateDir, {
+      phase: 'decompose', status: 'done',
+      extra: { wave_count: waves.length },
+    });
+
+    // (2) Render the Foreman-ready plan (the loop vets THIS human-readable draft; the
+    //     final emission re-renders from the same structured waves, so well-formedness
+    //     is guaranteed by construction regardless of free-text revision).
+    live.lastStep = 'render-plan';
+    const plan = renderImplementationPlan({ title, northStar, criteria, waves, testCommand });
+    live.plan = plan;
+
+    // (3) The Shark-Tank loop to model-side convergence (Stage-1's generic loop).
+    //
+    // T5 (2026-07-11): a round-cap HALT no longer throws the run away. The emission
+    // path re-renders from the STRUCTURED waves (well-formed by construction — the
+    // same property the approved path relies on), so on cap we can honestly emit
+    // the current doc-trio to an UNMISTAKABLY-unapproved draft dir, run the machine
+    // well-formedness gate over it, and HALT with everything attached for the user
+    // to review. The user stays the convergence authority; Foreman is never handed
+    // the draft dir (handoff still requires approval on the real outputDir).
+    live.lastStep = 'shark-tank';
+    stampStage2Progress(stateDir, { phase: 'shark-tank', status: 'start' });
+    let loop;
+    try {
+      loop = await withPhaseProgress({
+        phase: 'stage2-shark-tank',
+        log,
+        progressPath,
+        guards,
+        fn: () => runMasterPlanLoop({
+          agent, northStar, criteria,
+          draft: plan, research, acceptanceCriteria, roundCap, artifactsDir: stateDir, log,
+          sharkRoles: band.sharkRoles,
+          capPendingAction: 'stage2-round-cap',
+          statusLog, statusLabel: `Crucible Stage 2 (${band.depth})`,
+          routes,
+        }),
+      });
+    } catch (e) {
+      if (e && e.halt_for_human && e.pending_action === 'stage2-round-cap') {
+        const draftDir = path.join(path.resolve(outputDir), '_unapproved-cap-draft');
+        try {
+          const description = renderDescriptionDoc({ title, northStar, criteria, summary });
+          const executionLog = renderExecutionLog({ title, waveCount: waves.length });
+          const docTrio = writeDocTrio({
+            outputDir: draftDir, plan, description, executionLog,
+            depth, tier, triageLock, handoffTriage, log,
+          });
+          const gate = runWellFormednessGate({ projectDir: docTrio.dir, artifactsDir: stateDir, log });
+          e.emitted = { docTrio, wellFormedness: { pass: !!gate.pass, status: gate.status ?? null } };
+          e.reason += ` — the full doc-trio is EMITTED for review at ${docTrio.dir} ` +
+            `(well-formedness gate: ${gate.pass ? 'PASS' : 'FAIL'}; this draft dir is NOT the handoff)`;
+          log(`stage2 cap: unapproved doc-trio emitted to ${docTrio.dir} (well-formedness ${gate.pass ? 'PASS' : 'FAIL'})`);
+          writeStage2HaltJson(stateDir, {
+            reason: e.reason,
+            lastStep: 'shark-tank-round-cap',
+            humanLockable: true,
+            pendingAction: 'stage2-round-cap',
+            artifacts: { draft_dir: docTrio.dir },
+          });
+        } catch (emitErr) {
+          // Emission is best-effort on the HALT path — the HaltError still carries
+          // the best draft; never mask the cap HALT with an emission failure.
+          log(`stage2 cap: could not emit the draft doc-trio (${emitErr.reason || emitErr.message})`);
+        }
+      }
+      throw e;
+    }
+    stampStage2Progress(stateDir, { phase: 'shark-tank', status: 'done' });
+
+    // (4) The user-approval HALT gate (implementation-plan-approval). HALTs if unapproved.
+    live.lastStep = 'approval';
+    const approval = approveImplementationPlan({ loop, approved, log });
+
+    // (5) Emit the doc-trio + config, then gate the handoff on the well-formedness gate.
+    live.lastStep = 'emit-handoff';
+    stampStage2Progress(stateDir, { phase: 'emit-handoff', status: 'start' });
+    const description = renderDescriptionDoc({ title, northStar, criteria, summary });
+    const executionLog = renderExecutionLog({ title, waveCount: waves.length });
+    const docTrio = writeDocTrio({
+      outputDir, plan, description, executionLog,
+      depth, tier, triageLock, handoffTriage, log,
+    });
+    const handoff = runHandoffGate({ projectDir: docTrio.dir, artifactsDir: stateDir, log });
+    stampStage2Progress(stateDir, { phase: 'emit-handoff', status: 'done' });
+    live.lastStep = 'done';
+
+    return { waves, plan, loop, approval, docTrio, handoff };
+  } catch (e) {
+    // Expected human HALTs (approval, cap, well-formedness) stay HaltErrors — do not
+    // re-label them as process death. Unexpected errors + process-death path leave HALT.json.
+    const expectedHuman = e && e.halt_for_human;
+    if (!expectedHuman) {
+      writeStage2HaltJson(stateDir, {
+        reason: `unexpected Stage-2 failure at ${live.lastStep}: ${e?.message || e}`,
+        lastStep: live.lastStep,
+        humanLockable: Array.isArray(live.waves) && live.waves.length > 0,
+        pendingAction: 'stage2-unexpected-error',
+        artifacts: {
+          progress: progressPath,
+          wave_decomposition: fs.existsSync(path.join(stateDir, 'wave-decomposition.json'))
+            ? path.join(stateDir, 'wave-decomposition.json') : null,
+        },
+      });
+      if (Array.isArray(live.waves) && live.waves.length) {
+        try {
+          forceEmitStage2HumanLockable({
+            waves: live.waves, outputDir, title, northStar, criteria, summary, testCommand,
+            depth, tier, triageLock, handoffTriage, artifactsDir: stateDir, log,
+            reason: `Stage-2 unexpected error at ${live.lastStep} — human-lockable draft emitted`,
+          });
+        } catch { /* best-effort */ }
       }
     }
     throw e;
+  } finally {
+    try { guards.uninstall(); } catch { /* */ }
   }
-
-  // (4) The user-approval HALT gate (implementation-plan-approval). HALTs if unapproved.
-  const approval = approveImplementationPlan({ loop, approved, log });
-
-  // (5) Emit the doc-trio + config, then gate the handoff on the well-formedness gate.
-  const description = renderDescriptionDoc({ title, northStar, criteria, summary });
-  const executionLog = renderExecutionLog({ title, waveCount: waves.length });
-  const docTrio = writeDocTrio({
-    outputDir, plan, description, executionLog,
-    depth, tier, triageLock, handoffTriage, log,
-  });
-  const handoff = runHandoffGate({ projectDir: docTrio.dir, artifactsDir, log });
-
-  return { waves, plan, loop, approval, docTrio, handoff };
 }
 
 // ---------------------------------------------------------------------------

@@ -37,7 +37,11 @@ import {
   approveImplementationPlan,
   runStage2,
   parseWavesFromMarkdown,
+  writeStage2HaltJson,
+  stampStage2Progress,
+  forceEmitStage2HumanLockable,
 } from '../bin/stage2.mjs';
+import { installProcessLifetimeGuards } from '../../drivers/process-lifetime.mjs';
 
 const NORTH_STAR = 'STAGE2-NS-SENTINEL: emit a vetted, Foreman-ready doc-trio that locate-plan accepts.';
 const CRITERIA = ['emits a zero-HALT doc-trio', 'every wave has a done-when'];
@@ -171,6 +175,99 @@ test('writeDocTrio emits the three docs + foreman.config.json + scripts/run-all-
     assert.match(helper, /--test/);
     assert.match(helper, /\.test\.mjs/);
     assert.match(helper, /windowsHide:\s*true/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// --- durability (2026-07-24 wave 3 / journal 0075) --------------------------
+
+test('writeStage2HaltJson + stampStage2Progress leave operator forensics (never silent death)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crucible-s2-halt-'));
+  try {
+    stampStage2Progress(dir, { phase: 'shark-tank', status: 'start' });
+    const halt = writeStage2HaltJson(dir, {
+      reason: 'mid-challenge death',
+      lastStep: 'shark-tank',
+      humanLockable: true,
+      artifacts: { progress: path.join(dir, 'stage2-progress.json') },
+    });
+    assert.ok(halt);
+    assert.equal(halt.stage, 2);
+    assert.equal(halt.last_step, 'shark-tank');
+    assert.equal(halt.human_lockable, true);
+    const onDisk = JSON.parse(fs.readFileSync(path.join(dir, 'HALT.json'), 'utf8'));
+    assert.equal(onDisk.pending_action, 'stage2-process-death');
+    const prog = JSON.parse(fs.readFileSync(path.join(dir, 'stage2-progress.json'), 'utf8'));
+    assert.equal(prog.phase, 'shark-tank');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('forceEmitStage2HumanLockable emits draft trio + HALT human_lockable (not a handoff)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crucible-s2-force-'));
+  try {
+    const waves = normalizeWaves(DEFAULT_DECOMP);
+    const out = forceEmitStage2HumanLockable({
+      waves, outputDir: dir, northStar: NORTH_STAR, criteria: CRITERIA, title: 'force-emit unit',
+    });
+    assert.ok(out);
+    assert.ok(fs.existsSync(out.docTrio.files.plan), 'plan written under draft');
+    assert.match(out.draftDir, /_human-lockable-draft$/);
+    assert.ok(out.halt?.human_lockable);
+    const haltPath = path.join(dir, '.crucible', 'HALT.json');
+    assert.ok(fs.existsSync(haltPath), 'HALT.json under .crucible');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('process-lifetime onFatal can stamp Stage-2 HALT.json (death is not silent)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crucible-s2-onfatal-'));
+  const realExit = process.exit;
+  process.exit = () => {};
+  try {
+    const g = installProcessLifetimeGuards({
+      log: () => {},
+      crashPath: path.join(dir, 'last-crash.json'),
+      label: 'stage2-unit',
+      onFatal: (payload) => {
+        writeStage2HaltJson(dir, {
+          reason: `process death: ${payload.kind}`,
+          lastStep: 'shark-tank',
+          humanLockable: true,
+        });
+      },
+    });
+    g.fatal('uncaughtException', new Error('simulated mid-challenge death'), 2);
+    assert.ok(fs.existsSync(path.join(dir, 'last-crash.json')));
+    assert.ok(fs.existsSync(path.join(dir, 'HALT.json')));
+    const halt = JSON.parse(fs.readFileSync(path.join(dir, 'HALT.json'), 'utf8'));
+    assert.match(halt.reason, /process death/);
+    g.uninstall({ disarm: true });
+  } finally {
+    process.exit = realExit;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runStage2 stamps wave-decomposition + stage2-progress under artifactsDir', async () => {
+  const agent = makeStage2Agent({ blockedUntilRound: 0 }); // dry on first round
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'crucible-s2-prog-'));
+  const art = path.join(dir, 'artifacts');
+  try {
+    await runStage2({
+      agent, northStar: NORTH_STAR, masterPlan: MASTER_PLAN, criteria: CRITERIA,
+      outputDir: dir, artifactsDir: art, acceptanceCriteria: ['every wave has a done-when'],
+      approved: true,
+    });
+    assert.ok(fs.existsSync(path.join(art, 'stage2-progress.json')));
+    assert.ok(fs.existsSync(path.join(art, 'wave-decomposition.json')));
+    const decomp = JSON.parse(fs.readFileSync(path.join(art, 'wave-decomposition.json'), 'utf8'));
+    assert.ok(decomp.waves?.length >= 1);
+    const prog = JSON.parse(fs.readFileSync(path.join(art, 'stage2-progress.json'), 'utf8'));
+    assert.ok(['emit-handoff', 'done', 'shark-tank'].includes(prog.phase) || prog.status === 'done');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

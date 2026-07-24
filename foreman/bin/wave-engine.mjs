@@ -54,19 +54,33 @@ import { HaltError, newCheckpoint, writeCheckpointAtomic, renderDashboard } from
  * @param {number} [intervalMs=60000]
  * @returns {Promise<T>}
  */
-export async function withAgentHeartbeat(log, label, fn, intervalMs = 60_000) {
+export async function withAgentHeartbeat(log, label, fn, intervalMs = 60_000, o = {}) {
   const t0 = Date.now();
+  const waitPath = o.waitPath || null; // optional .foreman/waiting-on.json for status table
+  const stampWait = (m) => {
+    const line = `waiting on agent:${label} ${m}m`;
+    try { log(line); } catch { /* never crash the wave on logging */ }
+    if (waitPath) {
+      try {
+        fs.mkdirSync(path.dirname(waitPath), { recursive: true });
+        fs.writeFileSync(waitPath, JSON.stringify({
+          label, minutes: m, line, ts: new Date().toISOString(),
+        }, null, 2) + '\n', 'utf8');
+      } catch { /* best-effort */ }
+    }
+  };
+  stampWait(0);
   const tick = setInterval(() => {
-    try {
-      const m = Math.max(0, Math.round((Date.now() - t0) / 60000));
-      log(`waiting on agent:${label} ${m}m`);
-    } catch { /* never crash the wave on logging */ }
+    stampWait(Math.max(0, Math.round((Date.now() - t0) / 60000)));
   }, intervalMs);
   if (typeof tick.unref === 'function') tick.unref();
   try {
     return await fn();
   } finally {
     clearInterval(tick);
+    if (waitPath) {
+      try { fs.rmSync(waitPath, { force: true }); } catch { /* */ }
+    }
   }
 }
 
@@ -988,7 +1002,9 @@ export async function runWave(o) {
   const foremanDir = o.foremanDir || path.join(projectDir, '.foreman');
   const checkpointPath = o.checkpointPath || path.join(projectDir, 'foreman-checkpoint.json');
   const log = o.log || (() => {});
+  const waitPath = path.join(foremanDir, 'waiting-on.json');
   const steps = []; // dashboard step lines
+  const agentWait = (label, fn) => withAgentHeartbeat(log, label, fn, 60_000, { waitPath });
 
   // Plan text for execute contract injection (0076 package 1). Best-effort read.
   let planText = '';
@@ -1034,7 +1050,7 @@ export async function runWave(o) {
       (hasProvenSources ? ' with proven ledger' : '') +
       ' (crash-resilience; gate re-proves truth)');
   } else {
-    exec = await withAgentHeartbeat(log, 'execute', () => driver.execute(ctx));
+    exec = await agentWait('execute', () => driver.execute(ctx));
     steps.push(`▸ execute… ${exec?.note || 'done'}`);
     log(`execute: ${exec?.note || 'done'}`);
   }
@@ -1182,7 +1198,7 @@ export async function runWave(o) {
       if (effectiveReviewers < reviewerCount) {
         steps.push(`▸ review lean (${effectiveReviewers}/${reviewerCount} — ordinary mid-run wave; full panel on terminal/fix-iter waves)`);
       }
-      const settled = await withAgentHeartbeat(log, 'review', () => Promise.allSettled(
+      const settled = await agentWait('review', () => Promise.allSettled(
         Array.from({ length: effectiveReviewers }, (_, r) =>
           driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate))));
       // T10a: a REJECTED reviewer call is a transport failure, not a plan problem.
@@ -1197,7 +1213,7 @@ export async function runWave(o) {
       }
       reviews = [];
       for (let r = 0; r < effectiveReviewers; r++) {
-        reviews.push(await withAgentHeartbeat(log, `review-${r}`,
+        reviews.push(await agentWait(`review-${r}`,
           () => driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate)));
       }
     }
@@ -1225,10 +1241,10 @@ export async function runWave(o) {
           );
           reviews = [];
         } else {
-          const reason = `review transport HALT: ALL ${reviews.length} reviewer(s) unreachable/unparseable — nothing verified this wave`;
+          const reason = `[taxonomy:review-transport] HALT: ALL ${reviews.length} reviewer(s) unreachable/unparseable — nothing verified this wave`;
           steps.push(`✗ ${reason}`);
           return finishHalt({ reason, recommend:
-            `check the reviewer backend (agy/claude/grok transport), then re-invoke wave ${wave.n} — this is a transport problem, not a plan problem` });
+            `[taxonomy:review-transport] check the reviewer backend (agy/claude/grok transport), then re-invoke wave ${wave.n} — transport problem, not a plan problem` });
         }
       } else {
         steps.push(`▸ review degraded: ${transportFailed.length} reviewer(s) dropped (transport failure) — proceeding with ${reviews.length - transportFailed.length}`);
@@ -1242,10 +1258,10 @@ export async function runWave(o) {
     // ambiguity), and it is checked FIRST so F3 can never weaken it.
     const ambiguous = reviews.find((rv) => rv && rv.answerable === 'no');
     if (ambiguous) {
-      const reason = `ambiguity HALT: a reviewer could not answer from the frozen docs`;
+      const reason = `[taxonomy:ambiguity] HALT: a reviewer could not answer from the frozen docs`;
       steps.push(`✗ ${reason}`);
       return finishHalt({ reason, recommend: ambiguous.note ||
-        `resolve the ambiguity in the plan and re-invoke wave ${wave.n}` });
+        `[taxonomy:ambiguity] resolve the ambiguity in the plan and re-invoke wave ${wave.n}` });
     }
 
     // ----- §6 PLAN-AMENDMENT-PROPOSAL HALT (F3) -----
@@ -1371,7 +1387,7 @@ export async function runWave(o) {
 
     // ----- FIX (single-threaded; model-driven) -----
     iteration++;
-    const fix = await withAgentHeartbeat(log, `fix-${iteration}`,
+    const fix = await agentWait(`fix-${iteration}`,
       () => driver.fix({ ...ctx, iteration }, lastGate, findings));
     lastCitation = fix?.citation || lastCitation;
     steps.push(`▸ fix iter ${iteration}… ${fix?.note || 'applied'}`);

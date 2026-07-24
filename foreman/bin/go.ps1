@@ -23,8 +23,12 @@ param(
   [int]$MaxWallMin = 0,   # 0 => unbounded
   [switch]$Resume,        # continue from the on-disk checkpoint (clears a halt once its blocker is resolved)
   [switch]$Doctor,        # 0082: prove test-command collects >0 tests then exit
-  [switch]$Detached       # 0082: launch without inheriting parent stdout pipe (survives session close)
+  [switch]$Detached,      # 0082: launch detached (DEFAULT ON) — no Wait; survives session close
+  [switch]$Wait           # Foreground: Wait on node until exit (opt-out of default Detached)
 )
+# Default detached (0082 P0.2): parent pipe thrash killed long runs. -Wait for old sync mode.
+if (-not $Wait -and -not $PSBoundParameters.ContainsKey('Detached')) { $Detached = $true }
+if ($Wait) { $Detached = $false }
 $ErrorActionPreference = 'Stop'
 
 $proj = (Resolve-Path $Project).Path

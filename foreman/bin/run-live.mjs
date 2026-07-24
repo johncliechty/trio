@@ -396,9 +396,15 @@ function emitStatusTable(tag = '') {
   // Plain ASCII separators (0082 / crucible 0075) — unicode boxes garble on some hosts.
   const bar = '---------------------------------';
   const pending = cp?.pending_action || '';
-  const stuckHint = /waiting on agent/i.test(pending) ? pending
-    : (cp?.intra_wave_step && cp.intra_wave_step !== 'done'
-      ? `wave ${cp.current_wave} at ${cp.intra_wave_step}` : '');
+  let waitLine = '';
+  try {
+    const w = JSON.parse(fs.readFileSync(path.join(PROJECT, '.foreman', 'waiting-on.json'), 'utf8'));
+    if (w && w.line) waitLine = w.line;
+  } catch { /* none */ }
+  const stuckHint = waitLine
+    || (/waiting on agent/i.test(pending) ? pending
+      : (cp?.intra_wave_step && cp.intra_wave_step !== 'done'
+        ? `wave ${cp.current_wave} at ${cp.intra_wave_step}` : ''));
   emit([
     `[${hhmm}] Foreman build · ${path.basename(PROJECT)}${tag ? ` · ${tag}` : ''}`,
     bar,

@@ -115,11 +115,19 @@ function executePrompt(ctx) {
         `ORCHESTRATOR GATE (you do NOT run it): ${testCommand}`,
         `WARNING: could not extract ## Wave ${ctx.wave?.n} body from plan text — open the plan file and implement that wave's Deliverables and done-when only.`,
       ];
+  const lite = /^(LITE|LIGHT)$/i.test(String(process.env.FOREMAN_BAND_DEPTH || ''));
+  const liteBudget = lite
+    ? [
+        `LITE BAND BUDGET: stay minimal — implement only this wave's deliverables + the`,
+        `smallest tests that import new modules. No drive-by refactors, no docs fluff.`,
+      ]
+    : [];
   return [
     `You are the EXECUTE agent for Foreman wave ${ctx.wave.n} ("${ctx.wave.title}").`,
     `Project: ${ctx.projectDir}. Implement ONLY this wave's work as specified in the`,
     `frozen plan. Do not refactor outside the plan; do not weaken or delete tests.`,
     ...contractBlock,
+    ...liteBudget,
     `Ship real source that NEW tests import and exercise (or keep/extend tests that import your source).`,
     `A green suite that does not exercise this wave's files is a failed execute — the orchestrator will vacuous-GREEN HALT.`,
     // 0082 P3.15–16 acceptance checklist

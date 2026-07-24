@@ -638,7 +638,7 @@ test('T10a: a GENUINE answerable:no still halts as ambiguity (the §4.7 gate is 
       planPath: 'PLAN.md', driver, reviewerCount: 2, fixIterCap: 4,
     });
     assert.equal(r.status, 'HALT');
-    assert.match(r.haltReason, /ambiguity HALT/);
+    assert.match(r.haltReason, /ambiguity/);
   } finally { cleanup(dir); }
 });
 

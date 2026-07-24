@@ -5,7 +5,7 @@
 // `TRIO_DRIVER=gemini-cli`.
 //
 // W0 (2026-07-05) — LIVE agy contract rewrite. This driver now mirrors the PROVEN
-// transport in `C:\dev\Skill Foundry\tools\agy-dispatch.mjs` (validated against agy
+// transport in Skill Foundry tools/agy-dispatch.mjs (validated against agy
 // v1.0.13 on this host):
 //   * Invocation: `agy -p "<STEER + prompt>" --log-file <tmp> --model "<LABEL>"
 //     [--sandbox --add-dir <target>]`. The old `--skip-trust` / `--output-format

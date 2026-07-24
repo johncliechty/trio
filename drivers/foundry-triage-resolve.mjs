@@ -40,8 +40,15 @@ export function resolveFoundryTriagePath(file) {
   push(path.join(TRIO_ROOT, '..', 'Skill Foundry', 'foundry', 'triage', name));
   push(path.join(TRIO_ROOT, '..', 'Skill-Foundry', 'foundry', 'triage', name));
   push(path.join(TRIO_ROOT, 'vendor', 'foundry-triage', name));
-  // Skills-only package may nest triage under skills/../foundry if vendored later
+  // Skills-only / clean-ship package: drivers live next to skills; triage under
+  // bundled-skills/foundry/triage (vendored by vendor_skills.vendor_trio_runtime_support).
+  // When this file is at <bundle>/drivers/foundry-triage-resolve.mjs:
+  push(path.join(HERE, '..', 'foundry', 'triage', name));
   push(path.join(TRIO_ROOT, 'foundry', 'triage', name));
+  // When engines run from skills/foreman/bin with cwd package root:
+  push(path.join(process.cwd(), 'vendor', 'bundled-skills', 'foundry', 'triage', name));
+  push(path.join(process.cwd(), 'skills', 'foundry', 'triage', name));
+  push(path.join(process.cwd(), 'foundry', 'triage', name));
 
   for (const c of candidates) {
     try {

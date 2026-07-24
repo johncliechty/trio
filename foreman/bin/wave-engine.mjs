@@ -1104,19 +1104,36 @@ export async function runWave(o) {
     // T10a (2026-07-11): DEGRADE, don't halt, on transport-failed reviewers. A lone
     // reviewer cannot block anyway (≥2-agree), so halting the whole run because ONE
     // reply didn't parse was fail-deadly (observed live: agy exit 1 nearly killed a
-    // green wave). Drop the failed seats loudly; HALT only when the ENTIRE panel
-    // failed (then nothing verified the wave — that is a real stop).
+    // green wave). Drop the failed seats loudly.
+    //
+    // T10a-bis (2026-07-24, canonical onboard): when the ENTIRE panel fails BUT the
+    // orchestrator gate is GREEN, proceed as review:degraded — §5 ground truth is
+    // the gate, not the model envelope. HALT only when ALL transport-failed AND
+    // gate is not GREEN (then nothing verified the wave).
     const transportFailed = reviews.filter((rv) => rv && rv.transport_failed);
     if (transportFailed.length) {
       if (transportFailed.length === reviews.length && reviews.length > 0) {
-        const reason = `review transport HALT: ALL ${reviews.length} reviewer(s) unreachable/unparseable — nothing verified this wave`;
-        steps.push(`✗ ${reason}`);
-        return finishHalt({ reason, recommend:
-          `check the reviewer backend (agy/claude transport), then re-invoke wave ${wave.n} — this is a transport problem, not a plan problem` });
+        if (lastGate && lastGate.green) {
+          steps.push(
+            `▸ review degraded: ALL ${reviews.length} reviewer(s) transport-failed; ` +
+            `gate GREEN — proceeding (review:degraded; orchestrator gate is ground truth §5)`,
+          );
+          log(
+            `review: ALL ${reviews.length} transport-failed but gate GREEN — review:degraded ` +
+            `(${transportFailed.map((rv) => rv.note).filter(Boolean).join(' · ') || 'no notes'})`,
+          );
+          reviews = [];
+        } else {
+          const reason = `review transport HALT: ALL ${reviews.length} reviewer(s) unreachable/unparseable — nothing verified this wave`;
+          steps.push(`✗ ${reason}`);
+          return finishHalt({ reason, recommend:
+            `check the reviewer backend (agy/claude/grok transport), then re-invoke wave ${wave.n} — this is a transport problem, not a plan problem` });
+        }
+      } else {
+        steps.push(`▸ review degraded: ${transportFailed.length} reviewer(s) dropped (transport failure) — proceeding with ${reviews.length - transportFailed.length}`);
+        log(`review: ${transportFailed.length} transport-failed reviewer(s) dropped — ${transportFailed.map((rv) => rv.note).join(' · ')}`);
+        reviews = reviews.filter((rv) => !(rv && rv.transport_failed));
       }
-      steps.push(`▸ review degraded: ${transportFailed.length} reviewer(s) dropped (transport failure) — proceeding with ${reviews.length - transportFailed.length}`);
-      log(`review: ${transportFailed.length} transport-failed reviewer(s) dropped — ${transportFailed.map((rv) => rv.note).join(' · ')}`);
-      reviews = reviews.filter((rv) => !(rv && rv.transport_failed));
     }
 
     // Ambiguity gate (§4.7): any reviewer answering "no" is a HALT. UNCHANGED —

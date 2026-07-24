@@ -610,7 +610,10 @@ test('T10a: ONE transport-failed reviewer is dropped loudly; the wave still GOes
   } finally { cleanup(dir); }
 });
 
-test('T10a: ALL reviewers transport-failed => transport HALT (nothing verified), not an ambiguity HALT', async () => {
+test('T10a-bis: ALL reviewers transport-failed + GREEN gate => GO review:degraded (gate is ground truth)', async () => {
+  // 2026-07-24: 1-seat same-family review JSON thrash was killing GREEN waves.
+  // §5: orchestrator gate dominates; model envelope failure is not a plan problem.
+  // (RED-gate path never reaches this panel — review is skipped when gate is RED.)
   const dir = passingProject();
   try {
     const { driver } = t10Driver(() =>
@@ -619,10 +622,9 @@ test('T10a: ALL reviewers transport-failed => transport HALT (nothing verified),
       projectDir: dir, testCommand: 'node --test', wave: { n: 1, title: 'w', line: 1 }, totalWaves: 1,
       planPath: 'PLAN.md', driver, reviewerCount: 2, fixIterCap: 4,
     });
-    assert.equal(r.status, 'HALT');
-    assert.match(r.haltReason, /review transport HALT/);
-    assert.match(r.haltReason, /nothing verified/);
-    assert.ok(!/ambiguity/.test(r.haltReason), 'a transport problem never masquerades as a plan problem');
+    assert.equal(r.status, 'GO', 'GREEN gate must not die when every reviewer transport-fails');
+    assert.equal(r.verdict, 'GO');
+    assert.ok(!r.haltReason, 'no transport HALT when gate GREEN');
   } finally { cleanup(dir); }
 });
 

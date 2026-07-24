@@ -55,8 +55,21 @@ export function installProcessLifetimeGuards({
     }
   }
 
+  /** Parent closed stdout/stderr — must not kill long-lived engines (F-H residual / 0083). */
+  function isBenignIoError(err) {
+    if (!err) return false;
+    const code = err.code || '';
+    const msg = String(err.message || err);
+    return code === 'EPIPE' || code === 'EIO' || /broken pipe/i.test(msg);
+  }
+
   function fatal(kind, err, code = 2) {
     if (uninstalled) return;
+    // Logging / pipe errors are never fatal: status file + heartbeat still work.
+    if (isBenignIoError(err)) {
+      note(`benign ${kind} ignored: ${err.code || err.message || err}`);
+      return;
+    }
     const message = err?.stack || err?.message || String(err);
     const payload = {
       label,

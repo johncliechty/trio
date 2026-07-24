@@ -116,6 +116,17 @@ try {
   applyFamilyPrefsToEnv(process.env);
 } catch { /* registry optional at this load point — env-only */ }
 
+// Once: never let a broken parent pipe kill the engine (canonical onboard 2026-07-24
+// last-crash: uncaughtException EPIPE at emit → process.stdout.write).
+if (process.stdout && !process.stdout.__foremanEpipeHooked) {
+  process.stdout.on('error', () => { /* EPIPE/EIO when parent closed — continue on file log */ });
+  process.stdout.__foremanEpipeHooked = true;
+}
+if (process.stderr && !process.stderr.__foremanEpipeHooked) {
+  process.stderr.on('error', () => { /* same */ });
+  process.stderr.__foremanEpipeHooked = true;
+}
+
 function emit(line) {
   // LOCAL wall-clock (2026-07-11 fix): the log-line prefix used UTC while the
   // Status-table header used local time, so a run read as two clocks 6h apart.
@@ -123,7 +134,9 @@ function emit(line) {
   const d = new Date();
   const stamp = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
   const out = `[${stamp}] ${line}\n`;
-  process.stdout.write(out);
+  // Never throw on log write — durable status file is the source of truth for
+  // operators; stdout is best-effort (parent shell may have closed the pipe).
+  try { process.stdout.write(out); } catch { /* EPIPE etc. — keep going */ }
   try { fs.appendFileSync(STATUS_FILE, out); } catch { /* never crash on logging */ }
 }
 

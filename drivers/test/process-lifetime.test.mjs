@@ -57,3 +57,24 @@ test('withPhaseProgress stamps start/done and rethrows errors', async () => {
   assert.equal(err.status, 'error');
   assert.match(err.error, /boom/);
 });
+
+test('benign EPIPE/EIO never fatal-exits (stdout closed by parent)', () => {
+  // 2026-07-24: live Foreman died mid-status-emit when parent closed the pipe.
+  // isBenignIoError must swallow EPIPE/EIO so file status log keeps working.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pl-'));
+  const crashPath = path.join(dir, 'last-crash.json');
+  const lines = [];
+  const g = installProcessLifetimeGuards({
+    log: (s) => lines.push(s),
+    crashPath,
+    label: 'epipe-unit',
+  });
+  const epipe = Object.assign(new Error('write EPIPE'), { code: 'EPIPE' });
+  g.fatal('uncaughtException', epipe, 2);
+  assert.ok(!fs.existsSync(crashPath), 'EPIPE must not write last-crash.json');
+  assert.ok(lines.some((l) => /benign.*EPIPE|benign uncaughtException/i.test(l)),
+    `expected benign-ignore log, got: ${lines.join(' | ')}`);
+  // Must not have scheduled process.exit via exitCode from this path
+  // (fatal returns early before setting exitCode for benign IO).
+  g.uninstall();
+});

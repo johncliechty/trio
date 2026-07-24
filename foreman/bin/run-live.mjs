@@ -65,7 +65,9 @@ const CLAUDE_ARGS = ['-p', ' ', '--output-format', 'stream-json', '--verbose',
 
 // Phase-1: Foreman inherit-only via @foundry/triage foreman-wire (never re-triage;
 // LITE/LIGHT never map to 0 reviewers). Explicit --reviewers still wins.
-import { inheritReviewerCount } from 'file:///C:/dev/Skill%20Foundry/foundry/triage/foreman-wire.mjs';
+// Resolve without hardcoding host paths (collaborator / package ship).
+import { importFoundryTriage } from '../../drivers/foundry-triage-resolve.mjs';
+const { inheritReviewerCount } = await importFoundryTriage('foreman-wire.mjs');
 
 // Declarative per-role model routing from the project's foreman.config.json "models"
 // block, e.g. {"models":{"execute":"claude:claude-fable-5","fix":"claude:claude-fable-5",

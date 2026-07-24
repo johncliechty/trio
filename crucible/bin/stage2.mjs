@@ -51,14 +51,15 @@ import {
   withPhaseProgress,
 } from '../../drivers/process-lifetime.mjs';
 
-// NS-01 Wave 3: handoff emit shape from shared triage (pinned home).
-import {
+// NS-01 Wave 3: handoff emit shape from shared triage — resolve without host paths.
+import { importFoundryTriage } from '../../drivers/foundry-triage-resolve.mjs';
+const {
   buildHandoffTriageEmit,
   createLockRecord,
   legacyBandToDepth,
   MODEL_TIERS,
   DEPTH_BANDS,
-} from 'file:///C:/dev/Skill%20Foundry/foundry/triage/crucible-wire.mjs';
+} = await importFoundryTriage('crucible-wire.mjs');
 
 // ---------------------------------------------------------------------------
 // Stage-2 durability (2026-07-24 wave 3 / journal 0075)

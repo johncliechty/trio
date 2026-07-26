@@ -1,0 +1,33 @@
+{
+  "id": "2026-07-23T12-51-portfolio-crucible-sleep-index",
+  "skill": "crucible",
+  "program": "2026-07-22-portfolio-world-class",
+  "status": "friction",
+  "outcome": "friction",
+  "provenance": "genuine-execution",
+  "journal_human": "0063-portfolio-sleep-candidates-index-2026-07-23",
+  "sleep_clusters": [
+    {
+      "id": "C-A",
+      "title": "Stage-2 emit [object Object] + well-formedness FAIL",
+      "priority": "P0",
+      "friction": ["F001", "F016", "F019", "F024", "F028", "F031", "F035"],
+      "journals": ["0050", "0054", "0057", "0059", "0062"]
+    },
+    {
+      "id": "C-B",
+      "title": "LITE auto-advance on NOT_CONVERGED / DRY / revise ABSTAIN",
+      "priority": "P0",
+      "friction": ["F002", "F003", "F011", "F012", "F014", "F015", "F017", "F018", "F021", "F022", "F026", "F027", "F030", "F033", "F034"],
+      "journals": ["0055", "0056", "0058", "0060", "0061"]
+    },
+    {
+      "id": "C-C",
+      "title": "Revise agent non-JSON reply",
+      "priority": "P1",
+      "friction": ["F002", "F011", "F014", "F022", "F027", "F033", "F034"]
+    }
+  ],
+  "recorded_at": "2026-07-23T12:51:00Z",
+  "note": "Formal Foundry sleep after portfolio big runs; no mid-run engine freestyle."
+}

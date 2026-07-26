@@ -1,0 +1,24 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-24T15:00:00Z",
+  "ended": "2026-07-24T17:43:31Z",
+  "input": "post-mortem: flaky Foreman/Crucible on canonical skills onboard build",
+  "params": {
+    "depth": "LITE",
+    "waves": 8,
+    "coding_family": "grok",
+    "review_family": "grok"
+  },
+  "output": [
+    "journal/0082-canonical-onboard-build-flakes-and-improvement-backlog.md"
+  ],
+  "result": "friction: EPIPE/silent death/vacuous-GREEN/review-JSON thrash; product DONE via test-backed ops; improvement backlog journaled",
+  "cross_model": false,
+  "models": {
+    "execute": "grok-cli",
+    "review": "grok-cli"
+  },
+  "duration_s": null,
+  "journal_ref": "0082"
+}

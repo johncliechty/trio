@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T16:58:41.719Z",
+  "ended": "2026-07-18T17:02:34.439Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "3",
+    "git": false,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: wave reached green without proving its own deliverable was exercised — the wave changed no source file reachable by an executed test, so an already-green suite proves nothing about",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 233,
+  "journal_ref": null
+}

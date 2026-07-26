@@ -1,0 +1,23 @@
+{
+  "skill": "foreman",
+  "tier": "LITE",
+  "started": "2026-07-22T21:20:55Z",
+  "ended": null,
+  "project": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B3-jumper-bands",
+  "params": {
+    "depth": "LITE",
+    "reviewers": 1,
+    "waves": 6,
+    "execute": "grok-cli",
+    "review": "grok-cli",
+    "cross_model": false,
+    "launch": "pty-launch.py + run-live.mjs"
+  },
+  "result": "in-progress",
+  "journal_refs": [
+    "0064-b3-jumper-handoff-from-unapproved-draft",
+    "0065-portfolio-sleep-candidates-index"
+  ],
+  "cross_model": false,
+  "notes": "Started from recovered unapproved-cap-draft plan; locate-plan GREEN after explicit test files; lock pid 76584; W1/6 execute"
+}

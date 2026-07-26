@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-22T02:18:19.668Z",
+  "ended": "2026-07-22T02:55:03.840Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\literature-review",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\literature-review\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:GO,3:GO,4:GO,5:HALT — PLAN-AMENDMENT-PROPOSAL HALT: the frozen plan is wrong/incomplete for wave 5",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2204,
+  "journal_ref": null
+}

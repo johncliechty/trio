@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-18T22:46:00.988Z",
+  "ended": "2026-07-18T22:53:47.789Z",
+  "input": "C:\\dev\\anchor-doctor-v3-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "4",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\anchor-doctor-v3-build\\_foreman-status.log",
+  "result": "HALT: 1:HALT — test-immutability HALT: fix agent modified test file tests/test_doctor_v3.py",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 467,
+  "journal_ref": null
+}

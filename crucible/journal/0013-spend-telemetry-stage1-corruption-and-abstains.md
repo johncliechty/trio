@@ -1,0 +1,9 @@
+# 0013 — spend-telemetry stage1: revision-loop document corruption + terminal JSON abstains
+
+- **id:** 0013-spend-telemetry-stage1-corruption-and-abstains
+- **skill:** crucible
+- **situation:** Anchor "Honest Spend Telemetry v2" Stage 1, FULL depth, all-Claude Heavy seats (user-directed; agy full-model auth unavailable from a Claude session), 5-round cap.
+- **context:** Rich brainstorm (35 ideas → 29 integrated), 8-phase plan, healthy escalation (dry→challenge→dry→challenge→BLOCKED→fixed→fully-dry).
+- **observation:** Two distinct failures. (1) The markdown-first revise step CORRUPTED the draft: a `$` in a table item's text triggered a splice that embedded the entire older draft mid-sentence; later "clean re-emissions" re-embedded it recursively — BEST-DRAFT.md ended as ~3 interleaved copies with merge markers. The Synthesizer correctly held not-lockable on corruption for two rounds. (2) At round 5 (fully dry, 0 open findings) the fresh-eyes, judge, AND direction replies were all unparseable JSON even after strict reprompts → ABSTAIN → no verdict → cap HALT despite substantive convergence. Driving session recovered by mechanical de-interleave (every line verbatim from the artifact) + user approval as the convergence authority. Also: the user rejected the preview-pane presentation of long approval artifacts ("can't read it in that little window") — full-doc-in-chat-body is the only accepted form; the earlier chat-body invisibility was an artifact of stacking the ask dialog in the same turn as the text.
+- **outcome:** friction — plan approved and strong, but the engine needs (a) a revise-step guard against `$`/sed-style splice corruption + a structural lint (single NS copy, unique phase headings) before accepting a revision, and (b) cap-HALT classification that distinguishes "dry + abstained verdict" from "not converged".
+- **provenance:** genuine-execution

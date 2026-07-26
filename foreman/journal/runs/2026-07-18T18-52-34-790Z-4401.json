@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T18:52:34.790Z",
+  "ended": "2026-07-18T18:58:24.401Z",
+  "input": "C:\\dev\\plans\\2026-07-16-trio-foundry-repair-addendum\\crucible-itemF-out\\_unapproved-cap-draft",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\plans\\2026-07-16-trio-foundry-repair-addendum\\crucible-itemF-out\\_unapproved-cap-draft\\_foreman-status.log",
+  "result": "HALT: 1:HALT — test-immutability HALT: fix agent added test file test/gate.test.mjs",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 350,
+  "journal_ref": null
+}

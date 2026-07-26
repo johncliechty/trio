@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-21T22:45:25.157Z",
+  "ended": "2026-07-21T23:15:42.569Z",
+  "input": "C:\\dev\\skill-foundry-tidyidy-wt\\skills\\tidy-idy",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\skill-foundry-tidyidy-wt\\skills\\tidy-idy\\_foreman-status.log",
+  "result": "HALT: 9:HALT — test-immutability HALT: fix agent modified test file test/apply-reorg.test.mjs",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 1817,
+  "journal_ref": null
+}

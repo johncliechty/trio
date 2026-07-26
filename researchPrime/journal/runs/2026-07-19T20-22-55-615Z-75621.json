@@ -1,0 +1,20 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-07-19T20:22:55.615Z",
+  "ended": "2026-07-19T20:22:55.621Z",
+  "input": "C:\\dev\\Axmra\\ARAMCO Comparison\\_run\\rp-aramco-2026-07-19",
+  "params": {
+    "maxRounds": 4,
+    "live": false,
+    "stakesTier": "high"
+  },
+  "output": "C:\\dev\\Axmra\\ARAMCO Comparison\\_run\\rp-aramco-2026-07-19\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

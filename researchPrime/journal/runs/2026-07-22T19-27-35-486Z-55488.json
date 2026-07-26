@@ -1,0 +1,20 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-07-22T19:27:35.486Z",
+  "ended": "2026-07-22T19:27:35.488Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\Temp\\a-verify-rp-engine-QX3Dgg\\engine-cli-5-LITE",
+  "params": {
+    "maxRounds": 5,
+    "live": false,
+    "stakesTier": "standard"
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\Temp\\a-verify-rp-engine-QX3Dgg\\engine-cli-5-LITE\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

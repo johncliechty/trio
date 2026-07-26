@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-22T22:20:55.621Z",
+  "ended": "2026-07-22T23:17:11.446Z",
+  "input": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B3-jumper-bands",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B3-jumper-bands\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:GO,3:GO,4:GO,5:GO,6:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (scripts/b3-jumper-bands-gate.mjs) — no test reaches it; gate proves nothing about this wave",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 3376,
+  "journal_ref": null
+}

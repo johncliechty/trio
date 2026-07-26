@@ -1,0 +1,13 @@
+---
+id: 0016-tidy-idy-build-wave0-git-pollution-hermeticity
+skill: crucible
+---
+
+- **id:** 0016-tidy-idy-build-wave0-git-pollution-hermeticity
+- **skill:** crucible (Foreman build phase of the tidy-idy GUI effort)
+- **situation:** Foreman headless build of the standalone tidy-idy tool HALTED at Wave 0 (Seam Spike gate): gate RED with 2/66 tests failing, then 3 fix-agent iterations each produced 0 tokens / error-result code 1 (never ran) → non-convergence HALT. John: "harden the flaky tests then continue."
+- **context:** Build in worktree C:\dev\skill-foundry-tidyidy-wt on branch foreman/tidy-idy-gui. Failing tests: spike/seam-harness.test.mjs — (1) hygiene probe asserting a temp folder isGit=false, (2) coupling-inventory drift. execute=Fable-5, review=Gemini 3.1 Pro.
+- **observation:** NOT flaky — my "re-run passes now" was a false read: the failing spike files were in Foreman's non-convergence STASH (stashed to keep the tree clean), so the clean-tree re-run simply didn't include them. Real root cause = HOST GIT POLLUTION: stray `.git` dirs in the ancestry of os.tmpdir() (found C:\Users\john\AppData\Local\Temp\.git AND C:\Users\john\AppData\Local\.git — accidental `git init`s, 0 commits, orphaned loose objects) made EVERY generated temp folder read as "inside a git work tree", so the non-git probe failed. Fix agent's 0-token failures (separate) looked like a transient rate-limit window right after the expensive 66k-token execute call.
+- **outcome:** worked — hardened seam-harness.test.mjs to ceil git discovery at its own spike temp root (`process.env.GIT_CEILING_DIRECTORIES = tmpRoot` in before(), restored in after()); gitignored the runtime _measured-seams.json the agent forgot; gate now 66/66 GREEN, proven hermetic (passed with the real AppData\Local\.git pollution still present). Committed Wave 0 as ONE clean commit and let Foreman's commit-then-crash `adopt-head` reconcile advance to Wave 1 without re-executing (no re-burn, sidesteps the broken fix agent).
+- **provenance:** genuine-execution
+- **lesson:** (1) After a non-convergence HALT, a "passes now" re-run is meaningless if the failing files were stashed — always check `git stash list`. (2) Any spike/temp test that probes git-ness MUST set GIT_CEILING_DIRECTORIES; os.tmpdir() ancestries accumulate stray `.git`s. (3) A single clean commit exactly 1 ahead of the checkpoint's last_commit is the safe hand-off back to Foreman (adopt-head), avoiding manual checkpoint surgery. Latent risk carried forward: the fix-agent 0-token failures may recur on later waves. See [[0014-tidy-idy-gui-stage2-killed-recovered-gate-green]], [[usage-leak-2026-07-14]].

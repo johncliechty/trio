@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-22T04:10:09.547Z",
+  "ended": "2026-07-22T05:59:32.258Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\zombie-hunter",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "10",
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\zombie-hunter\\_foreman-status.log",
+  "result": "DONE: 1:GO,2:GO,3:GO,4:GO,5:GO,6:GO,7:GO,8:GO,9:GO,10:GO",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 6563,
+  "journal_ref": null
+}

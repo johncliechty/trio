@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-21T13:18:54.157Z",
+  "ended": "2026-07-21T13:35:45.242Z",
+  "input": "C:\\dev\\skill-foundry-tidyidy-wt\\skills\\tidy-idy",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\skill-foundry-tidyidy-wt\\skills\\tidy-idy\\_foreman-status.log",
+  "result": "HALT: 1:HALT — non-convergence HALT: hit MAX_ITERS=3 without GO (gate RED (exit 1, fail 2))",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 1011,
+  "journal_ref": null
+}

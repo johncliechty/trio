@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T22:01:32.721Z",
+  "ended": "2026-07-18T22:05:36.833Z",
+  "input": "C:\\dev\\plans\\2026-07-16-trio-foundry-repair-addendum",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\plans\\2026-07-16-trio-foundry-repair-addendum\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (.gitignore) — no test reaches it; gate proves nothing about this wave",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 244,
+  "journal_ref": null
+}

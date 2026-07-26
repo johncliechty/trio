@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T22:06:12.045Z",
+  "ended": "2026-07-18T22:06:12.048Z",
+  "input": "C:\\dev\\plans\\2026-07-16-trio-foundry-repair-addendum",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\plans\\2026-07-16-trio-foundry-repair-addendum\\_foreman-status.log",
+  "result": "THREW: none",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 0,
+  "journal_ref": null
+}

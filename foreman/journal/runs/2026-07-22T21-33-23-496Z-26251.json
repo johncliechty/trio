@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-22T21:33:23.496Z",
+  "ended": "2026-07-22T21:58:46.251Z",
+  "input": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B2-gandalf-bands",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B2-gandalf-bands\\_foreman-status.log",
+  "result": "DONE: 1:GO,2:GO,3:GO,4:GO",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1523,
+  "journal_ref": null
+}

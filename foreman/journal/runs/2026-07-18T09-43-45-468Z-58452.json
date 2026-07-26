@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T09:43:45.468Z",
+  "ended": "2026-07-18T09:49:18.452Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "15",
+    "git": false,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 14:HALT — vacuous-GREEN HALT: wave changed only test files (test/acceptance.test.mjs, test/windows.test.mjs) but the test-only evidence bar did not pass: declared tests 2597 -> 2597, green gate executed 29 — a ",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 333,
+  "journal_ref": null
+}

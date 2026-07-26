@@ -1,0 +1,16 @@
+﻿{
+  "ts": "2026-07-22T06:44:26.5952178-06:00",
+  "skill": "crucible",
+  "effort": "tidy-idy-gui-polish",
+  "stage": "stage1-lite",
+  "outputDir": "C:/dev/plans/2026-07-tidy-idy-gui-polish",
+  "depth": "LITE",
+  "families": {"coding":"grok","review":"grok","cross_model":false},
+  "events": [
+    {"kind":"silent_death","pid":65856,"note":"exited after brainstorm start, empty stderr"},
+    {"kind":"relaunch","pid":74048,"note":"uncaught wrappers; progressed past assumption-map+premortem"},
+    {"kind":"journal_late","note":"first journal written only after user asked"}
+  ],
+  "outcome": "friction",
+  "journal": "0020-tidy-idy-gui-polish-stage1-silent-death-relaunch.md"
+}

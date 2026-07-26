@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T04:46:29.076Z",
+  "ended": "2026-07-18T04:46:29.220Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "14",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "THREW: none",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 0,
+  "journal_ref": null
+}

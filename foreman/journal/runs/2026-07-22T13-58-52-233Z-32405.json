@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-22T13:58:52.233Z",
+  "ended": "2026-07-22T13:58:52.405Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\tidy-idy",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": "7",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\tidy-idy\\_foreman-status.log",
+  "result": "THREW: none",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 0,
+  "journal_ref": null
+}

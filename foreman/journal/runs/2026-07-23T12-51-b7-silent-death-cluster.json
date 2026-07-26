@@ -1,0 +1,64 @@
+{
+  "id": "2026-07-23T12-51-b7-silent-death-cluster",
+  "skill": "foreman",
+  "project": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B7-literature-review-bands",
+  "program": "2026-07-22-portfolio-world-class",
+  "track": "B7-literature-review-bands",
+  "depth": "LITE",
+  "wave": 4,
+  "total_waves": 4,
+  "status": "friction",
+  "outcome": "friction",
+  "provenance": "genuine-execution",
+  "journal_human": "0072-b7-silent-midwave-process-death-cluster",
+  "program_friction": ["F036", "F037", "F038", "F039"],
+  "product_gate": {
+    "command": "node --test --test-name-pattern=B7-C foundry/triage/test/b7-literature-review.test.mjs skills/literature-review/test/b7-c2-lean.test.mjs skills/literature-review/test/b7-c3-floor.test.mjs skills/literature-review/test/b7-c4-compose.test.mjs",
+    "last_orchestrator_result": "19 pass / 0 fail",
+    "wave_4_gate_mtime": "2026-07-23T06:43:56",
+    "project_done": false,
+    "wave_4_proven": false
+  },
+  "deaths": [
+    {
+      "id": "F036",
+      "pid": 18988,
+      "launch": "ConPTY pty-launch",
+      "approx": "2026-07-23T06:10-06:22",
+      "last_status_line": "wave 4/4 banner",
+      "gate": null
+    },
+    {
+      "id": "F037",
+      "pid": 25428,
+      "launch": "ConPTY pty-launch",
+      "approx": "2026-07-23T06:22-06:31",
+      "last_status_line": "gate 19/19 GREEN",
+      "gate": "GREEN"
+    },
+    {
+      "id": "F038",
+      "pid": 37460,
+      "launch": "ConPTY pty-launch",
+      "approx": "2026-07-23T06:31-06:41",
+      "last_status_line": "wave 4/4 banner",
+      "gate": null
+    },
+    {
+      "id": "F039",
+      "pid": 17756,
+      "launch": "direct node + RedirectStandardOutput/Error",
+      "approx": "2026-07-23T06:42-06:51",
+      "last_status_line": "gate 19/19 GREEN @06:43:56",
+      "gate": "GREEN",
+      "stderr_bytes": 0
+    }
+  ],
+  "seats": {
+    "execute": "grok-cli",
+    "review": "grok-cli",
+    "reviewers": 1
+  },
+  "sleep_clusters": ["F-H-silent-midwave-death"],
+  "recorded_at": "2026-07-23T12:51:00Z"
+}

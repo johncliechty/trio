@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T18:39:34.168Z",
+  "ended": "2026-07-18T18:39:36.296Z",
+  "input": "C:\\dev\\plans\\2026-07-16-trio-foundry-repair-addendum\\crucible-itemF-out\\_unapproved-cap-draft",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\plans\\2026-07-16-trio-foundry-repair-addendum\\crucible-itemF-out\\_unapproved-cap-draft\\_foreman-status.log",
+  "result": "THREW: none",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 2,
+  "journal_ref": null
+}

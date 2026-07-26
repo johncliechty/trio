@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-07-18T23:52:55.038Z",
+  "ended": "2026-07-18T23:54:44.514Z",
+  "input": "C:\\dev\\anchor-doctor-v3-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "4",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\anchor-doctor-v3-build\\_foreman-status.log",
+  "result": "HALT: 4:HALT — vacuous-GREEN HALT: wave changed only doc/data artifacts (dist_manifest.txt, planning/anchor-doctor-ui/handoff/EXECUTION-LOG.md, planning/anchor-doctor-ui/handoff/IMPLEMENTATION-PLAN.md) — such files ",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 109,
+  "journal_ref": null
+}

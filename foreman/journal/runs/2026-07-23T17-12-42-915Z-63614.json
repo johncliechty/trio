@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-23T17:12:42.915Z",
+  "ended": "2026-07-23T17:24:23.614Z",
+  "input": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\C-legal-engine",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\C-legal-engine\\_foreman-status.log",
+  "result": "HALT: 4:GO,5:GO,6:GO,7:HALT — PLAN-AMENDMENT-PROPOSAL HALT: the frozen plan is wrong/incomplete for wave 7",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 701,
+  "journal_ref": null
+}

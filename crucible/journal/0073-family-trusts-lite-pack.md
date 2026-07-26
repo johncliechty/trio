@@ -1,0 +1,7 @@
+- id: 0073-family-trusts-lite-pack
+- skill: crucible@2026-07-24
+- situation: User asked Crucible Light plan then lock-and-run pack of 3 PDFs + PPTX for Family Trusts HoldCo/grantor trust education
+- context: C:\dev\Family Trusts\reviews\2026-07-24\crucible-lite-holdco-trust-pack
+- observation: LITE fit; user locked verbally and ordered immediate build. Skipped FULL Shark ceremony per LITE. Delivered W1–W5 without separate Foreman engine (content-only waves). Show-the-artifact NS was presented prior turn; lock confirmed this turn.
+- outcome: worked
+- provenance: genuine-execution

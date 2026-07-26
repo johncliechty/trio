@@ -1,0 +1,11 @@
+﻿{
+  "skill": "crucible",
+  "tier": "LITE",
+  "started": "2026-07-23T02:33:20Z",
+  "ended": "2026-07-23T03:07:02Z",
+  "project": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B7-literature-review-bands",
+  "params": { "depth": "LITE", "cross_model": false },
+  "result": "stage2-wellformed-fail-handoff-with-friction",
+  "journal_refs": ["0060-b7-auto-approve-dry-not-converged", "0061-b7-stage2-after-not-converged", "0062-b7-object-object-wellformed-fail"],
+  "cross_model": false
+}

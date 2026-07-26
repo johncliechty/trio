@@ -1,0 +1,20 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-07-22T19:29:37.116Z",
+  "ended": "2026-07-22T19:29:37.119Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\Temp\\w4-debate-F0RMhh\\full",
+  "params": {
+    "maxRounds": 8,
+    "live": false,
+    "stakesTier": "standard"
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\Temp\\w4-debate-F0RMhh\\full\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

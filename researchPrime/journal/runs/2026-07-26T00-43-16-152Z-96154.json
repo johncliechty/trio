@@ -1,0 +1,20 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-07-26T00:43:16.152Z",
+  "ended": "2026-07-26T00:43:16.154Z",
+  "input": "C:\\dev\\trio\\researchPrime\\researchPrime-out\\governed-test-1785026596132\\deliverable-conformance",
+  "params": {
+    "maxRounds": 3,
+    "live": false,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\trio\\researchPrime\\researchPrime-out\\governed-test-1785026596132\\deliverable-conformance\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

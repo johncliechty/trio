@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-24T17:17:57.828Z",
+  "ended": "2026-07-24T17:22:47.172Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 4:HALT — ambiguity HALT: a reviewer could not answer from the frozen docs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 289,
+  "journal_ref": null
+}

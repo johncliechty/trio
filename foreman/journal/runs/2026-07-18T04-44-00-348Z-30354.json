@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T04:44:00.348Z",
+  "ended": "2026-07-18T04:45:30.354Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 9:HALT — test-immutability HALT: fix agent added test file bundle_staging/test/pinning/fs_shim.mjs",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 90,
+  "journal_ref": null
+}

@@ -1,0 +1,12 @@
+﻿{
+  "skill": "foreman",
+  "tier": "LITE",
+  "started": "2026-07-22T21:20:55Z",
+  "ended": null,
+  "project": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B3-jumper-bands",
+  "params": { "depth": "LITE", "reviewers": 1, "waves": 6, "halt": "vacuous-GREEN W6" },
+  "result": "halt-w6-vacuous-green-fixing",
+  "journal_refs": ["0064-b3-jumper-handoff-from-unapproved-draft", "0066-b3-w6-vacuous-green-sc5-gate"],
+  "cross_model": false,
+  "notes": "W1-5 GO; W6 vacuous-GREEN on SC5 gate script; sc5-gate.test.mjs import exercise; resume clear-halt"
+}

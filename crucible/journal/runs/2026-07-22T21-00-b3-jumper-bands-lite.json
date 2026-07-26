@@ -1,0 +1,23 @@
+{
+  "skill": "crucible",
+  "tier": "LITE",
+  "started": "2026-07-22T20:50:00Z",
+  "ended": "2026-07-22T21:20:00Z",
+  "project": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B3-jumper-bands",
+  "params": {
+    "depth": "LITE",
+    "seats": "grok/grok",
+    "cross_model": false,
+    "launcher": "launch-crucible-lite.mjs"
+  },
+  "result": "stage2-wellformed-fail-handoff-with-friction",
+  "journal_refs": [
+    "0047-b3-auto-approve-dry-not-converged",
+    "0048-b3-object-object-plan-again",
+    "0049-b3-stage2-without-judge-converge",
+    "0050-b3-wellformed-fail-auto-foreman",
+    "0051-portfolio-lite-sleep-cluster-index"
+  ],
+  "cross_model": false,
+  "notes": "Shark DRY both stages; Judge NOT_CONVERGED; revise mixed; well-formedness FAIL; [object Object] root draft; unapproved-cap-draft promoted; Foreman W1/6 started"
+}

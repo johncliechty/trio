@@ -1,0 +1,12 @@
+{
+  "skill": "foreman",
+  "tier": "LITE",
+  "started": "2026-07-23T01:58:27Z",
+  "ended": "2026-07-23T02:32:41Z",
+  "project": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B6-zombie-hunter-bands",
+  "params": { "depth": "LITE", "reviewers": 1, "waves": 4, "cross_model": false },
+  "result": "DONE",
+  "journal_refs": ["0071-b6-zombie-hunter-bands-done"],
+  "cross_model": false,
+  "notes": "W1-4 GO 0-fix; suite 33/33; F030 handoff recovered"
+}

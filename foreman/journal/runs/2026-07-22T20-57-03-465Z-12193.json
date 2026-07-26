@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-22T20:57:03.465Z",
+  "ended": "2026-07-22T21:11:52.193Z",
+  "input": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B-researchprime-bands",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B-researchprime-bands\\_foreman-status.log",
+  "result": "DONE: 4:GO,5:GO",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 889,
+  "journal_ref": null
+}

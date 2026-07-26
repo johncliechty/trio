@@ -1,0 +1,15 @@
+{
+  "skill": "foreman",
+  "tier": "LITE",
+  "started": "2026-07-22T22:56:23Z",
+  "ended": "2026-07-22T23:29:39Z",
+  "project": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\B4-ramanujan-bands",
+  "params": { "depth": "LITE", "reviewers": 1, "waves": 4, "cross_model": false },
+  "result": "DONE",
+  "journal_refs": [
+    "0068-b4-w4-review-json-retry",
+    "0069-b4-ramanujan-bands-done"
+  ],
+  "cross_model": false,
+  "notes": "W1-4 GO; suite 37/37; F024 handoff recovered; F025 review JSON retry then GO"
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-22T14:09:05.695Z",
+  "ended": "2026-07-22T14:44:07.911Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\tidy-idy",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": "7",
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\tidy-idy\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:GO,3:GO,4:GO,5:HALT — test-integrity HALT: skip/xfail markers rose 0 -> 1 and the gate actually skipped 1 test(s) with no plan citation",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2102,
+  "journal_ref": null
+}

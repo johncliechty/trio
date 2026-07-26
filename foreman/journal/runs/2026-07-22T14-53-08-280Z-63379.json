@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-22T14:53:08.280Z",
+  "ended": "2026-07-22T15:04:23.379Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\tidy-idy",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": "7",
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\tidy-idy\\_foreman-status.log",
+  "result": "HALT: 5:HALT — ambiguity HALT: a reviewer could not answer from the frozen docs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 675,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T05:04:14.424Z",
+  "ended": "2026-07-18T06:32:49.622Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "15",
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 9:HALT — test-immutability HALT: fix agent modified test file test/pinning/wave9.test.mjs",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 5315,
+  "journal_ref": null
+}

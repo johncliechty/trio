@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-25T02:27:01.530Z",
+  "ended": "2026-07-25T02:46:37.470Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:HALT — [taxonomy:ambiguity] HALT: a reviewer could not answer from the frozen docs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1176,
+  "journal_ref": null
+}

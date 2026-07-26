@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-24T15:22:25.357Z",
+  "ended": "2026-07-24T15:26:54.509Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: pytest collected/ran no real tests (exit 4; \"no tests ran\") — refusing vacuous GREEN",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 269,
+  "journal_ref": null
+}

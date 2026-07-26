@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-21T20:24:27.872Z",
+  "ended": "2026-07-21T22:44:45.158Z",
+  "input": "C:\\dev\\skill-foundry-tidyidy-wt\\skills\\tidy-idy",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\skill-foundry-tidyidy-wt\\skills\\tidy-idy\\_foreman-status.log",
+  "result": "HALT: 5:GO,6:GO,7:GO,8:GO,9:HALT — PLAN-AMENDMENT-PROPOSAL HALT: the frozen plan is wrong/incomplete for wave 9",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 8417,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-18T01:38:40.397Z",
+  "ended": "2026-07-18T01:42:36.968Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 2:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (.anchor/reaper_receipts.jsonl) — no test reaches it; gate proves nothing about this wave",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 237,
+  "journal_ref": null
+}

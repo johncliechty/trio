@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-22T14:45:42.503Z",
+  "ended": "2026-07-22T14:51:44.834Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\tidy-idy",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": "7",
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\tidy-idy\\_foreman-status.log",
+  "result": "HALT: 5:HALT — vacuous-GREEN HALT: wave reached green without proving its own deliverable was exercised — the wave changed no source file reachable by an executed test, so an already-green suite proves nothing about",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 362,
+  "journal_ref": null
+}

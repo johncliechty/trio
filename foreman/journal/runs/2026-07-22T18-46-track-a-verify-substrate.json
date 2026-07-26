@@ -1,0 +1,25 @@
+{
+  "skill": "foreman",
+  "tier": "LITE",
+  "started": "2026-07-22T18:46:15Z",
+  "project": "C:\\dev\\plans\\2026-07-22-portfolio-world-class\\A-verify-substrate",
+  "params": {
+    "depth": "LITE",
+    "reviewers": 1,
+    "waves": 6
+  },
+  "result": "in-progress-or-halt-chain",
+  "waves": {
+    "1": "GO",
+    "2": "GO-after-plan-amend",
+    "3": "GO",
+    "4": "HALT-plan-amend-then-vacuous-green-on-resume"
+  },
+  "journal_refs": [
+    "0055-track-a-plan-amend-dual-halt-shapes",
+    "0056-track-a-plan-amend-rp-cli-knobs",
+    "0057-track-a-vacuous-green-after-plan-amend-resume",
+    "0058-track-a-execution-log-not-appended"
+  ],
+  "cross_model": false
+}

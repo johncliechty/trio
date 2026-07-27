@@ -168,6 +168,39 @@ data -> directly-read authoritative source -> theory/argument.
 
 ---
 
+## §5b — The DELTA-COVERAGE gate (`bin/delta-coverage-gate.mjs`, journal 0091)
+
+**A wave that adds a SURFACE and ships zero tests is a BLOCKER, not a nit.**
+
+Why this is its own gate: a green suite is not evidence that a wave is covered.
+Foreman built a subsystem GREEN that delivered **8 HTTP routes, 13 functions and
+~670 lines with not one test file mentioning it** — and the existing suite stayed
+green *precisely because* the new code was untested. So "0 tests for 670 new lines"
+and "full coverage" produced the same verdict. Six real defects were found later,
+by reading.
+
+Run `checkDeltaCoverage({changedFiles, testMentions})` per wave:
+
+1. **Delta, not percentage.** The unit is *what this wave added*. A global coverage
+   % is gameable and stays comfortably green while an entire subsystem is bare —
+   which is exactly how this happened. An unrelated test in the same wave does not
+   satisfy the gate.
+2. **Surfaces are:** HTTP routes, handlers, CLI verbs, persistence paths, frontend
+   entry points. Adding one obliges a test that *names* it.
+3. **Honor the repo's own convention.** Where a repo has stub gates
+   (`tests/test_<subsystem>_<wave>.py`), a new subsystem without one is an
+   INCOMPLETE wave — check for the convention rather than assuming a global suite.
+4. **Emit the wire-up assertions by default** for any wave adding routes (static
+   text checks, no server boot — roughly five tests): every route reaches a handler
+   that exists; every handler is reachable; every endpoint the frontend calls is
+   declared; every route carries its expected auth policy; each failure path returns
+   its documented status code and text.
+5. **Failure-path tests assert the USER-VISIBLE TEXT,** not just a non-crash. The
+   recurring defect in this family of work is a *confident wrong answer* — "no
+   projects", "queue 0" — which a happy-path test cannot see.
+6. **No fixed-rate poller against an endpoint that spawns a process** — it ships with
+   visibility gating and failure backoff, or it does not ship.
+
 ## §6 — Halt-for-human conditions (the only things that wake you)
 
 1. Budget / iter / wall-clock cap.
@@ -276,6 +309,10 @@ context: ~38% (best-effort) · elapsed 1h12m · budget 3/8 waves · window OK
   identity). Language-aware gate for Node `--test` and `python -m pytest -v`.
 - `bin/project-engine.mjs` — multi-wave auto-advance (`runProject`): ascending
   truth-gated advance, project-DONE, budget pre-flight, wave/intra-wave/git resume.
+- `bin/delta-coverage-gate.mjs` — §5b: classifies a wave's changed files, flags any
+  SURFACE (route / handler / CLI verb / persistence path / frontend entry) that no
+  test names, and returns a **BLOCKER**. Pure predicates over a file list — no git
+  spawn. `renderDeltaCoverageRequirement()` emits the wave text.
 - `bin/git-hygiene.mjs` — §9 git hygiene: dedicated work branch, commit-only-on-GO,
   dirty-tree HALT, repo-boundary containment, crash reconciliation. Never pushes.
 - `bin/wave-workflow.js` — the production driver seam: `makeAgentDriver({agent})`

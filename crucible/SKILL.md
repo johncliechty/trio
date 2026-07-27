@@ -82,6 +82,38 @@ drifting** from the project's locked objective.
    (a one-line *done-when* + Given/When/Then for non-trivial waves), the Shark-Tank
    loop, then the emitted doc-trio + `foreman.config.json`.
 
+### The hardening law (Stage 2 — MANDATORY; `bin/hardening-gate.mjs`, journal 0080)
+
+**A plan that ASSERTS a property must EMIT a mechanical gate for it.** This is the
+sibling of the mockup-contract law (journal 0079): the plan does not get to *describe*
+a guarantee, it must emit the artifact that makes the guarantee checkable.
+
+It exists because Crucible planned, and Foreman built GREEN, a subsystem whose plan
+asserted *"Strip is append-only; receipts are never lost"* and *"the steward never
+invents; unknown is spoken as unknown"* — and shipped both as prose. The ledger was a
+bare `writeFileSync` read-modify-write, so two concurrent acts silently dropped
+receipts; a swallowed exception rendered a **broken** store as the cheerful *"no
+projects"* with an ambient queue badge of **0** (= "nothing needs you").
+
+At Stage 2, run `checkPropertyGates({plan, waves, addsSurface})`:
+
+1. **Durability claims are STORAGE claims.** "append-only" / "never lost" / "single
+   writer" / "atomic" ⇒ the plan must name atomic write (temp + fsync + rename), a lock
+   or documented serialization, **and a concurrency test**. A module that *validates* a
+   rule does not *provide* it — say which layer provides it.
+2. **Every surface-bearing wave emits a failure-state table**: dependency-missing,
+   dependency-slow-or-killed, dependency-returns-garbage, backing-store-unreadable,
+   empty-but-valid. Each row names the **status code AND the user-visible text**.
+   **"unknown" and "empty" are DIFFERENT rows** — collapsing them is the single most
+   common honesty defect across this codebase.
+3. **Any value crossing a process boundary as a delimited string** needs a delimiter
+   guard in the plan (reject / escape / drop-and-report), not just in review.
+4. **Any client-side poller against an endpoint that spawns a process** must be planned
+   with visibility gating + failure backoff. Fixed-rate polling of a spawning endpoint
+   is a standing BLOCKER.
+5. **Sharks attack the plan for "property asserted, no gate emitted"** as a standard
+   finding class.
+
 **The Shark Tank** is the adversarial review round: 3 independent fresh-context Sharks
 (Skeptic / Contrarian / Analyst), each prompted to refute, each embedding the North
 Star + a rotated PM critique angle. **BLOCKER = ≥2 Sharks agree.** **The Synthesizer**
@@ -111,6 +143,9 @@ user is the final convergence authority**.
   fresh-eyes cold pass + isolation oracle) and the context-free deciding Judge.
 - `bin/gates.mjs` — the well-formedness gate (spawns `locate-plan.mjs`), the
   quality/convergence gate, and the post-lock tiered drift detector.
+- `bin/hardening-gate.mjs` — the **hardening law** (below): detects the properties a
+  plan ASSERTS and fails Stage 2 when the plan does not also emit a mechanical gate
+  for each one. Pure predicates; `renderPropertyGateChecklist()` emits the plan text.
 - `bin/research.mjs` — researchPrime integration (once up-front + cost-guarded per round).
 - `bin/stage0.mjs` / `bin/stage1.mjs` / `bin/stage2.mjs` — the three stage protocols.
 - `bin/band-profile.mjs` — LITE / SPIKE-FIRST / FULL ceremony profiles (cf-slick; depth → real path).

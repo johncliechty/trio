@@ -130,7 +130,7 @@ if ($Detached) {
   Write-Host "lifecycle: detached-ish (redirected logs only; engine EPIPE-safe; status= _foreman-status.log)"
   $proc = Start-Process -FilePath "node" -ArgumentList $argList -WorkingDirectory $proj `
     -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
-  Write-Host "started pid=$($proc.Id) — tail $proj\_foreman-status.log"
+  Write-Host "started pid=$($proc.Id) - tail $proj\_foreman-status.log"
   exit 0
 }
 Write-Host "lifecycle: parent-owned node (redirected logs; Wait)"

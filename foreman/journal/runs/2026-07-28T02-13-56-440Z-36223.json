@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-28T02:13:56.440Z",
+  "ended": "2026-07-28T02:35:36.223Z",
+  "input": "C:\\dev\\Ecgberht\\planning\\steward-tracking-2026-07\\stage2",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\steward-tracking-2026-07\\stage2\\_foreman-status.log",
+  "result": "HALT: 18:HALT — vacuous-GREEN HALT: wave reached green without proving its own deliverable was exercised — the wave changed no source file reachable by an executed test, so an already-green suite proves nothing about",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1300,
+  "journal_ref": null
+}

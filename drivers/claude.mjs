@@ -126,7 +126,8 @@ export function parseClaudeFrames(stdout, { label = '(unlabeled)', cli_status = 
  */
 const TIER_CLAUDE_MODELS = {
   heavy: 'claude-fable-5',
-  standard: 'claude-opus-4-8',
+  // one notch below frontier (2026-07-27): Opus 5 — was claude-opus-4-8 until Opus 5 shipped
+  standard: 'claude-opus-5',
 };
 
 /** The Claude model ONE NOTCH BELOW frontier (the `standard` tier) — the failover target when a

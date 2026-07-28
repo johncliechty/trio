@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-27T23:33:19.449Z",
+  "ended": "2026-07-28T00:11:25.419Z",
+  "input": "C:\\dev\\Ecgberht\\planning\\steward-tracking-2026-07\\stage2",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\steward-tracking-2026-07\\stage2\\_foreman-status.log",
+  "result": "HALT: 13:HALT — non-convergence HALT: hit MAX_ITERS=3 without GO (GREEN gate blocked by 1 verified repro finding(s))",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2286,
+  "journal_ref": null
+}

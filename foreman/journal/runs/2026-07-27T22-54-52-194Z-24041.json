@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-27T22:54:52.194Z",
+  "ended": "2026-07-27T23:00:24.041Z",
+  "input": "C:\\dev\\Ecgberht\\planning\\steward-tracking-2026-07\\stage2",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\steward-tracking-2026-07\\stage2\\_foreman-status.log",
+  "result": "HALT: 11:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (_run-foreman.bat) — no test reaches it; gate proves nothing about this wave",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 332,
+  "journal_ref": null
+}

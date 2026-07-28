@@ -95,7 +95,9 @@ bare `writeFileSync` read-modify-write, so two concurrent acts silently dropped
 receipts; a swallowed exception rendered a **broken** store as the cheerful *"no
 projects"* with an ambient queue badge of **0** (= "nothing needs you").
 
-At Stage 2, run `checkPropertyGates({plan, waves, addsSurface})`:
+At Stage 2, run `checkPropertyGates({plan, waves, addsSurface})` — **enforced in engine**
+(`bin/apply-hardening-to-plan.mjs` + `writeDocTrio` fail-closed, journal **0081**). Draft injects
+the checklist; emit HALTs with `hardening-gate-failed` if still not pass:
 
 1. **Durability claims are STORAGE claims.** "append-only" / "never lost" / "single
    writer" / "atomic" ⇒ the plan must name atomic write (temp + fsync + rename), a lock
@@ -143,9 +145,10 @@ user is the final convergence authority**.
   fresh-eyes cold pass + isolation oracle) and the context-free deciding Judge.
 - `bin/gates.mjs` — the well-formedness gate (spawns `locate-plan.mjs`), the
   quality/convergence gate, and the post-lock tiered drift detector.
-- `bin/hardening-gate.mjs` — the **hardening law** (below): detects the properties a
-  plan ASSERTS and fails Stage 2 when the plan does not also emit a mechanical gate
-  for each one. Pure predicates; `renderPropertyGateChecklist()` emits the plan text.
+- `bin/hardening-gate.mjs` — the **hardening law** (journal 0080): detects properties a
+  plan ASSERTS; pure predicates; `renderPropertyGateChecklist()` emits plan text.
+- `bin/apply-hardening-to-plan.mjs` — inject + re-check; wired into `writeDocTrio` fail-closed
+  (journal **0081**).
 - `bin/research.mjs` — researchPrime integration (once up-front + cost-guarded per round).
 - `bin/stage0.mjs` / `bin/stage1.mjs` / `bin/stage2.mjs` — the three stage protocols.
 - `bin/band-profile.mjs` — LITE / SPIKE-FIRST / FULL ceremony profiles (cf-slick; depth → real path).

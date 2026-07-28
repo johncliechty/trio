@@ -46,6 +46,7 @@ import { HaltError, haltForHuman, HALT_GATES, draftToText, assertPlanText } from
 import { runMasterPlanLoop } from './stage1.mjs';
 import { resolveBandProfile, bandProfileStamp } from './band-profile.mjs';
 import { runWellFormednessGate } from './gates.mjs';
+import { enforceHardeningGate } from './apply-hardening-to-plan.mjs';
 import {
   installProcessLifetimeGuards,
   withPhaseProgress,
@@ -510,6 +511,9 @@ export function writeDocTrio({
   triageLock = null,
   handoffTriage = null,
   log = () => {},
+  /** When true (default), assert+inject journal-0080 property gates before write. */
+  enforceHardening = true,
+  addsSurface = true,
 } = {}) {
   if (!outputDir) throw new HaltError('writeDocTrio requires an outputDir', 'pass the handoff output directory');
   const dir = path.resolve(outputDir);
@@ -522,8 +526,32 @@ export function writeDocTrio({
   };
   // P1 2026-07-25 (0063 P0): the handoff PLAN goes through the canonical serializer +
   // corrupt/short refusal — the engine never writes `[object Object]` or a stub plan.
+  // Journal 0080 / 2026-07-27 dogfood: a plan that ASSERTS a property must EMIT a
+  // mechanical gate — inject checklist + fail-closed before the plan hits disk.
+  let planText = assertPlanText(plan, { label: 'implementation plan' });
+  let hardeningResult = null;
+  if (enforceHardening) {
+    const applied = enforceHardeningGate({ plan: planText, addsSurface, log });
+    planText = applied.plan;
+    hardeningResult = applied.gate;
+    try {
+      fs.writeFileSync(
+        path.join(dir, 'hardening-gate-result.json'),
+        JSON.stringify({ ...applied.gate, claims: applied.claims, injected: applied.injected, ts: new Date().toISOString() }, null, 2) + '\n',
+        'utf8',
+      );
+    } catch { /* best-effort */ }
+    if (!applied.gate.pass) {
+      throw haltForHuman(
+        `Stage-2 emit BLOCKED by hardening-gate (journal 0080): ${applied.gate.detail} — ` +
+          `the plan asserts properties without mechanical gates in acceptance/obligation text. ` +
+          `Fix the plan (or propertyGates map) then re-emit.`,
+        'hardening-gate-failed',
+      );
+    }
+  }
   fs.writeFileSync(files.description, draftToText(description));
-  fs.writeFileSync(files.plan, assertPlanText(plan, { label: 'implementation plan' }));
+  fs.writeFileSync(files.plan, planText);
   fs.writeFileSync(files.execution_log, draftToText(executionLog));
 
   // Sleep 0076 package 4: always emit Windows-safe expanding gate helper so
@@ -582,6 +610,7 @@ export function writeDocTrio({
     configPath,
     fileNames,
     handoffTriage: emit,
+    hardening: hardeningResult,
   };
 }
 
@@ -786,8 +815,25 @@ export async function runStage2({
     // (2) Render the Foreman-ready plan (the loop vets THIS human-readable draft; the
     //     final emission re-renders from the same structured waves, so well-formedness
     //     is guaranteed by construction regardless of free-text revision).
+    //     Journal 0080: inject property-gate checklist into the draft the Sharks review
+    //     so "asserted as prose" cannot leave Stage 2 as GREEN without mechanism text.
     live.lastStep = 'render-plan';
     let plan = renderImplementationPlan({ title, northStar, criteria, waves, testCommand });
+    {
+      const applied = enforceHardeningGate({ plan, addsSurface: true, log });
+      plan = applied.plan;
+      try {
+        fs.writeFileSync(
+          path.join(stateDir, 'hardening-gate-result.json'),
+          JSON.stringify({ ...applied.gate, claims: applied.claims, injected: applied.injected, phase: 'post-render', ts: new Date().toISOString() }, null, 2) + '\n',
+          'utf8',
+        );
+      } catch { /* best-effort */ }
+      // Do not HALT on fail at draft stage — Shark loop may add mechanisms; emit path is fail-closed.
+      if (!applied.gate.pass) {
+        log(`stage2: hardening draft not yet pass (will re-check on emit): ${applied.gate.detail}`);
+      }
+    }
     live.plan = plan;
 
     // (3) The Shark-Tank loop to model-side convergence (Stage-1's generic loop).
@@ -868,11 +914,30 @@ export async function runStage2({
     }
     stampStage2Progress(stateDir, { phase: 'shark-tank', status: 'done' });
 
+    // Prefer the loop's revised draft when present (human-readable Shark revisions).
+    if (loop?.draft) {
+      plan = assertPlanText(loop.draft, { label: 'implementation plan (post-shark)' });
+      live.plan = plan;
+    }
+    // Re-apply hardening after Shark free-text edits (checklist may have been stripped).
+    {
+      const applied = enforceHardeningGate({ plan, addsSurface: true, log });
+      plan = applied.plan;
+      live.plan = plan;
+      try {
+        fs.writeFileSync(
+          path.join(stateDir, 'hardening-gate-result.json'),
+          JSON.stringify({ ...applied.gate, claims: applied.claims, injected: applied.injected, phase: 'post-shark', ts: new Date().toISOString() }, null, 2) + '\n',
+          'utf8',
+        );
+      } catch { /* */ }
+    }
+
     // (4) The user-approval HALT gate (implementation-plan-approval). HALTs if unapproved.
     live.lastStep = 'approval';
     const approval = approveImplementationPlan({ loop, approved, log });
 
-    // (5) Emit the doc-trio + config, then gate the handoff on the well-formedness gate.
+    // (5) Emit the doc-trio + config, then gate on hardening (0080) + well-formedness.
     live.lastStep = 'emit-handoff';
     stampStage2Progress(stateDir, { phase: 'emit-handoff', status: 'start' });
     const description = renderDescriptionDoc({ title, northStar, criteria, summary });
@@ -880,6 +945,8 @@ export async function runStage2({
     const docTrio = writeDocTrio({
       outputDir, plan, description, executionLog,
       depth, tier, triageLock, handoffTriage, log,
+      enforceHardening: true,
+      addsSurface: true,
     });
     const handoff = runHandoffGate({ projectDir: docTrio.dir, artifactsDir: stateDir, log });
     stampStage2Progress(stateDir, { phase: 'emit-handoff', status: 'done' });

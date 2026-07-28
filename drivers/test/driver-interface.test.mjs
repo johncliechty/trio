@@ -130,7 +130,7 @@ test('foreman seam: makeForemanDriver routes an INJECTED agent through unchanged
 
 test('belowFrontierClaudeModel is the standard (one-below-frontier) tier, not hard-coded frontier (2026-07-17)', async () => {
   const { belowFrontierClaudeModel } = await import('../claude.mjs');
-  assert.equal(belowFrontierClaudeModel(), 'claude-opus-4-8');
+  assert.equal(belowFrontierClaudeModel(), 'claude-opus-5');
 });
 
 test('runAgent: a seat_unavailable failure fails OVER to Claude (model-integrity rule, 2026-07-17)', async () => {

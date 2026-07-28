@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-27T11:37:11.640Z",
+  "ended": "2026-07-27T11:46:25.316Z",
+  "input": "C:\\dev\\Family Trusts\\reviews\\2026-07-27-deck4-rebuild",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Family Trusts\\reviews\\2026-07-27-deck4-rebuild\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: gate exited 0 but did not demonstrate real passing tests (tests=none, pass=none, fail=none, skip=none) — refusing vacuous GREEN",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 554,
+  "journal_ref": null
+}

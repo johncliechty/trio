@@ -54,11 +54,11 @@ test('resolveClaudeModel: per-role env outranks the global; global is the fallba
 test('TRIO_TIER (2026-07-04): heavy/standard flip every Claude seat; explicit model still wins; tier beats setx env; junk tier ignored', () => {
   // heavy => frontier; standard => one notch below (John's heavy/non-heavy skills)
   assert.equal(resolveClaudeModel({ role: 'execute', env: { TRIO_TIER: 'heavy' } }), 'claude-fable-5');
-  assert.equal(resolveClaudeModel({ role: 'execute', env: { TRIO_TIER: 'standard' } }), 'claude-opus-4-8');
+  assert.equal(resolveClaudeModel({ role: 'execute', env: { TRIO_TIER: 'standard' } }), 'claude-opus-5');
   // the whole point: standard tier flips a machine pinned always-heavy via setx
   assert.equal(
     resolveClaudeModel({ role: 'execute', env: { TRIO_TIER: 'standard', CLAUDE_MODEL_EXECUTE: 'claude-fable-5', CLAUDE_MODEL: 'claude-fable-5' } }),
-    'claude-opus-4-8');
+    'claude-opus-5');
   // explicit model (per-project config) still outranks the tier
   assert.equal(resolveClaudeModel({ model: 'explicit', role: 'execute', env: { TRIO_TIER: 'standard' } }), 'explicit');
   // unknown tier value falls through to the old ladder unchanged

@@ -39,6 +39,7 @@ import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 
 import { HaltError, newCheckpoint, writeCheckpointAtomic, renderDashboard, parseWaves, discoverTestCommand, locateDocs } from './foreman-lib.mjs';
+import { checkDeltaCoverage } from './delta-coverage-gate.mjs';
 
 // ---------------------------------------------------------------------------
 // Agent-wait heartbeat (0082 P0.3 / 2026-07-24 thrash cleanup)
@@ -1476,6 +1477,52 @@ export async function runWave(o) {
               `add/keep a test that exercises the changed code, then re-invoke wave ${wave.n}`
             : `add/keep a test that exercises the changed code, then re-invoke wave ${wave.n}`;
         return finishHalt({ reason, recommend: vacuousRecommend });
+      }
+      // ----- Delta-coverage gate (journal 0091, 2026-07-27 dogfood) -----
+      // A wave that adds a surface (route/handler/cli/persistence/frontend) and no
+      // test naming it must BLOCK, not go GREEN. Suite-green is not evidence when
+      // the new code is simply untested.
+      try {
+        const changedFiles = (changed || [])
+          .map((f) => String(f).replace(/ \(deleted\)$/, ''))
+          .filter(Boolean);
+        let testMentions = '';
+        for (const f of changedFiles) {
+          if (!isTestFile(f)) continue;
+          try {
+            const full = path.isAbsolute(f) ? f : path.join(projectDir, f);
+            if (fs.existsSync(full)) testMentions += fs.readFileSync(full, 'utf8') + '\n';
+          } catch { /* best-effort */ }
+        }
+        const delta = checkDeltaCoverage({
+          changedFiles,
+          testMentions,
+          repoTestConvention: ['test/wNN-<subject>.test.mjs'],
+        });
+        try {
+          fs.writeFileSync(
+            path.join(foremanDir, `wave-${wave.n}-delta-coverage.json`),
+            JSON.stringify({ ...delta, wave: wave.n, at: new Date().toISOString() }, null, 2) + '\n',
+            'utf8',
+          );
+        } catch { /* best-effort */ }
+        if (!delta.pass) {
+          const reason = `delta-coverage HALT (journal 0091): ${delta.detail}`;
+          steps.push(`✗ ${reason}`);
+          log(`delta-coverage: FAIL wave ${wave.n} — ${delta.detail}`);
+          return finishHalt({
+            reason,
+            recommend:
+              `add a test that NAMES each new surface (route/handler/CLI/persist path) ` +
+              `before wave ${wave.n} can GO — file name tokens or body mentions count; ` +
+              `convention: test/wNN-<subject>.test.mjs`,
+          });
+        }
+        if (delta.detail && !/not applicable/i.test(delta.detail)) {
+          log(`delta-coverage: PASS wave ${wave.n} — ${delta.detail}`);
+        }
+      } catch (deltaErr) {
+        log(`delta-coverage: skip (non-fatal) — ${deltaErr?.message || deltaErr}`);
       }
       // Record proven deliverable for resume/clear-halt credit (Phase A).
       // Filter via writeWaveProvenLedger (never logs — 0078/0079 package 6).

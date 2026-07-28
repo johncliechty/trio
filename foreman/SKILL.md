@@ -179,6 +179,12 @@ green *precisely because* the new code was untested. So "0 tests for 670 new lin
 and "full coverage" produced the same verdict. Six real defects were found later,
 by reading.
 
+**Enforced in engine (journal 0092):** after vacuous-GREEN passes and before
+`finishGo`, `wave-engine.mjs` runs `checkDeltaCoverage` on the wave's changed
+files + test-file text; writes `.foreman/wave-N-delta-coverage.json`; **HALTs**
+when a surface is uncovered. Soft-skip only on unexpected throw (never silent
+suppress of a real fail). Sibling of Crucible's property-gate emit (0080/0081).
+
 Run `checkDeltaCoverage({changedFiles, testMentions})` per wave:
 
 1. **Delta, not percentage.** The unit is *what this wave added*. A global coverage
@@ -312,7 +318,8 @@ context: ~38% (best-effort) · elapsed 1h12m · budget 3/8 waves · window OK
 - `bin/delta-coverage-gate.mjs` — §5b: classifies a wave's changed files, flags any
   SURFACE (route / handler / CLI verb / persistence path / frontend entry) that no
   test names, and returns a **BLOCKER**. Pure predicates over a file list — no git
-  spawn. `renderDeltaCoverageRequirement()` emits the wave text.
+  spawn. `renderDeltaCoverageRequirement()` emits the wave text. **Wired into the
+  live GO path** in `wave-engine.mjs` (journal **0092**).
 - `bin/git-hygiene.mjs` — §9 git hygiene: dedicated work branch, commit-only-on-GO,
   dirty-tree HALT, repo-boundary containment, crash reconciliation. Never pushes.
 - `bin/wave-workflow.js` — the production driver seam: `makeAgentDriver({agent})`

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-27T22:34:15.828Z",
+  "ended": "2026-07-27T22:54:17.244Z",
+  "input": "C:\\dev\\Ecgberht\\planning\\steward-tracking-2026-07\\stage2",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\steward-tracking-2026-07\\stage2\\_foreman-status.log",
+  "result": "HALT: 11:HALT — [taxonomy:ambiguity] HALT: a reviewer could not answer from the frozen docs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1201,
+  "journal_ref": null
+}

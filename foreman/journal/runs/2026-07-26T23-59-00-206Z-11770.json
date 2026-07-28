@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-26T23:59:00.206Z",
+  "ended": "2026-07-27T00:01:51.770Z",
+  "input": "C:\\dev\\Ecgberht\\e9-e10-crucible\\stage2",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\e9-e10-crucible\\stage2\\_foreman-status.log",
+  "result": "HALT: 1:HALT — [taxonomy:ambiguity] HALT: a reviewer could not answer from the frozen docs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 172,
+  "journal_ref": null
+}

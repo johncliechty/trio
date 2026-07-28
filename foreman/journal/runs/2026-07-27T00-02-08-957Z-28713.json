@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-27T00:02:08.957Z",
+  "ended": "2026-07-27T00:03:48.713Z",
+  "input": "C:\\dev\\Ecgberht\\e9-e10-crucible\\stage2",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\e9-e10-crucible\\stage2\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: wave reached green without proving its own deliverable was exercised — the wave changed no source file reachable by an executed test, so an already-green suite proves nothing about",
+  "cross_model": true,
+  "models": null,
+  "duration_s": 100,
+  "journal_ref": null
+}

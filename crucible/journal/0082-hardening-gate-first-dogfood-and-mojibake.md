@@ -72,4 +72,30 @@ Two things make this worth a rule rather than a shrug:
    locked at Stage 0 must byte-match what appears in the Stage-2 plan. Drift there
    is not cosmetic; it is the anchor every other gate measures against.
 
+
+## FINDING 2 — emitted JSON carries a UTF-8 BOM (P2, same root as the mojibake)
+
+`stage1/NORTH-STAR-LOCK.json` and `stage1/STAGE1-APPROVED.json` begin with
+`EF BB BF`. Python's `json.load` rejects that outright
+(*"Unexpected UTF-8 BOM (decode using utf-8-sig)"*), and Node's `JSON.parse`
+throws on it too. These are **gate artifacts** — the North-Star lock and the
+Stage-1 approval — so any downstream tool that machine-reads them to confirm a
+lock will fail on a file that is otherwise perfectly valid.
+
+Same root cause as the mojibake: the emit path does not pin its encoding. A BOM
+is what you get from a Windows text write that defaults to `utf-8-sig`.
+
+**Rule:** emit JSON as **UTF-8 without BOM**, and add a parse-back assertion to
+the emit step — write it, then `JSON.parse` it from disk. An artifact that
+cannot be read back is not emitted.
+
+## Repair applied 2026-07-28
+
+14 mojibake sequences repaired across 9 planning docs (targeted sequence map;
+a whole-file cp1252→utf-8 reversal does NOT work because the files are *mixed* —
+partly correct text, partly corrupted). Engine code was clean: **0 affected
+files** under `engine/`, `test/`, `tools/`. The BOM files were left as-is —
+they are pre-existing gate artifacts and rewriting a lock receipt to fix its
+encoding is not this session's call.
+
 - **provenance**: genuine-execution (post-run review, 2026-07-28). See foreman journal 0093 for the build-side findings from the same run (19 GREEN waves, zero commits).

@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-07-30T05:16:51.642Z",
+  "ended": "2026-07-30T05:18:25.993Z",
+  "input": "C:/dev/Axmra/Holding Company/_rp_tam",
+  "params": {
+    "maxRounds": 1,
+    "live": true,
+    "stakesTier": "high"
+  },
+  "output": "C:\\dev\\Axmra\\Holding Company\\_rp_tam\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": true,
+  "models": [
+    "claude",
+    "grok"
+  ],
+  "duration_s": 94,
+  "journal_ref": null
+}

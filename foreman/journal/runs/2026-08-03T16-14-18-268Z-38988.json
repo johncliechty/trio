@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T16:14:18.268Z",
+  "ended": "2026-08-03T16:48:58.988Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "HALT: 7:GO,8:GO,9:HALT — syntax-smoke HALT: syntax smoke failed for engine/index.mjs: C:\\dev\\Ecgberht\\engine\\index.mjs:587\r\n  batchConfirmScaffolding,\r\n  ^^^^^^^^^^^^^^^^^^^^^^^\r\n\r\nSyntaxError: Duplicate export of 'batchConfi",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2081,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-29T12:46:32.125Z",
+  "ended": "2026-07-29T13:07:17.567Z",
+  "input": "C:\\dev\\Anchor\\planning\\sleep-2026-07-28\\stage2",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor\\planning\\sleep-2026-07-28\\stage2\\_foreman-status.log",
+  "result": "HALT: 1:HALT — test-immutability HALT: fix agent modified test file tests/test_verification_task_triple_2026_07_29.py",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1245,
+  "journal_ref": null
+}

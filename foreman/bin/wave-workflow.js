@@ -219,6 +219,11 @@ export function makeAgentDriver({ agent }) {
         reviewer: `reviewer-${ctx.reviewerIndex}`,
         answerable: out?.answerable ?? 'yes',
         note: out?.note,
+        // T10a: drivers stamp transport_failed on unparseable-after-retry (with
+        // answerable:'no'). Forward it so wave-engine degrades the seat BEFORE the
+        // §4.7 ambiguity gate — stripping it turned every review JSON hiccup into a
+        // false [taxonomy:ambiguity] HALT (live: W16 2026-07-29, sleep stage2).
+        ...(out?.transport_failed ? { transport_failed: true } : {}),
         // F3: forward a well-formed plan-amendment proposal (diff + rationale) so
         // the engine can raise the PLAN-AMENDMENT-PROPOSAL halt; absent otherwise.
         ...(out?.plan_amendment ? { plan_amendment: out.plan_amendment } : {}),

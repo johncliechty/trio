@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T05:00:55.634Z",
+  "ended": "2026-08-03T06:02:27.858Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:GO,3:GO,4:HALT — delta-coverage HALT (journal 0091): 1 surface change(s) with no test naming them: artifacts/fix-item-ledger.json (persistence). A suite that stays green because the new code is UNTESTED is not evidenc",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 3692,
+  "journal_ref": null
+}

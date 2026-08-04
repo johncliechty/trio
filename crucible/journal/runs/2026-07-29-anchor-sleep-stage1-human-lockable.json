@@ -1,0 +1,23 @@
+{
+  "id": "2026-07-29-anchor-sleep-stage1",
+  "skill": "crucible",
+  "stage": 1,
+  "project": "C:\\dev\\Anchor",
+  "branch": "v1.2",
+  "effort": "sleep-2026-07-28",
+  "depth": "FULL",
+  "seats": {
+    "coding": "claude",
+    "review": "grok-cli",
+    "cross_model": true
+  },
+  "outcome": "human-lockable",
+  "rounds": 2,
+  "shark_dry_streak": 2,
+  "multi_shark_blockers": 0,
+  "judge": ["NOT_CONVERGED", "NOT_CONVERGED"],
+  "open_findings": { "total": 31, "BLOCKER": 10, "MAJOR": 16, "MINOR": 5, "max_agreement": 1 },
+  "artifacts_dir": "C:\\dev\\Anchor\\planning\\sleep-2026-07-28\\stage1",
+  "journal": "0083-anchor-sleep-stage1-human-lockable.md",
+  "ts": "2026-07-29T06:45:00.000Z"
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T15:44:12.915Z",
+  "ended": "2026-08-03T16:11:09.620Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "HALT: 6:GO,7:HALT — syntax-smoke HALT: syntax smoke failed for engine/index.mjs: C:\\dev\\Ecgberht\\engine\\index.mjs:677\r\n  realpathJunctionAware,\r\n  ^^^^^^^^^^^^^^^^^^^^^\r\n\r\nSyntaxError: Duplicate export of 'realpathJuncti",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1617,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T15:11:50.147Z",
+  "ended": "2026-08-03T15:36:36.441Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "HALT: 6:HALT — test-immutability HALT: fix agent modified test file test/w6-t-dur-s1.auth-on.test.mjs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1486,
+  "journal_ref": null
+}

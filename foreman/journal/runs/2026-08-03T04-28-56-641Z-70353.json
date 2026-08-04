@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T04:28:56.641Z",
+  "ended": "2026-08-03T04:57:50.354Z",
+  "input": "C:\\dev\\Ecgberht\\planning\\steward-handoff-v3",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\steward-handoff-v3\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (engine/brief.mjs, engine/durable-write.mjs, engine/high-seat.mjs, engine/index.mjs, scripts/run-all-tests.mjs, engine/authorize",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1734,
+  "journal_ref": null
+}

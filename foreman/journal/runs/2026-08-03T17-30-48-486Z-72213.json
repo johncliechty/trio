@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T17:30:48.486Z",
+  "ended": "2026-08-03T17:39:32.213Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "HALT: 11:HALT — syntax-smoke HALT: syntax smoke failed for engine/index.mjs: C:\\dev\\Ecgberht\\engine\\index.mjs:467\r\n  recomputeProposalHash,\r\n  ^^^^^^^^^^^^^^^^^^^^^\r\n\r\nSyntaxError: Duplicate export of 'recomputePropo",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 524,
+  "journal_ref": null
+}

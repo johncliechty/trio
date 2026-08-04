@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T18:29:49.018Z",
+  "ended": "2026-08-03T22:14:38.871Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "DONE: 14:GO,15:GO,16:GO,17:GO,18:GO,19:GO,20:GO,21:GO,22:GO",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 13490,
+  "journal_ref": null
+}

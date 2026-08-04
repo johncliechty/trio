@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-01T19:21:28.390Z",
+  "ended": "2026-08-01T19:49:02.536Z",
+  "input": "C:\\dev\\Ecgberht\\planning\\steward-lifecycle-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "19",
+    "git": true,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\steward-lifecycle-build\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (engine/durable-write.mjs, scripts/check-diff-fence.mjs) — no test reaches it; gate proves nothing about this wave",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1654,
+  "journal_ref": null
+}

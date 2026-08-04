@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-07-29T13:17:08.642Z",
+  "ended": "2026-07-29T13:24:38.281Z",
+  "input": "C:\\dev\\Anchor\\planning\\sleep-2026-07-28\\stage2",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "_foreman-status.log",
+  "result": "HALT: 1:HALT — PLAN-AMENDMENT-PROPOSAL HALT: the frozen plan is wrong/incomplete for wave 1",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 450,
+  "journal_ref": null
+}

@@ -23,3 +23,18 @@ plans/out/
 /crucible/EXECUTION-LOG.md
 /crucible/CLAUDE_hist.md
 /crucible/GRASSCATCHER.md
+
+# Session scratch from driving Crucible/Foreman stages by hand (2026-08-04).
+# One-off emit scripts and chunked plan-edit buffers written beside the repo
+# during a live stage run. They are inputs to a moment, never artifacts: the
+# durable record of a run is journal/NNNN-*.md plus journal/runs/*.json.
+plan-edit-*.txt
+_stage1-*.json
+_stage1-*.md
+_stage1-*.mjs
+_stage1_*.py
+_b[0-9]-*.mjs
+_b[0-9]-*.json
+_b[0-9]_*.py
+.crucible-revise/
+_stash-untracked-journals/

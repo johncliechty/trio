@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T17:45:44.392Z",
+  "ended": "2026-08-03T17:57:28.103Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "HALT: 12:HALT — test-immutability HALT: fix agent modified test file test/w7-roadmap.test.mjs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 704,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-03T18:02:54.566Z",
+  "ended": "2026-08-03T18:25:31.017Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "22",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\_foreman-status.log",
+  "result": "HALT: 13:HALT — test-immutability HALT: fix agent modified test file test/w13-reconciler-parity.test.mjs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1356,
+  "journal_ref": null
+}

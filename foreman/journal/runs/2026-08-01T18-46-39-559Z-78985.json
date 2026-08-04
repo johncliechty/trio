@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-01T18:46:39.559Z",
+  "ended": "2026-08-01T19:16:18.985Z",
+  "input": "C:\\dev\\Ecgberht\\planning\\steward-lifecycle-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "19",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\steward-lifecycle-build\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (engine/brief.mjs, scripts/run-all-tests.mjs, planning/steward-lifecycle-build/scripts/run-all-tests.mjs, scripts/check-decompos",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1779,
+  "journal_ref": null
+}

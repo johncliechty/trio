@@ -28,7 +28,7 @@ heavyweight planner that turns an intent — or a messy existing project — int
 **vetted, gold-standard, Foreman-ready implementation plan**, while **never
 drifting** from the project's locked objective.
 
-> **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `C:\dev\Skill Foundry\AGENTS.md` → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
+> **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `AGENTS.md` (Foundry root on the author host; your install root in a distributed bundle) → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
 
 > **Status (2026-06-05): the engine is built and GREEN through Wave 11.** The
 > three-stage pipeline, the Shark-Tank round engine, the Synthesizer + Judge, the
@@ -220,7 +220,7 @@ user is the final convergence authority**.
 >    but they cannot catch a job-object kill — the launch path is the real mitigation.
 > 3. **Arm the cadence at launch** (`ScheduleWakeup` ~600s or `/loop 10m`) and **each tick READ the tail
 >    of `_crucible-status.log` (shell-free) and POST the latest status to chat in the LOCKED Status-table
->    format — canonical definition in ONE place: user-global `AGENTS.md` → "Long-run progress updates"
+>    format — canonical definition in ONE place: the canonical `AGENTS.md` → "Long-run progress updates"
 >    (`[HH:MM]` header · Effort/Doing/Status/Tests/Blocker/Procs/**Journal** rows · ETA + To do footer).
 >    The **Journal** row (mandatory, `none` when empty) recaps everything journaled since the last tick —
 >    the engine log is the data source; the SESSION composes the Journal row from `journal/`.**

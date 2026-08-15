@@ -27,7 +27,7 @@ on a defined blocker set**.
 
 > **Tier definition (Heavy vs regular · stakes-gated cross-model · seat mapping) + invocation
 > discipline (zero deliberation · the LOCKED global status table · run capture):** canonical in
-> `C:\dev\Skill Foundry\AGENTS.md` → "Skill tiers" / "Invocation discipline" / "Run capture".
+> `AGENTS.md` (Foundry root on the author host; your install root in a distributed bundle) → "Skill tiers" / "Invocation discipline" / "Run capture".
 > Trio build tier: `TRIO_TIER=heavy|standard` (standard is the build default). Do not re-define
 > or deliberate any of it.
 
@@ -352,7 +352,7 @@ drive only the model steps via the `agent()` seam.
 > 3. **Each tick, relay — shell-free:** the engine writes the LOCKED Status table to
 >    `<projectDir>/_foreman-status.log` at t=0, every ~10 min, and on halt/done. READ its tail with the
 >    Read tool (never spawn a shell) and POST the latest status to chat in the LOCKED Status-table format —
->    canonical definition in ONE place: user-global `AGENTS.md` → "Long-run progress updates"
+>    canonical definition in ONE place: the canonical `AGENTS.md` → "Long-run progress updates"
 >    (`[HH:MM]` header · Effort/Doing/Status/Tests/Blocker/Procs/**Journal** rows · ETA + To do footer).
 >    The **Journal** row (mandatory, `none` when empty) recaps everything journaled since the last tick —
 >    the engine log is the data source; the SESSION composes the Journal row from `journal/`.

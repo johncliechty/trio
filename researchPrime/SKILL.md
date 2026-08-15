@@ -13,7 +13,7 @@ researchPrime OWNS the evidence ledger, the verification ladder (OBSERVED > CORR
 
 This file is self-contained for the prose protocol; the engine is in `bin/` alongside it.
 
-> **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `C:\dev\Skill Foundry\AGENTS.md` → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
+> **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `AGENTS.md` (Foundry root on the author host; your install root in a distributed bundle) → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
 
 ---
 
@@ -118,7 +118,7 @@ Never flatter, never hallucinate a source, never count popularity as truth, neve
 ## Reserved / HALT-worthy
 
 The attested-lineage enum membership, the pre-registered thresholds (G / X% / C_min / N / K / M / T / N_min), and any change to the locked North Star / invariants are human calls — HALT for a human.
-> **⏱ STATUS UPDATES TO CHAT:** When running a long research phase in the background, you MUST arm a 10-minute cadence (`ScheduleWakeup` ~600s, AT LAUNCH) and post scheduled updates in the LOCKED Status-table format — canonical definition in ONE place: user-global `AGENTS.md` → "Long-run progress updates" (`[HH:MM]` header · Effort/Doing/Status/Tests/Blocker/Procs/**Journal** rows · ETA + To do footer). The **Journal** row (mandatory, `none` when empty) recaps everything journaled since the last tick — the SESSION composes it from this skill's `journal/`.
+> **⏱ STATUS UPDATES TO CHAT:** When running a long research phase in the background, you MUST arm a 10-minute cadence (`ScheduleWakeup` ~600s, AT LAUNCH) and post scheduled updates in the LOCKED Status-table format — canonical definition in ONE place: the canonical `AGENTS.md` → "Long-run progress updates" (`[HH:MM]` header · Effort/Doing/Status/Tests/Blocker/Procs/**Journal** rows · ETA + To do footer). The **Journal** row (mandatory, `none` when empty) recaps everything journaled since the last tick — the SESSION composes it from this skill's `journal/`.
 
 ## Usage journal (sleep-loop feed — append after every REAL run)
 

@@ -290,10 +290,31 @@ user is the final convergence authority**.
 
 Every real run writes a `journal/runs/` training record (Skill Foundry AGENTS.md "Run capture").
 
+## Standing rules (sleep-cycle promotion 2026-08-15 — journals 0086-0089, 0005, 0069)
+
+- **A criterion names the SURFACE, not the capability.** "The chamber can
+  render M1" was green while the page deleted it; the criterion is "M1 is ON
+  THE USER'S SCREEN after open," and its gate must look there. (0086)
+- **Right-size on task signals, never invocation vocabulary.** Invoking
+  Crucible by name is not a request for FULL; converged inputs + fixed scope
+  + reversible ⇒ LITE. An `assessComplexity` schema mismatch must be a loud
+  refusal — `emptyIntake:true` silently defaulting to FULL is how ceremony
+  taxes small tasks. (0087)
+- **The declared testCommand must be machine-countable** — a Stage-2 lint on
+  runner names; a "gate" that cannot emit counts is not a gate. (0088)
+- **A plan that replaces a surface names the DELETION** — acceptance asserts
+  the old surface is ABSENT, or the replacement ships beside its ghost. (0089)
+- **agy takes model LABEL strings** — stale short ids kill every Shark in a
+  round and the wreckage reads as a dry round; the abstain path (never
+  silent-drop) exists for exactly this. (0005)
+- **`approved=true` must emit, full stop.** A Stage-2 that re-tanks an
+  approved plan without emitting is a defect (0069/0076's force-emit exists
+  for it) — approval is the user's convergence authority being exercised.
+
 ## Usage journal (sleep-loop feed — append after every REAL run)
 
 At the end of any real (non-test) run of this skill, append ONE entry to
-`journal/` in this skill folder as `NNNN-<slug>.md` (next number; APPEND-ONLY —
+`journal/` in this skill folder as `NNNN-<slug>.md` (next number = **max(existing NNNN)+1 over the WHOLE directory** — gandalf accumulated 32 colliding ids because sessions read the low numbers as the frontier; APPEND-ONLY —
 a correction is a new entry, never an edit). Keep it under ~15 lines, honest over
 polished, with the 7 canonical fields (see the Skill Foundry's
 `planning/portfolio-program/src/journal.mjs`): id, skill, situation, context,

@@ -445,10 +445,27 @@ drive only the model steps via the `agent()` seam.
    (`model routing: execute=… · review=… · fix=…`) and every call's served model is
    attested per SR-5 — check both when verifying a routing change.
 
+## Standing rules (sleep-cycle promotion 2026-08-15 — journals 0093/0099/0100/0101)
+
+- **A GO with `last_commit: null` HALTs.** The EXECUTION-LOG append is part of
+  the GO transaction, not a courtesy; a checkpoint from a foreign project is
+  refused, never adopted; the gate refutes the reviewer — a reviewer verdict
+  that contradicts the orchestrator gate loses. (0093)
+- **A test that enters through a different door than the human proves the
+  wrong thing.** §5b proves a new surface HAS a test; it does not prove the
+  surface is REACHABLE from the user's entry point — check reachability when
+  the wave's deliverable is user-facing. (0099, open engine work)
+- **`--clear-halt` clears a STATE, not a defect.** Its refusal check is a
+  regex on halt text, not proof the remedy landed — clearing without landing
+  the named remedy re-buys the same halt. (0100)
+- **The gate command must be a TEST RUNNER that emits counts.** A declared
+  gate that cannot count tests gates nothing; name the remedy in the halt
+  text. (0088 crucible / 0101)
+
 ## Usage journal (sleep-loop feed — append after every REAL run)
 
 At the end of any real (non-test) run of this skill, append ONE entry to
-`journal/` in this skill folder as `NNNN-<slug>.md` (next number; APPEND-ONLY —
+`journal/` in this skill folder as `NNNN-<slug>.md` (next number = **max(existing NNNN)+1 over the WHOLE directory** — gandalf accumulated 32 colliding ids because sessions read the low numbers as the frontier; APPEND-ONLY —
 a correction is a new entry, never an edit). Keep it under ~15 lines, honest over
 polished, with the 7 canonical fields (see the Skill Foundry's
 `planning/portfolio-program/src/journal.mjs`): id, skill, situation, context,

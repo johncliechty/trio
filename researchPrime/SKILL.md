@@ -112,7 +112,13 @@ Before crossing the context boundary, present the frozen Phase-1 plan to the use
 Accept exactly one of: **APPROVE** (proceed to execution), **EDIT** (revise the plan per the user's change and re-present — bounded to 3 cycles), **ABORT** (halt the run). On EDIT, the revised plan is re-frozen and re-reported before any approval counts.
 
 **On a host with Node**, record the decision durably (hash-bound governance record, EDIT re-hash, replay binding) by driving the real engine gate:
-`node bin/plan-gate.mjs <planInputs.json> [runDir]` — where `planInputs.json` is `{ objective, axis, branches:[…], baselines:[…], stakes:{ declared_stakes:'low|medium|high', reversibility:'reversible|hard-to-reverse|irreversible', blast_radius:'narrow|moderate|wide', magnitude:'minor|moderate|major' } }` (the `adjudicateStakes` axes; `irreversible` floors the tier at `medium`). Gate 2 renders and approves the ACTUAL Phase-1 plan (AXIS/branches/baselines + stakes/tier/foresight from `runPhase1`), NOT the generic `planMatrix`. APPROVE writes `governance.json` + `gate2-record.json` bound to the plan hash; EDIT re-hashes; ABORT/EDIT-overflow HALTs before execution. The plan artifact is a pure function of the inputs, so the same plan always yields the same `planHash`.
+`node bin/plan-gate.mjs <planInputs.json> [runDir]` — **TTY hosts only** (journal 0031,
+hit twice on 2026-08-15: the CLI's readline reads EOF on piped/non-interactive stdin and
+exits 0 having written NOTHING — gate1-record without governance.json). **On a
+non-interactive host use the programmatic seam** — import `runPlanReviewGate` from
+`bin/plan-gate.mjs` and drive it with `promptGate1`/`promptGate2` callbacks returning the
+user's recorded decision (same hash-bound `governance.json`; the engine's
+execution-blocked guard requires it either way). `planInputs.json` is `{ objective, axis, branches:[…], baselines:[…], stakes:{ declared_stakes:'low|medium|high', reversibility:'reversible|hard-to-reverse|irreversible', blast_radius:'narrow|moderate|wide', magnitude:'minor|moderate|major' } }` (the `adjudicateStakes` axes; `irreversible` floors the tier at `medium`). Gate 2 renders and approves the ACTUAL Phase-1 plan (AXIS/branches/baselines + stakes/tier/foresight from `runPhase1`), NOT the generic `planMatrix`. APPROVE writes `governance.json` + `gate2-record.json` bound to the plan hash; EDIT re-hashes; ABORT/EDIT-overflow HALTs before execution. The plan artifact is a pure function of the inputs, so the same plan always yields the same `planHash`.
 
 **On a host without Node**, run the same gate as prose: report the plan, capture APPROVE/EDIT/ABORT in the transcript, and only cross the boundary on APPROVE (stamp "plan-gate: prose, not hash-bound").
 
@@ -140,6 +146,11 @@ Gather evidence; record each item in the evidence ledger with its origin(s) and 
 1. Make a run dir; write `round-1-input.json`: `{ round, northStar, stakes, reviews:[{reviewer, angle,
    lineage, findings:[{claim_id?, topic, severity, traces_to_north_star, message}]}], adjudications?:{...} }`.
    When the reviewed artifact carries claim ids, reviewers MUST set `claim_id` (agreement keys on it — G6).
+   FIELD LAWS (each one burned a real round): `traces_to_north_star` is the STRING `'yes'`/`'no'`, never a
+   boolean — `String(true) !== 'yes'`, so booleans demote EVERY finding and the round skips zero-AXIS
+   (2026-08-15). Reviewer prompts hand agy ABSOLUTE artifact paths (0002 — never rely on its CWD); agy
+   replies may arrive ```json-fenced ~1-in-6 (0052 — strip fences before parsing); agy takes `--model
+   "<label form>"` and no permission flags (0048).
 2. `node bin/run-rounds.mjs <runDir> [--max-rounds N]` — replay mode by default (recorded adjudications);
    `RESEARCHPRIME_LIVE_ROUND=1` routes reviewer/debate/judge LIVE to Gemini via agy (5:1; agy down ⇒
    honest HALT, never self-review). `--max-rounds` (default 8) is a HARD budget — the cap stops honestly

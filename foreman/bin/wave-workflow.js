@@ -207,6 +207,11 @@ export function makeAgentDriver({ agent }) {
     // execute/fix pin to the strongest coder, review can fan out to another family.
     async execute(ctx) {
       const out = await agent(executePrompt(ctx), { label: `execute:w${ctx.wave.n}`, role: 'execute' });
+      // 0102: a dead agent (typed { agent_failed } marker from the transport) must
+      // never be labeled "complete" — forward the failure so the engine HALTs.
+      if (out && typeof out === 'object' && out.agent_failed) {
+        return { note: `agent execute DIED (${out.exit_class})`, agent_failed: out };
+      }
       return { note: 'agent execute complete', raw: out };
     },
     async review(ctx, gate) {
@@ -234,6 +239,9 @@ export function makeAgentDriver({ agent }) {
     },
     async fix(ctx, gate, findings) {
       const out = await agent(fixPrompt(ctx, gate, findings), { label: `fix:w${ctx.wave.n}.${ctx.iteration}`, role: 'fix' });
+      if (out && typeof out === 'object' && out.agent_failed) {
+        return { note: `agent fix DIED (${out.exit_class})`, agent_failed: out };
+      }
       return { note: 'agent fix complete', raw: out };
     },
   };

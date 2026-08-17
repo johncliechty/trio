@@ -83,7 +83,9 @@ and gates); a few plain sentences carrying the two-three details that matter
 + where the full detail lives; genuinely complicated content goes in NUMBERED
 BATCHES, one at a time, each ending "OK so far?"; no seat/stamp/gate
 vocabulary in the sentence the user must read; every ask ends with a question
-answerable in one word.
+answerable in one word AND carries a recommendation (what you would choose +
+one line of why + alternatives when the choice has them + "or tell me
+something else" — options are a convenience, never a cage).
 <!-- /ELEGANCE-V2.1 -->
 <!-- /ELEGANCE-LAW -->
 

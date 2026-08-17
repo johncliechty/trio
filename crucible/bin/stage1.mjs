@@ -965,7 +965,10 @@ export async function runMasterPlanLoop({
           `finding problems they agree on${openCount ? `, though ${openCount} single-reviewer ` +
           `concern(s) stay listed for your eyes (OPEN-FINDINGS.json)` : ''}. ` +
           `Approving locks this draft as the Master Plan; challenging costs another review ` +
-          `round. The full draft is on disk (BEST-DRAFT.md). Approve, or say what to challenge?`,
+          `round. Recommendation: approve — the concerns left are single-reviewer catches, ` +
+          `worth a read but none met the two-reviewer bar; challenge instead if one of them ` +
+          `names something you care about. The full draft is on disk (BEST-DRAFT.md). ` +
+          `Approve, challenge, or tell me something else?`,
         'stage1-human-lockable',
       );
       err.best_draft = bestDraft;

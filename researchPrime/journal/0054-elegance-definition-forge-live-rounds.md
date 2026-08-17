@@ -1,4 +1,4 @@
-- `id`: 0032-elegance-definition-forge-live-rounds
+- `id`: 0054-elegance-definition-forge-live-rounds
 - `skill`: researchPrime@2026-08-15
 - `situation`: Definition-forging under governed rounds — the artifact under review is a normative criterion (not code), revised between rounds by the drafter, reviewed by fresh Gemini seats each round.
 - `context`: ELEGANCE v2 (the Rabbit-Catcher) for all 14 portfolio skills; run dir C:\dev\plans\2026-08-elegance-v2\rp-run.

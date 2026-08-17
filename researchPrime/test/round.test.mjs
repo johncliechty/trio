@@ -126,7 +126,7 @@ test('(b) an EMPTY round does NOT increment the dry counter N (I7) — convergen
 
 test('(c) loopThresholds reads the committed N/K/M (I6) and throws if they are missing', () => {
   const th = loopThresholds();
-  assert.deepEqual(th, { N: 2, K: 2, M: 0 }, 'the committed Wave-1 thresholds');
+  assert.deepEqual(th, { N: 1, K: 2, M: 0 }, 'the committed thresholds (N re-locked 2→1 by John 2026-08-16 — Elegance rule 5; see preregistration.json relocked attestation)');
   assert.throws(() => loopThresholds({ N: 2, K: 2 /* M missing */ }), /committed loop threshold M/);
 });
 

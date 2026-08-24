@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-08-08T00:29:56.828Z",
+  "ended": "2026-08-08T00:31:02.475Z",
+  "input": "C:/dev/Anchor/.anchor/worktrees/a00e50e9516e4987a1e714c894039850/research/rp-assess-a00e50e9",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Anchor\\.anchor\\worktrees\\a00e50e9516e4987a1e714c894039850\\research\\rp-assess-a00e50e9\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": true,
+  "models": [
+    "claude",
+    "grok"
+  ],
+  "duration_s": 66,
+  "journal_ref": null
+}

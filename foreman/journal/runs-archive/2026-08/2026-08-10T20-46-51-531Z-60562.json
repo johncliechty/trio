@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-10T20:46:51.531Z",
+  "ended": "2026-08-10T22:02:40.562Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 9:HALT — delta-coverage HALT (journal 0091): 2 surface change(s) with no test naming them: route_table.py (http-route), static/project-window.js (frontend). A suite that stays green because the new code is UNT",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 4549,
+  "journal_ref": null
+}

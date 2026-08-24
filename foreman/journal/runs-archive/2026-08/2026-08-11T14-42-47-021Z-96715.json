@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-11T14:42:47.021Z",
+  "ended": "2026-08-11T15:26:36.715Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 11:HALT — vacuous-GREEN HALT: wave changed only doc/data artifacts (.anchor/projects/__doctor__/general/index.json, general/RESTART.md, general/dbc27481dbd0-transcript.md, planning/rearch-2026-07/MUTATION-INVEN",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2630,
+  "journal_ref": null
+}

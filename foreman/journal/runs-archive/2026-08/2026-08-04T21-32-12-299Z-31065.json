@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-04T21:32:12.299Z",
+  "ended": "2026-08-04T21:38:51.065Z",
+  "input": "C:\\dev\\Family-Finances",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Family-Finances\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: pytest collected/ran no real tests (exit 4; \"no tests ran\") — refusing vacuous GREEN",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 399,
+  "journal_ref": null
+}

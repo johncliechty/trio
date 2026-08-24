@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-11T15:36:23.191Z",
+  "ended": "2026-08-11T17:12:01.289Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": true,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 11:HALT — test-immutability HALT: fix agent modified test file tests/conftest.py",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 5738,
+  "journal_ref": null
+}

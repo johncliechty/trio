@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-10T19:00:34.101Z",
+  "ended": "2026-08-10T20:40:54.053Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 8:GO,9:HALT — delta-coverage HALT (journal 0091): 1 surface change(s) with no test naming them: general/dbc27481dbd0-transcript.md (persistence). A suite that stays green because the new code is UNTESTED is not evi",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 6020,
+  "journal_ref": null
+}

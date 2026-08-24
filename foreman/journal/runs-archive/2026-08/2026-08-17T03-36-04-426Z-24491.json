@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-17T03:36:04.426Z",
+  "ended": "2026-08-17T03:50:24.491Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "HALT: 2:HALT — delta-coverage HALT (journal 0091): 4 surface change(s) with no test naming them: build/reports/fixture.gate.json (persistence), build/reports/fixture.gate.md (persistence), build/reports/lecture2.gat",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 860,
+  "journal_ref": null
+}

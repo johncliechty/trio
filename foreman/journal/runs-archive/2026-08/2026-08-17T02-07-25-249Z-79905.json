@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-17T02:07:25.249Z",
+  "ended": "2026-08-17T03:24:39.905Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:HALT — PLAN-AMENDMENT-PROPOSAL HALT: the frozen plan is wrong/incomplete for wave 2",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 4635,
+  "journal_ref": null
+}

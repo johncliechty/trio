@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-10T03:54:04.483Z",
+  "ended": "2026-08-10T05:03:30.637Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 4:GO,5:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (chamber_brownfield.py, chamber_reconcile.py) — no test reaches it; gate proves nothing about this wave",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 4166,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-10T11:42:40.277Z",
+  "ended": "2026-08-10T12:46:50.141Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 5:HALT — test-immutability HALT: fix agent modified test file tests/fixtures/chamber/refresh_real_ledgers.py",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 3850,
+  "journal_ref": null
+}

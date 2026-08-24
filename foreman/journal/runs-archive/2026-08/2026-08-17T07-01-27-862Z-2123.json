@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-17T07:01:27.862Z",
+  "ended": "2026-08-17T08:18:22.123Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "HALT: 5:GO,6:HALT — delta-coverage HALT (journal 0091): 1 surface change(s) with no test naming them: build/reports/paper.structure.json (persistence). A suite that stays green because the new code is UNTESTED is not evi",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 4614,
+  "journal_ref": null
+}

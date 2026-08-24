@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-08-07T19:26:09.666Z",
+  "ended": "2026-08-07T19:26:49.903Z",
+  "input": "C:/dev/Anchor/.anchor/worktrees/432a9f4e7bb74aabb9ed7f6c231ae7b0/research/rp-deep-read-432a9f4e",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Anchor\\.anchor\\worktrees\\432a9f4e7bb74aabb9ed7f6c231ae7b0\\research\\rp-deep-read-432a9f4e\\DELIVERABLE-ENGINE.json",
+  "result": "converged (clean)",
+  "cross_model": true,
+  "models": [
+    "claude",
+    "grok"
+  ],
+  "duration_s": 40,
+  "journal_ref": null
+}

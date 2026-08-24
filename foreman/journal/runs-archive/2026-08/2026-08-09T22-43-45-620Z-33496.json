@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-09T22:43:45.620Z",
+  "ended": "2026-08-09T23:23:53.496Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 1:HALT — [taxonomy:gate-timeout] HALT: gate timed out INCOMPLETE after the 20m cap at ~100% of the suite — tests did not fail; they did not finish",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2408,
+  "journal_ref": null
+}

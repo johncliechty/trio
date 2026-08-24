@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-10T13:40:10.713Z",
+  "ended": "2026-08-10T14:53:38.193Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 5:GO,6:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (chamber_open.py) — no test reaches it; gate proves nothing about this wave",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 4407,
+  "journal_ref": null
+}

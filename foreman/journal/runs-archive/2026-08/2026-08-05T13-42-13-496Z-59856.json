@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-05T13:42:13.496Z",
+  "ended": "2026-08-05T15:30:59.856Z",
+  "input": "C:\\dev\\Family-Finances",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Family-Finances\\_foreman-status.log",
+  "result": "DONE: 1:GO,2:GO,3:GO,4:GO,5:GO,6:GO,7:GO",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 6526,
+  "journal_ref": null
+}

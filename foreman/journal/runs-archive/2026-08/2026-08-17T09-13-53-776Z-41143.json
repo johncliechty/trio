@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-17T09:13:53.776Z",
+  "ended": "2026-08-17T09:27:21.143Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "HALT: 6:HALT — delta-coverage HALT (journal 0091): 18 surface change(s) with no test naming them: build/reports/ai-supplement.gate.json (persistence), build/reports/ai-supplement.gate.md (persistence), build/reports",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 807,
+  "journal_ref": null
+}

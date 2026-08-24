@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-17T06:06:32.885Z",
+  "ended": "2026-08-17T06:58:15.585Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "HALT: 4:GO,5:HALT — delta-coverage HALT (journal 0091): 1 surface change(s) with no test naming them: build/reports/paper.rerun.md (persistence). A suite that stays green because the new code is UNTESTED is not evidence.",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 3103,
+  "journal_ref": null
+}

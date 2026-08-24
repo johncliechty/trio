@@ -1,0 +1,20 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-08-10T20:04:40.567Z",
+  "ended": "2026-08-10T20:04:40.577Z",
+  "input": "C:/dev/plans/2026-08-10-researchprime-nn-collapse/plan-gate-run",
+  "params": {
+    "maxRounds": 8,
+    "live": false,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\plans\\2026-08-10-researchprime-nn-collapse\\plan-gate-run\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

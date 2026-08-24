@@ -5,13 +5,10 @@ description: >-
   has frozen design + implementation-plan docs to drive each wave/sprint/section
   to done via fresh-context sub-agents in an EXECUTE -> ADVERSARIAL-REVIEW -> FIX
   -> RE-REVIEW loop, auto-advancing across waves and halting only on a defined
-  blocker set. STATUS (2026-06-02): the full engine — contract + parsers, the
-  one-wave EXECUTE/GATE/REVIEW/JUDGE/FIX loop, multi-wave auto-advance, budget
-  pre-flight + resume, git hygiene, and Node + Python/pytest gates — is BUILT and
-  adversarially verified through Phase 3d (106/106 unit tests). The ground-truth
-  test gate is run by the orchestrator (a Node process), never by a sub-agent.
-  Remaining: the empirical live agent()-driven calibration on the Pro/Max
-  subscription.
+  blocker set. STATUS (2026-08-24): PRODUCTION — ~15 real builds shipped; the
+  ground-truth test gate is run by the orchestrator (a Node process), never by a
+  sub-agent. One consolidated status block lives in the body below; verified
+  currency lives in the foundry PLAN.md, never in this line.
 ---
 
 <!-- ELEGANCE-LAW v2 -->
@@ -103,44 +100,22 @@ on a defined blocker set**.
 > Trio build tier: `TRIO_TIER=heavy|standard` (standard is the build default). Do not re-define
 > or deliberate any of it.
 
-> **Status (refreshed 2026-07-11): PRODUCTION — ~15 real builds shipped** (aurora,
+> **Status (2026-08-24, consolidated — the ONE status block; verified currency lives in
+> `Skill Foundry/PLAN.md`): PRODUCTION — ~15 real builds shipped** (aurora,
 > researchPrime-upgrade, ramanujan, the Anchor rearchitecture 20/20 waves, most Foundry
-> skills). Engine: contract + parsers, the one-wave EXECUTE/GATE/REVIEW/JUDGE/FIX loop,
-> multi-wave auto-advance, budget pre-flight + intra-wave/git resume, Node + pytest gates —
-> suite `node --test "test/*.test.mjs"` (120 tests; the bare directory form false-fails on
+> skills). Suite: `node --test "test/*.test.mjs"` (the bare directory form false-fails on
 > fixture subdirs). The ground-truth gate is orchestrator-run (unforgeable); the JUDGE is a
-> pure function, not an agent. 2026-07-11 fixes: `--clear-halt` actually implemented
-> (`checkpoint.mjs clear`; halted→budget_stopped@gate, resume re-proves GREEN); pytest
-> summaries trusted before per-test-event heuristics + gates normalized to `-v` at contract
-> time (`-q` refuses pre-run); the vacuous-GREEN guard has an honest test-only path
-> (inventory rose + gate ran the larger suite auto-passes; tag a modify-only test wave
-> `[test-only]` in its title); transport-failed reviewers degrade instead of halting; the
-> reviewer fan-out is stakes-gated (full panel on terminal/fix-iter waves).
-
-> **Status (refreshed 2026-07-25 — July hardening now documented):**
-> - **Gate is ASYNC with a heartbeat** — during a gate the status log prints
->   `gate running · t+Nm · last: <output line>` every minute (a silent 20-minute
->   `spawnSync` freeze is gone). The gate command is **re-resolved from the plan on
->   disk every iteration**, so a plan amendment rebinds the live gate mid-run.
-> - **Gate timeout is CLASSIFIED, never a fake RED**: a gate killed at the cap
->   (default 20m; `FOREMAN_GATE_TIMEOUT_MS`) HALTs as `[taxonomy:gate-timeout]`
->   `TIMEOUT_INCOMPLETE` with the pytest progress %, kills the child TREE (no orphan
->   pytest), and steers you to scope the suite — the FIX loop never chases it.
-> - **Per-wave scoped gates**: a `gate-command:` line under a wave heading scopes that
->   wave's gate (0086). Under a plan-declared scoped gate the test-only evidence bar
->   accepts the wave's NET-NEW test count; an undeclared subset run still HALTs.
-> - **Clear-halt discipline**: `--clear-halt` on a vacuous halt is REFUSED unless code
->   landed; `--clear-halt --force` re-enters EXECUTE with eyes open; a PLAN-AMENDMENT
->   clear re-enters EXECUTE at iteration 0. Halt reasons carry `[taxonomy:*]` prefixes
->   (vacuous, ambiguity, review-transport, gate-timeout, dead-process, …).
-> - **`review:degraded`**: unparseable/unreachable reviewer seats are dropped loudly;
->   ALL seats failed + gate GREEN proceeds stamped `review:degraded` (gate is ground
->   truth §5); ALL failed + gate not-GREEN halts as review-transport.
-> - **EXECUTION-LOG.md is orchestrator-appended on every GO** (one GREEN line per
->   wave, committed with the wave) — downstream agents can trust it for prerequisites.
-> - **NEVER run `git clean -fd` in a Foreman workspace** — two total-project-loss
->   events (journals 0013/0042). Non-convergence uses `git stash` (recoverable);
->   untracked deliverables are exactly what `git clean` destroys.
+> pure function, not an agent. Operationally hardened through 2026-07: async gate with
+> per-minute heartbeat + on-disk plan rebind each iteration; classified gate timeouts
+> (`[taxonomy:gate-timeout]`, child-tree kill, never a fake RED); per-wave scoped gates
+> (0086); halt taxonomy prefixes on every reason; `review:degraded` honest seat-dropping
+> (gate stays ground truth §5); EXECUTION-LOG.md orchestrator-appended on every GO.
+> **Halt recovery:** `--clear-halt` on a vacuous halt is REFUSED unless code landed;
+> `--clear-halt --force` re-enters EXECUTE with eyes open; a PLAN-AMENDMENT clear
+> re-enters EXECUTE at iteration 0; resume re-proves GREEN.
+> **NEVER run `git clean -fd` in a Foreman workspace** — two total-project-loss
+> events (journals 0013/0042). Non-convergence uses `git stash` (recoverable);
+> untracked deliverables are exactly what `git clean` destroys.
 
 ## What Foreman is / is NOT
 
@@ -362,15 +337,7 @@ context fill, and rate-window status are **best-effort with graceful fallback**
 observed 429s, e.g. `window: OK` / `throttled @ HH:MM`). Rendered by
 `renderDashboard()` in `bin/foreman-lib.mjs`:
 
-```
-[Foreman | C:\dev\aurora | wave 3/7 "MoE judge wiring"]
-  ▸ execute… done (commit 1a2b3c4, 2 files)            +6m
-  ▸ review (2 independent, sequential)… 1 MAJOR        +5m
-  ▸ fix iter 1… closed MAJOR; re-review… GO            +4m
-  ✓ wave 3 converged (2 iters) · gate 18/18 (orchestrator-run)
-  → advancing to wave 4/7
-context: ~38% (best-effort) · elapsed 1h12m · budget 3/8 waves · window OK
-```
+(Sample dashboard rendering moved to `HUMAN.md` — 2026-08-24 elegance sweep.)
 
 ---
 

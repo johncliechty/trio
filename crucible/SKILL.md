@@ -12,10 +12,9 @@ description: >-
   Deep-Think Synthesizer (steers, never decides) and decided by a context-free
   Judge plus the user (the convergence authority). A Node engine that IMPORTS
   Foreman's durability/git/driver modules (never forks) and SPAWNS
-  locate-plan.mjs as the machine well-formedness gate. STATUS (2026-06-05): the
-  full engine — Waves 1-11 — is built and GREEN; the dogfood self-run proves
-  convergence (finding -> dry round) + a user-gate HALT/resume and emits a
-  zero-HALT doc-trio, and the 5-gate Skill Productionization Checklist passes.
+  locate-plan.mjs as the machine well-formedness gate. STATUS (2026-08-24): engine
+  LIVE and in regular use (depth bands, Speaking-Law decision asks, first-dry stop);
+  current verified status lives in the foundry PLAN.md, never in this line.
 ---
 
 <!-- ELEGANCE-LAW v2 -->
@@ -102,14 +101,13 @@ drifting** from the project's locked objective.
 
 > **Tier definition (Heavy vs regular · always-cross-model · seat mapping):** canonical in `AGENTS.md` (Foundry root on the author host; your install root in a distributed bundle) → "Skill tiers". A `-Heavy` run uses top-frontier models on EVERY seat regardless of the base session (delegate the frontier seat to a frontier-pinned sub-agent if the base session isn't frontier); foundry skills are ALWAYS true cross-model. Do not re-define tiers locally.
 
-> **Status (2026-06-05): the engine is built and GREEN through Wave 11.** The
-> three-stage pipeline, the Shark-Tank round engine, the Synthesizer + Judge, the
-> two-gate convergence, researchPrime integration, the cross-model Enhanced mode +
-> GitHub remote, the docs/VC layer, and the dogfood self-run + 5-gate
-> productionization checklist all live in `bin/` and are exercised by
-> `node --test test/`. The model-driven steps run through an injected `agent()`
-> seam; the machine well-formedness gate is Foreman's real `locate-plan.mjs`,
-> SPAWNED (never forked) so its exit code is forge-proof.
+> **Status (2026-08-24, elegance sweep): the engine is LIVE and in regular use.** The
+> three-stage pipeline, Shark-Tank round engine, Synthesizer + Judge, two-gate
+> convergence, and researchPrime integration live in `bin/` and are exercised by
+> `node --test test/`; the machine well-formedness gate is Foreman's real
+> `locate-plan.mjs`, SPAWNED (never forked) so its exit code is forge-proof.
+> Per the foundry rule, do NOT trust this block for currency — the verified
+> per-skill status table is `Skill Foundry/PLAN.md`.
 
 ## What Crucible is / is NOT
 

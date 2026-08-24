@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-17T03:58:33.178Z",
+  "ended": "2026-08-17T05:58:27.550Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "HALT: 2:GO,3:GO,4:HALT — non-convergence HALT: hit MAX_ITERS=3 without GO (gate RED (exit 2, fail 0))",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 7194,
+  "journal_ref": null
+}

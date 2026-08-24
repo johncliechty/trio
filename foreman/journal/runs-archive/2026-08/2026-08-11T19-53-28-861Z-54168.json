@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-11T19:53:28.861Z",
+  "ended": "2026-08-11T20:05:54.168Z",
+  "input": "C:\\dev\\plans\\2026-08-11-collapse-deck\\deck",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\plans\\2026-08-11-collapse-deck\\deck\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: gate exited 0 but did not demonstrate real passing tests (tests=none, pass=none, fail=none, skip=none) — refusing vacuous GREEN",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 745,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-10T02:57:25.559Z",
+  "ended": "2026-08-10T03:43:06.108Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "12",
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 4:HALT — test-immutability HALT: fix agent modified test file tests/test_chamber_manifest_schema_w4.py",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2741,
+  "journal_ref": null
+}

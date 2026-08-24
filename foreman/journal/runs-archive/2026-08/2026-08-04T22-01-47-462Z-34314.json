@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-08-04T22:01:47.462Z",
+  "ended": "2026-08-04T22:15:34.314Z",
+  "input": "C:\\dev\\Family-Finances",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Family-Finances\\_foreman-status.log",
+  "result": "HALT: 1:HALT — test-immutability HALT: fix agent added test file tests/conftest.py",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 827,
+  "journal_ref": null
+}

@@ -1037,7 +1037,8 @@ export function judge(gate, findings) {
   return { go: true, reason: 'gate GREEN and no verified blocking finding', blocking: [] };
 }
 
-// SPIKE(foreman-parallel): A/B toggle for CONCURRENT read-only reviewers (default OFF).
+// SPIKE(foreman-parallel): A/B toggle for CONCURRENT read-only reviewers (default ON;
+// set FOREMAN_CONCURRENT_REVIEW=0 for the historical sequential path).
 // The reviewers are read-only and the finding-merge (collectFindings) keys by stable
 // id, so concurrency is order-independent by construction. Flag OFF ⇒ byte-identical
 // to the historical sequential path. Used only to MEASURE the latency-tail win.
@@ -1329,8 +1330,8 @@ export async function runWave(o) {
     }
 
     // ----- REVIEW: REVIEWER_COUNT independent reviewers (§3) -----
-    // Default SEQUENTIAL. SPIKE(foreman-parallel) A/B: with FOREMAN_CONCURRENT_REVIEW=1
-    // the read-only reviewers run CONCURRENTLY via Promise.allSettled — order-independent
+    // Default CONCURRENT (FOREMAN_CONCURRENT_REVIEW=0 restores the serial path). The
+    // read-only reviewers run via Promise.allSettled — order-independent
     // (collectFindings keys by stable id). A reviewer whose promise REJECTS is mapped to
     // an abstain (answerable:'no') so a degraded run HALTs at the §4.7 ambiguity gate
     // rather than silently passing on one reviewer (never Promise.all, which would drop

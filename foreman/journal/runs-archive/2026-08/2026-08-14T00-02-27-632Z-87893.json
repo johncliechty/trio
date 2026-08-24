@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-08-14T00:02:27.632Z",
+  "ended": "2026-08-14T00:44:47.893Z",
+  "input": "C:\\dev\\Anchor",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 4,
+    "maxWaves": "2",
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor\\_foreman-status.log",
+  "result": "HALT: 1:HALT — test-immutability HALT: fix agent added test file tests/test_share_py38_compat.py",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2540,
+  "journal_ref": null
+}

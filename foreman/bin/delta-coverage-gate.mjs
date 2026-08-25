@@ -98,9 +98,15 @@ export function checkDeltaCoverage({ changedFiles = [], testMentions = '', repoT
   const mentions = String(testMentions).toLowerCase();
   const testTokens = new Set(tests.flatMap(tokensFor));
 
+  // 2026-08-25: SHORT fallback tokens (whole-stem, <4 chars — 'db', 'f1') match on WORD
+  // BOUNDARIES; plain substring let any text containing those letters count as coverage.
+  const mentionHas = (t) =>
+    t.length >= 4 ? mentions.includes(t)
+      : new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i').test(mentions);
+
   const uncovered = surfaces.filter(({ file }) => {
     const toks = tokensFor(file);
-    if (toks.some((t) => mentions.includes(t))) return false;   // a test names it
+    if (toks.some(mentionHas)) return false;                    // a test names it
     if (toks.some((t) => testTokens.has(t))) return false;      // a test file is named for it
     return true;
   });

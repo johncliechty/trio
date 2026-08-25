@@ -141,9 +141,12 @@ drifting** from the project's locked objective.
    stakes/irreversibility, unknowns) recommend a pipeline depth — **LITE** (single-pass,
    minimal/no Shark rounds for small/clear work), **FULL** (the full 3-stage + Shark-Tank
    machinery — the default), or **SPIKE-FIRST** (probe before planning when genuinely
-   uncertain). Right-sizing is **your** judgment, so it **HALTs for you to confirm** and
-   **defaults to FULL** when uncertain or when stakes are high — rigor is never silently
-   downgraded. The triage only right-sizes *ceremony*: the North-Star lock, post-lock drift
+   uncertain). Since 2026-08-25 (John-ratified card; Elegance rule 3) the band
+   **AUTO-APPLIES and announces itself in the first status line — it never asks** (a
+   confirm question was a fourth gate); an unsizable intake defaults to FULL **loudly**
+   ("DEFAULTED — triage could not size"), so rigor is never silently downgraded and a
+   small task never silently pays the FULL tax (journal 0087). The auto-band also writes
+   the triage LOCK record, so the Stage-2 Foreman handoff's fail-closed emit is satisfied. The triage only right-sizes *ceremony*: the North-Star lock, post-lock drift
    detection, the inclusion test, and full Shark-Tank rigor (when FULL) are unchanged in
    every band. Then greenfield Oranges framing, or a tiered brownfield ingest (T1
    inventory/dedupe → T2 reproduce-first + coverage → T3 delegate deep archaeology to
@@ -247,8 +250,16 @@ user is the final convergence authority**.
    split, Gemini cap 2). Pass its ROUTES into the loop (`runMasterPlanLoop({ ..., routes })`) so the
    Judge's stamp derives from where the judge role ACTUALLY dispatches (T7) — the default same-model
    Judge persona is the agy-down fallback, not the normal path.
-2. **Stage 0** → `runStage0`/protocol: complexity triage HALTs for depth confirmation; frame; candidate
-   North Star. **Gate ergonomics (John's locked preferences):**
+2. **Stage 0** → `runStage0`/protocol: complexity triage AUTO-BANDS (announced, never asked —
+   2026-08-25) + writes the triage lock; frame; candidate North Star. **Gate ergonomics (John's
+   locked preferences — SCOPE RECONCILED 2026-08-25):** the 07-16 show-the-artifact rule and the
+   08-15 Elegance rule 1 (artifact on disk + ≤200-word ask; longer approvals VOID) are BOTH his
+   locked words. Scope by artifact size, per his own later law and his live acceptances (0090/
+   0091 first-attempt approvals with the draft on disk): the **North Star (a short document)
+   still prints IN FULL at its lock ask** — the rule below stands verbatim for it and for any
+   short approval artifact (amendment diffs). **Long artifacts (Master Plan, Implementation
+   Plan) live on disk, named by path, with a ≤200-word decision block + print-on-request** —
+   never a clipped dialog preview.
    > **THE SHOW-THE-ARTIFACT RULE (locked by John, 2026-07-16): NEVER ask the user to approve/lock a
    > North Star they have not just been SHOWN. At the moment of the ask, print the ENTIRE candidate
    > North Star document — statement, success criteria, non-goals, risk taxonomy, foresight brief,

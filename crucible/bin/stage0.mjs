@@ -543,6 +543,22 @@ export async function runStage0({
   } else {
     log(`stage0 band: ${triage.band} (auto — ${triage.rationale || 'triage recommendation'}; tier=${triage.nsTier}) — auto-applied, announced not asked`);
   }
+  // 2026-08-25 hardening (review finding): the auto-band must also CREATE THE LOCK
+  // RECORD — Stage-2's handoff emit fail-closes on a missing lock, so an auto-banded
+  // run would poison the Foreman handoff downstream. The lock records the auto-apply
+  // honestly (decision=confirm of the shared recommendation; rationale carries AUTO).
+  try {
+    const locked = resolveStage0TriageLock({
+      complexity: triage,
+      confirmedDepth: triage.nsDepth,
+      confirmedTier: triage.nsTier,
+      decision: 'confirm',
+      rationale: `stage0 AUTO-BAND (announced, not asked; Elegance rule 3): ${triage.rationale || 'shared triage recommendation'}`,
+    });
+    triage.lock = locked.lock;
+  } catch (e) {
+    log(`stage0 band: lock record NOT created (${e?.message || e}) — handoff emit will refuse until a lock exists (fail-closed, loud)`);
+  }
 
   const sel = selectTier(input);
   const greenfield = sel.tier === TIERS.GREENFIELD;

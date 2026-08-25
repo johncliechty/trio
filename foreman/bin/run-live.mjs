@@ -47,6 +47,9 @@ const CALL_TIMEOUT_MS = Number(CALL_TIMEOUT_MIN) > 0 ? Number(CALL_TIMEOUT_MIN) 
 if (CALL_TIMEOUT_MS !== null && Number(CALL_TIMEOUT_MIN) < 45) {
   console.log(`!! call-timeout ${CALL_TIMEOUT_MIN}m is below the 45m floor (journals 0102/0103: healthy agents killed at 20m) — proceeding as explicitly instructed`);
 }
+if (CALL_TIMEOUT_MS === null) {
+  console.log('!! per-call timeout DISABLED (--call-timeout-min 0) — NO dead-process backstop this run; a hung agent will hang the wave (explicit operator choice, named here)');
+}
 const LOCK_FILE = flag('--lock', path.join(PROJECT, '.foreman', 'run.lock'));
 
 // F-H sleep fix (0072): fail-loud guards + heartbeat so mid-wave deaths leave forensics
@@ -424,13 +427,24 @@ try {
     return null;
   };
   const candidates = new Set();
-  for (const m of planText.match(/[A-Za-z]:[\\/](?:[^\s"'`|<>:*?\r\n]+[\\/])*[^\s"'`|<>:*?\r\n]+/g) ?? []) {
+  const unresolved = [];
+  const addCandidate = (m) => {
     const cleaned = m.replace(/[),.;:\]]+$/, '');
     try {
       const st = fs.statSync(cleaned);
       const root = gitRootOf(st.isDirectory() ? cleaned : path.dirname(cleaned));
       if (root) candidates.add(root);
-    } catch { /* prose path that doesn't exist — not a repo */ }
+    } catch { unresolved.push(cleaned); }
+  };
+  // Pass 1 (2026-08-25 review fix — the guard was FAIL-OPEN on spacey paths): quoted or
+  // backticked spans may contain spaces ("C:\dev\Skill Foundry\..."); the unquoted pass
+  // truncates at the first space, which both MISSES a spacey sibling entirely and can
+  // FALSE-match an existing shorter prefix. Quoted spans are scanned first, spaces allowed.
+  for (const m of planText.match(/["'`][A-Za-z]:[\\/][^"'`\r\n]+["'`]/g) ?? []) addCandidate(m.slice(1, -1));
+  // Pass 2: unquoted prose paths (no spaces — the honest limit of unquoted matching).
+  for (const m of planText.match(/[A-Za-z]:[\\/](?:[^\s"'`|<>:*?\r\n]+[\\/])*[^\s"'`|<>:*?\r\n]+/g) ?? []) addCandidate(m);
+  if (unresolved.length) {
+    emit(`sibling-repos: ${unresolved.length} plan path token(s) did not resolve on disk (first: ${unresolved[0].slice(0, 80)}) — note: unquoted paths cannot carry spaces; QUOTE spacey repo paths in the plan to have them guarded`);
   }
   candidates.delete(projReal);
   if (engineHome) candidates.delete(engineHome);
@@ -438,8 +452,13 @@ try {
   if (checked.length) emit(`sibling-repos: checked ${checked.length} plan-named repo(s): ${checked.join(' · ')}`);
   const dirty = [];
   for (const repo of checked) {
-    const r = spawnSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8' });
-    if (r.status === 0 && r.stdout.trim() !== '') dirty.push(`${repo} (${r.stdout.trim().split('\n').length} uncommitted path(s))`);
+    const r = spawnSync('git', ['status', '--porcelain'], { cwd: repo, encoding: 'utf8', timeout: 20000 });
+    if (r.error || r.status !== 0) {
+      // Review fix: a git failure was silently counted CLEAN — say it, don't bless it.
+      emit(`sibling-repos: git status FAILED in ${repo} (${r.error?.message || `exit ${r.status}`}) — repo NOT verified clean`);
+      continue;
+    }
+    if (r.stdout.trim() !== '') dirty.push(`${repo} (${r.stdout.trim().split('\n').length} uncommitted path(s))`);
   }
   if (dirty.length) {
     if (process.env.FOREMAN_ALLOW_DIRTY_SIBLINGS === '1') {

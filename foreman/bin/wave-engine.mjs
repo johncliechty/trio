@@ -1538,7 +1538,10 @@ export async function runWave(o) {
                 if (e.isDirectory()) {
                   if (/^(node_modules|\.git|\.foreman|dist|build|__pycache__)$/i.test(e.name)) continue;
                   walk(full, depth + 1);
-                } else if (isTestFile(path.relative(projectDir, full))) {
+                } else if (isTestFile(path.relative(projectDir, full).split(path.sep).join('/'))) {
+                  // (Review fix: raw path.relative gives backslashes on Windows — the
+                  // dir-pattern half of isTestFile never matched, silently shrinking the
+                  // rescue corpus to filename-suffix matches only.)
                   let text = '';
                   try { text = fs.readFileSync(full, 'utf8').slice(0, 65536).toLowerCase(); } catch { /* skip */ }
                   corpus.push({ file: full, stemTokens: deltaTokensFor(full), textLower: text });
@@ -1548,9 +1551,15 @@ export async function runWave(o) {
             walk(projectDir, 0);
             const rescued = [];
             const stillUncovered = [];
+            // Review fix: SHORT fallback tokens ('db', 'f1') must match on WORD BOUNDARIES —
+            // substring matching let any test containing the letters 'db' rescue db.py,
+            // flipping the gate from never-passes to always-passes for short names.
+            const tokenInText = (text, t) =>
+              t.length >= 4 ? text.includes(t)
+                : new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i').test(text);
             for (const u of delta.uncovered) {
               const toks = deltaTokensFor(u.file);
-              const hit = corpus.find((c) => toks.some((t) => c.stemTokens.includes(t) || c.textLower.includes(t)));
+              const hit = corpus.find((c) => toks.some((t) => c.stemTokens.includes(t) || tokenInText(c.textLower, t)));
               if (hit) rescued.push({ ...u, coveredBy: path.relative(projectDir, hit.file) });
               else stillUncovered.push(u);
             }

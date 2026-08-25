@@ -324,6 +324,10 @@ Every real run writes a `journal/runs/` training record (Skill Foundry AGENTS.md
 - **`approved=true` must emit, full stop.** A Stage-2 that re-tanks an
   approved plan without emitting is a defect (0069/0076's force-emit exists
   for it) — approval is the user's convergence authority being exercised.
+- **DRY ≠ clean — read OPEN-FINDINGS at every gate.** A quiet review round means
+  the reviewers stopped AGREEING, not that the plan is defect-free: on LITE's two
+  seats, real blocker-severity findings ride through as single-reviewer catches
+  (0091: four of four were real). The gate ask now says this; honor it. (0091, rule 9)
 
 ## Usage journal (sleep-loop feed — append after every REAL run)
 

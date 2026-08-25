@@ -78,6 +78,43 @@ export async function runRounds(runDir, { maxRounds = null, env = process.env, l
     .map((f) => JSON.parse(fs.readFileSync(path.join(runDir, f), 'utf8')));
   if (!allInputs.length) throw new Error(`no round-*-input.json found in ${runDir}`);
 
+  // FIELD LAWS, mechanized (2026-08-25, John-ratified card — each of these burned a real
+  // round as SKILL.md prose; now the engine HALTs loudly at load, one line, never a silent
+  // auto-fix). Law 1: traces_to_north_star is the STRING 'yes'/'no' — a boolean silently
+  // demotes EVERY finding (2026-08-15). Law 2: pasted agy replies may arrive ```-fenced
+  // ~1-in-6 (0052) — a fenced blob in an input field is a transcription defect, not data.
+  // Law 3: any *path* field must be ABSOLUTE (0002 — agy's CWD is never reliable).
+  for (const input of allInputs) {
+    const rn = input?.round ?? '?';
+    for (const rev of input?.reviews ?? []) {
+      for (const f of rev?.findings ?? []) {
+        const t = f?.traces_to_north_star;
+        if (t !== 'yes' && t !== 'no') {
+          throw new Error(`FIELD-LAW HALT round ${rn} reviewer ${rev?.reviewer ?? '?'} topic "${f?.topic ?? '?'}": traces_to_north_star must be the STRING 'yes' or 'no', got ${JSON.stringify(t)} — a non-string silently demotes every finding`);
+        }
+      }
+    }
+    const walk = (obj, at) => {
+      if (obj == null) return;
+      if (typeof obj === 'string') {
+        if (obj.trimStart().startsWith('```')) {
+          throw new Error(`FIELD-LAW HALT round ${rn} at ${at}: value begins with a \`\`\` fence — a fenced agy reply was pasted as data; strip the fence and re-run (journal 0052)`);
+        }
+        return;
+      }
+      if (Array.isArray(obj)) { obj.forEach((v, i) => walk(v, `${at}[${i}]`)); return; }
+      if (typeof obj === 'object') {
+        for (const [k, v] of Object.entries(obj)) {
+          if (/path$/i.test(k) && typeof v === 'string' && v && !path.isAbsolute(v)) {
+            throw new Error(`FIELD-LAW HALT round ${rn} at ${at}.${k}: "${v}" is not an ABSOLUTE path — agy's CWD is never reliable (journal 0002)`);
+          }
+          walk(v, `${at}.${k}`);
+        }
+      }
+    };
+    walk(input, `round-${rn}-input`);
+  }
+
   // P0 2026-07-25 (journal 0004): a legacy governance record carries the two-gate
   // placeholder `{hash:'mock-hash'}` with NO thresholds/tier — the old `||` short-
   // circuited on that truthy object and crashed at thresholds.N. A locked output is

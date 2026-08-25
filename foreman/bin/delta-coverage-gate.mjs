@@ -77,10 +77,13 @@ export function classifyDelta(changedFiles = []) {
  * @returns {{pass:boolean, severity:'BLOCKER'|'OK', detail:string, uncovered:object[]}}
  */
 export function checkDeltaCoverage({ changedFiles = [], testMentions = '', repoTestConvention = [] } = {}) {
-  const { tests, surfaces } = classifyDelta(changedFiles);
+  const { files, tests, surfaces } = classifyDelta(changedFiles);
+  // 2026-08-25 (journal 0103 item 3, John-ratified card): every verdict carries the SCAN
+  // WINDOW — the halt that never said which files it scanned burned three remedy attempts.
+  const scanned = { files, tests };
 
   if (surfaces.length === 0) {
-    return { pass: true, severity: 'OK', uncovered: [], detail: 'wave adds no surface; delta-coverage not applicable' };
+    return { pass: true, severity: 'OK', uncovered: [], scanned, detail: 'wave adds no surface; delta-coverage not applicable' };
   }
 
   const mentions = String(testMentions).toLowerCase();
@@ -98,9 +101,13 @@ export function checkDeltaCoverage({ changedFiles = [], testMentions = '', repoT
       pass: true,
       severity: 'OK',
       uncovered: [],
+      scanned,
       detail: `${surfaces.length} surface change(s), each named by a test in this wave`,
     };
   }
+
+  const listCap = (arr, n = 12) =>
+    arr.length <= n ? arr.join(', ') : `${arr.slice(0, n).join(', ')} +${arr.length - n} more (full list in the wave's delta-coverage.json)`;
 
   const conventionNote = repoTestConvention.length
     ? ` This repo's convention is a stub gate per subsystem (e.g. ${repoTestConvention[0]}); a new subsystem without one is an INCOMPLETE wave.`
@@ -110,11 +117,13 @@ export function checkDeltaCoverage({ changedFiles = [], testMentions = '', repoT
     pass: false,
     severity: 'BLOCKER',
     uncovered,
+    scanned,
     detail:
       `${uncovered.length} surface change(s) with no test naming them: ` +
       uncovered.map((u) => `${u.file} (${u.kind})`).join(', ') +
       `. A suite that stays green because the new code is UNTESTED is not evidence.` +
-      conventionNote,
+      conventionNote +
+      ` SCANNED — changed files (${files.length}): ${listCap(files)}; test files read for mentions (${tests.length}): ${tests.length ? listCap(tests) : 'NONE in this wave'}.`,
   };
 }
 

@@ -1,0 +1,11 @@
+{
+  "holder": null,
+  "committing_state": false,
+  "resume_interlock": false,
+  "liveness_heartbeat": null,
+  "pid": null,
+  "halted_build": "researchPrime 13-wave checkpoint state (wave 1/13, HALTED on Item C)",
+  "amendments": {
+    "committing_state_refinement": "John-amendment flag on committing-state refinement surfaced"
+  }
+}

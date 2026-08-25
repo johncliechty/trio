@@ -1,0 +1,351 @@
+<<<<
+> Every wave ships real source its new tests import and exercise; acceptance criteria follow the D16 hybrid convention (a one-line done-when + Given/When/Then for non-trivial waves).
+
+====
+> Every wave ships real source its new tests import and exercise; acceptance criteria follow the D16 hybrid convention (a one-line done-when + Given/When/Then for non-trivial waves).
+
+## Closed Stage-1 decisions (Round 2 — Foreman-checkable)
+
+These close the not-lockable gaps. Not principles — each row is a binary product decision later waves enforce as done-when John can check false.
+
+| ID | Decision | Closed choice |
+|----|----------|---------------|
+| C1 | Feedback transport v1 | **Local-queue + pull/export only.** Sanitizer writes to local queue only; no auto network send. User-initiated export command produces a sanitizer-proven bundle. John **pulls/ingests** into a private feedback-intake path on his schedule (issue/drop/import — never product `main`). **Zero feedback credentials in distro/package.** Public push tokens = out of v1. Collaborator auto-drop (invite-scoped token) = optional dogfood post-v1, not ship-blocking for package A/B works-on-arrival. |
+| C2 | Friction schema | **Strict allowlist; zero free-text fields.** Any non-allowlisted key **or** any free-text string value → drop **entire** record (fail closed). Workarounds = **enum-only**. Red-team planted free-text must fail closed. |
+| C3 | Journal writers | **One intercept layer** (`skill_journal.append_run_outcome`) — not skill-body rewrites (NS non-goal holds). Named call sites under freeze tags: (1) Trio shared host end-of-run covering researchPrime/Crucible/Foreman; (2) Foundry skill launcher/wrapper for Foundry roster IDs; (3) Anchor `job_runner` completion when package B invokes skills. Fake-run smoke alone is **insufficient** — real intercept integration tests required. |
+| C4 | Freeze pin matrix | Closed `repo → freeze-tag placeholder → artifact → package A/B` table in W1. W11 asserts every pin filled before ship-allowed. |
+| C5 | v1 skill roster IDs | Closed set (exact IDs): `researchprime`, `crucible`, `foreman`, `gandalf`, `jumper`, `tidy-idy`, `zombie-hunter`, `legal-beagle`, `literature-review`, `ramanujan`, `figure-designer`, `expert-coder`, `agent-builder`. **Anchor Doctor** = Anchor feature surface (not a skill_id). Capability matrix marks Anchor-required vs works-without-Anchor per ID. |
+| C6 | Live-tree canaries | **Banned before freeze.** Canaries use only freeze-tag `git archive` fixtures or mock archives. Dirty/live working trees hard-fail publish. |
+| C7 | Stranger gate | Named clean Windows E2E for **both package A and package B** is a captain **ship-blocker**. Automated surrogate alone is **not** sufficient for ship-allowed. |
+| C8 | Wave order | Topology/captain (**W9**) is **decoupled** from feedback transport (**W10**). Feedback trails works-on-arrival. W9 depends on W7 (not W10). W10 depends on W8. W11 depends on W9 for WOA ship; feedback ship-allowed items additionally require W8 red-team + W10 export path green. |
+| C9 | Prefs path | **One path for A and B:** `~/.anchor/model_prefs.json` (mirror of Anchor `settings.json` fields `coding_family`, `review_family`, `default_cli`, `cross_model`). Skills-only onboard writes the same path without requiring an Anchor process. |
+| C10 | Fork export | **Export blocked on forked seal.** No structural export from unsealed/forked trees in v1. Documented expected drop reason `forked_tree`; yield-empty is an ops note, not an alternate export mode. |
+| C11 | Windows service | **No-admin is the success path.** Desktop `.url` → local dashboard without admin = required success. Service: prefer per-user non-admin registration; if service register fails without elevation → degraded stamp `service_nonadmin` + manual/login-start instructions; onboard does **not** hard-fail; shortcut still created. |
+
+### Closed pin matrix (C4 — placeholders until freeze; W11 fills actual tags)
+
+| SoT repo | Artifact produced | Freeze-tag placeholder | Package |
+|----------|-------------------|------------------------|---------|
+| trio (private `*-dev`) | Trio skill trees: `researchprime`, `crucible`, `foreman` | `FREEZE_TRIO_TAG` | A, B |
+| Skill Foundry (private `*-dev`) | Foundry skill trees for remaining roster IDs + journal/intercept hooks | `FREEZE_FOUNDRY_TAG` | A, B |
+| Anchor (private `*-dev`) | Anchor service/app + Anchor Doctor surface | `FREEZE_ANCHOR_TAG` | B only |
+| share-distro / distro tooling (as in GREEN inventory) | `distro.py`, `vendor_skills.py`, `onboard.py`, scrub/publish | `FREEZE_DISTRO_TAG` | A, B tooling |
+| governance sources (canonical AGENTS.md pack inputs) | Governance pack payload | `FREEZE_GOV_TAG` (or derived stamp) | A, B |
+
+B always declares `skills_pin` referencing the Skills release tag/commit that A would ship at that cut.
+
+>>>>
+
+<<<<
+## Wave 1 — W1 — Brownfield contracts: SUPERSEDES/REUSE, package & capability schemas
+
+**Intent:** Lock extension-only brownfield map and machine-checkable package/capability/readiness/SOURCES contracts so every later wave extends one distro stack and cannot ship Anchor-only.
+
+**Deliverables:** GREEN inventory + gap-proof map (path→NS criterion) citing distro.py, vendor_skills.py, onboard.py, registrar, publish_distro, scrub/clean-scan; SUPERSEDES + REUSE map artifact forbidding second publish path and Tailscale/onboard2 reimplementation without gap-proof ticket; package_matrix schema (A Skills-only | B Anchor+Skills; hard-block Anchor-only names; B⊇A; skills_pin); per-skill capability matrix (works-without-Anchor | degraded-without-Anchor | Anchor-required) for Trio+Foundry roster; readiness stamp schema (ready | degraded + reason codes); SOURCES.md multi-repo pin schema + skill freeze tag placeholders; unit tests validating schemas and Anchor-only rejection
+
+**Depends on:** —
+
+**done-when:** Schemas and SUPERSEDES/REUSE map land with tests that reject Anchor-only package names and assert B must declare skills_pin and contain full Skills subtree contract.
+
+- **Given** A package matrix document names an Anchor-only artifact, **when** the package_matrix validator runs, **then** validation fails closed and no ship-allowed stamp can be produced
+- **Given** Capability matrix lists Zombie Hunter / Tidy-Idy / Anchor Doctor, **when** Skills-only roster is derived, **then** Anchor-required surfaces are excluded or degraded-labeled, never crash-on-missing-Anchor
+- **Given** A Foreman wave template omits reuse-proof path, **when** contract lint runs, **then** lint fails until reuse path or gap-proof ticket is present
+
+====
+## Wave 1 — W1 — Brownfield contracts: SUPERSEDES/REUSE, package & capability schemas
+
+**Intent:** Lock extension-only brownfield map and machine-checkable package/capability/readiness/SOURCES contracts so every later wave extends one distro stack and cannot ship Anchor-only — with a **closed** pin matrix and **closed** v1 roster ID set.
+
+**Deliverables:** GREEN inventory + gap-proof map (path→NS criterion) citing distro.py, vendor_skills.py, onboard.py, registrar, publish_distro, scrub/clean-scan; SUPERSEDES + REUSE map artifact forbidding second publish path and Tailscale/onboard2 reimplementation without gap-proof ticket; package_matrix schema (A Skills-only | B Anchor+Skills; hard-block Anchor-only names; B⊇A; skills_pin); **closed pin matrix table** (repo→artifact→FREEZE_* placeholder→package A/B) as machine-checkable schema; **closed v1 roster ID list** (C5) with per-skill capability matrix (works-without-Anchor | degraded-without-Anchor | Anchor-required); readiness stamp schema (ready | degraded + reason codes including `service_nonadmin`, `pin_mismatch`, `forked_tree`, seat gaps); SOURCES.md multi-repo pin schema + skill freeze tag placeholders matching C4; unit tests validating schemas, Anchor-only rejection, roster membership completeness, pin-matrix shape
+
+**Depends on:** —
+
+**done-when:** Schemas and SUPERSEDES/REUSE map land with tests that reject Anchor-only package names; assert B must declare skills_pin and contain full Skills subtree contract; assert pin matrix lists every C4 row; assert roster ID set equals C5 exactly (no extras without plan amendment).
+
+- **Given** A package matrix document names an Anchor-only artifact, **when** the package_matrix validator runs, **then** validation fails closed and no ship-allowed stamp can be produced
+- **Given** Capability matrix lists Zombie Hunter / Tidy-Idy / Anchor Doctor, **when** Skills-only roster is derived, **then** Anchor-required surfaces are excluded or degraded-labeled, never crash-on-missing-Anchor
+- **Given** A Foreman wave template omits reuse-proof path, **when** contract lint runs, **then** lint fails until reuse path or gap-proof ticket is present
+- **Given** Pin matrix omits FREEZE_TRIO_TAG or FREEZE_FOUNDRY_TAG row, **when** schema validator runs, **then** validation fails closed
+- **Given** Roster config adds a skill_id not in C5 without plan amendment flag, **when** roster membership assert runs, **then** validation fails closed
+
+>>>>
+
+<<<<
+## Wave 2 — W2 — No-leak distro substrate: roster canary, denylist scrub, SOURCES provenance
+
+**Intent:** Expand freeze-at-tag vendoring and deny-by-default scrub so full-roster packaging cannot leak author data or ship from dirty mid-run trees.
+
+**Deliverables:** vendor_skills.py roster config extended toward full declared suite via config-only changes; canary: one large Foundry skill + one Trio skill through git-archive → denylist → residual scrub → SOURCES.md; expanded denylist + residual host-path/secret scrub; dual CI fixtures: planted-leak fails clean-scan; planted-legit skill-prose paths pass; SOURCES.md attestation fields (multi-repo freeze tags/commits, package versions, scrub tool versions, ship-allowed gate text); money-safe packaging tests (network deny default; mock archive fixtures only)
+
+**Depends on:** W1 — Brownfield contracts: SUPERSEDES/REUSE, package & capability schemas
+
+**done-when:** Canary archive for roster expansion is scrub-green; planted-leak fixture fails clean-scan; planted-legit fixture passes; SOURCES pin schema is written for freeze tags.
+
+- **Given** A fixture tree plants an author host path and a secret token, **when** clean-scan runs on the scrubbed archive, **then** publish is blocked and the leak is reported
+- **Given** A legitimate skill doc mentions a relative path pattern, **when** clean-scan runs, **then** scan passes (no false-positive block)
+- **Given** Working tree is dirty mid concurrent skill run, **when** publish pipeline is invoked, **then** dirty-tree gate fails before any artifact is emitted
+
+====
+## Wave 2 — W2 — No-leak distro substrate: roster canary, denylist scrub, SOURCES provenance
+
+**Intent:** Expand freeze-at-tag vendoring and deny-by-default scrub so full-roster packaging cannot leak author data or ship from dirty mid-run trees; **ban live-tree canaries before freeze**.
+
+**Deliverables:** vendor_skills.py roster config extended to **closed C5 roster IDs** via config-only changes; canary: one large Foundry skill + one Trio skill through **freeze-tag/mock git-archive only** → denylist → residual scrub → SOURCES.md (**live dirty working-tree canaries forbidden** — C6); expanded denylist + residual host-path/secret scrub; dual CI fixtures: planted-leak fails clean-scan; planted-legit skill-prose paths pass; SOURCES.md attestation fields (multi-repo FREEZE_* placeholders→tags/commits when filled, package versions, scrub tool versions, ship-allowed gate text); money-safe packaging tests (network deny default; mock archive fixtures only); publish gate fails if archive source is dirty live tree rather than tag/commit
+
+**Depends on:** W1 — Brownfield contracts: SUPERSEDES/REUSE, package & capability schemas
+
+**done-when:** Canary archive for roster expansion is scrub-green using tag/mock archive only; planted-leak fixture fails clean-scan; planted-legit fixture passes; SOURCES pin schema is written for freeze tags; live-tree canary path is hard-rejected.
+
+- **Given** A fixture tree plants an author host path and a secret token, **when** clean-scan runs on the scrubbed archive, **then** publish is blocked and the leak is reported
+- **Given** A legitimate skill doc mentions a relative path pattern, **when** clean-scan runs, **then** scan passes (no false-positive block)
+- **Given** Working tree is dirty mid concurrent skill run, **when** publish pipeline is invoked, **then** dirty-tree gate fails before any artifact is emitted
+- **Given** A canary requests vendoring from live HEAD without a freeze tag, **when** vendor/publish runs, **then** job fails closed (C6)
+
+>>>>
+
+<<<<
+## Wave 4 — W4 — Governance pack generator + Foundry journal layout hooks
+
+**Intent:** Ship version-stamped operating rules and journal append hooks so recipients inherit culture and sleep-ready journal layout without claiming Foundry sleep is live.
+
+**Deliverables:** governance pack generator from canonical AGENTS.md sources + host-personal denylist; exportable AGENTS.md + thin CLAUDE.md/GEMINI.md pointers; version stamp; golden fixture pack in CI (generated matches golden after denylist; no author paths); pack content: Status-table 10-minute format, seating law, skill immutability vs Foundry edit path, journal expectations; Foundry sleep labeled future-ready; Foundry journal layout + minimal append API (skill_id, skill_version, outcome class, structural failure codes; schema-versioned semver); smoke test: fake run writes a journal file
+
+**Depends on:** W3 — Package matrix publish gates (A or B only; B⊇A; skills_pin)
+
+**done-when:** Governance golden CI passes with no author host paths; journal append smoke writes a schema-valid local journal file.
+
+- **Given** Canonical AGENTS.md sources include author-specific paths, **when** governance pack generator runs with denylist, **then** exported pack matches golden and contains zero author home paths
+- **Given** A fake skill run completes, **when** journal append hook is invoked with mandatory fields, **then** a local journal file is written with skill_id, skill_version, outcome class, and structural codes
+- **Given** A reader inspects governance pack labels, **when** Foundry sleep section is read, **then** copy states future-ready / not v1-complete
+
+====
+## Wave 4 — W4 — Governance pack generator + Foundry journal layout + writer intercept
+
+**Intent:** Ship version-stamped operating rules, journal append hooks, and the **named writer intercept layer** so real runs emit structured friction fields without rewriting skill internals.
+
+**Deliverables:** governance pack generator from canonical AGENTS.md sources + host-personal denylist; exportable AGENTS.md + thin CLAUDE.md/GEMINI.md pointers; version stamp; golden fixture pack in CI (generated matches golden after denylist; no author paths); pack content: Status-table 10-minute format, seating law, skill immutability vs Foundry edit path, journal expectations; Foundry sleep labeled future-ready; Foundry journal layout + **intercept module** `skill_journal.append_run_outcome` (mandatory: skill_id, skill_version from SOURCES/manifest, outcome class enum, structural failure code enums; schema-versioned semver); **three named call sites (C3)** wired under freeze-tag stubs: (1) Trio shared host end-of-run; (2) Foundry launcher/wrapper; (3) Anchor job_runner completion (B); integration tests that invoke each call site (not fake-run smoke alone); smoke: fake run also still writes a journal file for unit isolation
+
+**Depends on:** W3 — Package matrix publish gates (A or B only; B⊇A; skills_pin)
+
+**done-when:** Governance golden CI passes with no author host paths; each of the three C3 call sites has an integration test that writes skill_id + outcome class + structural codes; fake-run-only is not the sole proof.
+
+- **Given** Canonical AGENTS.md sources include author-specific paths, **when** governance pack generator runs with denylist, **then** exported pack matches golden and contains zero author home paths
+- **Given** Trio shared host ends a run under freeze-tag stub, **when** intercept fires, **then** a local journal record is written with skill_id, skill_version, outcome class, and structural codes
+- **Given** Foundry launcher completes a roster skill under freeze-tag stub, **when** intercept fires, **then** the same mandatory fields are written for that skill_id
+- **Given** Package B job_runner completes a skill invocation under freeze-tag stub, **when** intercept fires, **then** mandatory fields are written without editing skill body trees
+- **Given** A reader inspects governance pack labels, **when** Foundry sleep section is read, **then** copy states future-ready / not v1-complete
+
+>>>>
+
+<<<<
+## Wave 5 — W5 — Consumer install model, readiness stamp, skills immutability seal
+
+**Intent:** Make Skills install consumer-safe with machine-readable readiness and forked-tree detection so green ready is honest and feedback cannot export from broken immutability.
+
+**Deliverables:** consumer skill install model (read-only-by-default or clear overlay; re-vendor for updates); onboard path labels: consumer vs collaborator vs Foundry-edit; post-onboard checksum/manifest seal of vendored skills; local edits → degraded forked status; machine-local home config root for projects/skills/Anchor without embedding author paths in shipped trees; readiness stamp on disk: ready requires governance installed + ≥1 coding-family seat probe pass OR explicit user-accepted degraded; Skills refuses green ready otherwise; tests for seal mismatch and readiness reason codes
+
+**Depends on:** W4 — Governance pack generator + Foundry journal layout hooks
+
+**done-when:** Ready stamp is green only with governance + seat probe or explicit degraded; skill tree edits flip seal to forked and block feedback export path.
+
+- **Given** Governance is installed but no coding-family seat probe has passed and user has not accepted degraded, **when** readiness is evaluated, **then** stamp is not green ready and reason codes explain the gap
+- **Given** Vendored skills manifest is sealed at onboard, **when** a local skill file is modified, **then** status becomes degraded forked and feedback export is disabled until re-vendor
+- **Given** User chooses a home directory, **when** machine-local config is written, **then** skills and future projects resolve under that root without author paths in package trees
+
+====
+## Wave 5 — W5 — Consumer install model, readiness stamp, skills immutability seal
+
+**Intent:** Make Skills install consumer-safe with machine-readable readiness and forked-tree detection so green ready is honest; **forked trees cannot export friction (C10)**.
+
+**Deliverables:** consumer skill install model (read-only-by-default or clear overlay; re-vendor for updates); onboard path labels: consumer vs collaborator vs Foundry-edit; post-onboard checksum/manifest seal of vendored skills; local edits → degraded forked status; **export path hard-blocked when seal is forked** (C10 — no structural export alternate); machine-local home config root for projects/skills/Anchor without embedding author paths in shipped trees; **single prefs path (C9)** documented: `~/.anchor/model_prefs.json`; readiness stamp on disk: ready requires governance installed + ≥1 coding-family seat probe pass OR explicit user-accepted degraded; Skills refuses green ready otherwise; tests for seal mismatch, export-blocked-on-fork, and readiness reason codes
+
+**Depends on:** W4 — Governance pack generator + Foundry journal layout + writer intercept
+
+**done-when:** Ready stamp is green only with governance + seat probe or explicit degraded; skill tree edits flip seal to forked and block feedback export path (no alternate structural export).
+
+- **Given** Governance is installed but no coding-family seat probe has passed and user has not accepted degraded, **when** readiness is evaluated, **then** stamp is not green ready and reason codes explain the gap
+- **Given** Vendored skills manifest is sealed at onboard, **when** a local skill file is modified, **then** status becomes degraded forked and feedback export is disabled until re-vendor
+- **Given** User chooses a home directory, **when** machine-local config is written, **then** skills and future projects resolve under that root without author paths in package trees
+- **Given** Seal status is forked, **when** any friction export is attempted, **then** export fails with reason `forked_tree` and no bundle is produced
+
+>>>>
+
+<<<<
+## Wave 7 — W7 — Onboard seats, feedback consent, Anchor desktop/service, pin-mismatch
+
+**Intent:** Complete works-on-arrival onboard: real subscription seat probes, opt-in friction consent (default off), local-only Anchor service + desktop icon, honest OS and pin-mismatch stamps.
+
+**Deliverables:** seat probes matching production transports: claude, agy-dispatch/agy, grok.exe -p (session visibility, not PATH-only); post-login re-probe walkthrough; cross_model stamped honestly from prefs; OpenAI slot coming-soon disabled; reject sole-family OpenAI until transport ships; optional advanced API-key path documented as non-default explicit opt-in only; feedback consent step: default no; plain-English what/not shared + residual re-id risk; local reversible preference; decline leaves skills fully usable; not a readiness gate; Anchor package: per-user local service + desktop .url/shortcut without admin preferred; elevation detect + non-admin fallback; icon → default browser → local dashboard only; OS honesty banner (Windows first-class; macOS/Linux best-effort); pin-mismatch degraded print when local skills ≠ B.skills_pin; CI mock/fake CLI probes; live probes only behind opt-in env
+
+**Depends on:** W6 — Plain-English onboard core: home, prereqs, permissions, refuse-don't-clobber
+
+**done-when:** Skills onboard completes with seat probe results and default-off feedback consent; Anchor package creates local dashboard desktop shortcut without remote URL; pin mismatch and OS scope are stamped honestly.
+
+- **Given** claude/agy/grok subscription CLIs are logged in, **when** seat probes run, **then** session-visibility results match production transports and readiness can go green without any API key
+- **Given** User declines friction sharing, **when** onboard finishes, **then** skills remain fully usable, no install key is minted, and readiness does not require opt-in
+- **Given** Package B onboard on Windows non-admin, **when** service + desktop shortcut steps run, **then** local dashboard URL shortcut is created (or clear non-admin fallback) and no Tailscale/remote URL is configured
+- **Given** Local skills tree diverges from declared B.skills_pin, **when** onboard prints pin status, **then** degraded pin-mismatch is stamped/printed
+
+====
+## Wave 7 — W7 — Onboard seats, feedback consent, Anchor desktop/service, pin-mismatch, unified prefs
+
+**Intent:** Complete works-on-arrival onboard: real subscription seat probes, opt-in friction consent (default off), **one prefs path for A and B (C9)**, local-only Anchor service + desktop icon with **no-admin success or degraded stamp (C11)**, honest OS and pin-mismatch stamps.
+
+**Deliverables:** seat probes matching production transports: claude, agy-dispatch/agy, grok.exe -p (session visibility, not PATH-only); post-login re-probe walkthrough; **prefs write/read only via `~/.anchor/model_prefs.json`** (and Anchor `settings.json` fields when B runs — same fields; A never invents a second prefs file); cross_model stamped honestly from prefs; OpenAI slot coming-soon disabled; reject sole-family OpenAI until transport ships; optional advanced API-key path documented as non-default explicit opt-in only; feedback consent step: default no; plain-English what/not shared + residual re-id risk + **honesty that nothing auto-leaves the machine** (transport is local-queue + user export — C1); local reversible preference; decline leaves skills fully usable; not a readiness gate; Anchor package: **desktop `.url`/shortcut without admin = required success**; service prefers per-user non-admin registration; elevation detect + **degraded stamp `service_nonadmin`** when service cannot register without admin (onboard continues; manual/login-start docs); icon → default browser → local dashboard only; OS honesty banner (Windows first-class; macOS/Linux best-effort); pin-mismatch degraded print when local skills ≠ B.skills_pin; CI mock/fake CLI probes; live probes only behind opt-in env
+
+**Depends on:** W6 — Plain-English onboard core: home, prereqs, permissions, refuse-don't-clobber
+
+**done-when:** Skills onboard completes with seat probe results and default-off feedback consent; both A and B resolve seats from `~/.anchor/model_prefs.json`; Anchor package creates local dashboard desktop shortcut without admin; service either registers non-admin or stamps `service_nonadmin`; pin mismatch and OS scope are stamped honestly.
+
+- **Given** claude/agy/grok subscription CLIs are logged in, **when** seat probes run, **then** session-visibility results match production transports and readiness can go green without any API key
+- **Given** User declines friction sharing, **when** onboard finishes, **then** skills remain fully usable, no install key is minted, and readiness does not require opt-in
+- **Given** Package B onboard on Windows non-admin, **when** service + desktop shortcut steps run, **then** local dashboard `.url` shortcut is created without admin; if service registration requires elevation that is refused, stamp is `service_nonadmin` (not hard-fail) and no Tailscale/remote URL is configured
+- **Given** Package A Skills-only onboard completes, **when** model prefs are read by seat resolution, **then** prefs are loaded from `~/.anchor/model_prefs.json` (same path package B uses)
+- **Given** Local skills tree diverges from declared B.skills_pin, **when** onboard prints pin status, **then** degraded pin-mismatch is stamped/printed
+
+>>>>
+
+<<<<
+## Wave 8 — W8 — Friction feedback core: schema, fail-closed sanitizer, de-identified install key
+
+**Intent:** Build the only allowed global improvement feed substrate: structured per-skill friction exports that fail closed and never send session content or PII.
+
+**Deliverables:** structured friction schema at journal-append time (skill_id+version from SOURCES/manifest, outcome class, structural codes, duration/complexity bands, OS class, model-family seats, workaround enums/bounded tokens); sanitizer: allowlist fields only; PII/path/prompt/session-purpose detectors on every string; hard-drop on hit; fail closed if unclean; de-identified install key: high-entropy random UUID on opt-in only; never hash email/username/machine/path; rotate/wipe with continuity-break warning; local full journals remain local; no retro-upload on later opt-in; opt-out stops sends and may wipe key; local queue rules: send only while consent valid; never send after mid-queue opt-out; schema-versioned journal + feedback contracts (semver) with unit tests
+
+**Depends on:** W7 — Onboard seats, feedback consent, Anchor desktop/service, pin-mismatch
+
+**done-when:** Sanitizer red-team unit suite drops planted PII/paths/secrets/session-purpose and sends nothing when unclean; install key is opaque random and opt-in-only.
+
+- **Given** A journal entry contains an absolute user path and session-purpose prose, **when** sanitizer builds an export while user is opted in, **then** record is dropped and nothing is sent (fail closed)
+- **Given** User has never opted in, **when** export pipeline is invoked, **then** no install key exists and no payload is produced
+- **Given** User opts in then opts out with key wipe while items remain queued, **when** queue drain runs, **then** no further sends occur and key is wiped
+
+====
+## Wave 8 — W8 — Friction feedback core: strict allowlist schema, fail-closed sanitizer, de-identified install key
+
+**Intent:** Build the only allowed global improvement feed substrate: structured per-skill friction exports that **admit zero free text**, fail closed, and never send session content or PII.
+
+**Deliverables:** structured friction schema at journal-append / intercept time with **strict allowlist keys only (C2)** — skill_id (enum from C5 roster), skill_version (semver string from manifest only), de-identified install_key (UUID), outcome_class enum, structural_code enums, duration_band enum, complexity_band enum, os_class enum, model_family_seat enums, workaround_code enums (**no free-text fields; no free-text workaround**); sanitizer: reject any non-allowlisted key; reject any string not matching allowlisted enum/semver/UUID patterns; PII/path/prompt/session-purpose detectors as defense-in-depth on any residual string slots; **hard-drop entire record on hit**; fail closed if unclean; de-identified install key: high-entropy random UUID on opt-in only; never hash email/username/machine/path; rotate/wipe with continuity-break warning; local full journals remain local; no retro-upload on later opt-in; opt-out stops queue inclusion and may wipe key; local queue rules: export only while consent valid; never include after mid-queue opt-out; schema-versioned journal + feedback contracts (semver) with unit tests; **red-team planted free-text field must drop entire record**
+
+**Depends on:** W7 — Onboard seats, feedback consent, Anchor desktop/service, pin-mismatch, unified prefs
+
+**done-when:** Sanitizer red-team unit suite drops planted PII/paths/secrets/session-purpose/**free-text** and produces nothing when unclean; install key is opaque random and opt-in-only; schema admits zero free-text fields.
+
+- **Given** A journal entry contains an absolute user path and session-purpose prose, **when** sanitizer builds an export while user is opted in, **then** record is dropped and nothing is queued (fail closed)
+- **Given** A record includes any non-allowlisted key or a free-text string value, **when** sanitizer validates, **then** the entire record is dropped (C2)
+- **Given** Red-team fixture plants a free-text workaround string, **when** sanitizer runs, **then** record is dropped and export suite asserts fail-closed
+- **Given** User has never opted in, **when** export pipeline is invoked, **then** no install key exists and no payload is produced
+- **Given** User opts in then opts out with key wipe while items remain queued, **when** export runs, **then** no bundle includes post-opt-out items and key is wiped
+
+>>>>
+
+<<<<
+## Wave 9 — W9 — Feedback transport, per-skill intake, red-team, dogfood hooks
+
+**Intent:** Deliver controlled recipient→John intake separated from product write access, partitioned per skill, proven by red-team and thinnest collaborator dogfood path.
+
+**Deliverables:** recipient-side push of sanitizer-proven JSON/NDJSON to John-owned private intake (repo subtree or inbox repo) via token-scoped bot/drop; intake hard-partitioned by skill_id folders/tags; edge schema validation rejects unknown fields and free-text overflow; no auto-merge to skill sources; separate credentials from product main; docs hard-line feedback ≠ code contribution; immutability seal blocks export from forked trees; red-team suite integrated: plant PII, absolute paths, secrets, session-purpose; assert drop/fail-closed; dogfood hooks for invited collaborators first; yield metrics stub; kill-channel-cost honesty if yield zero; forward-compat rules so schema version bumps do not silently accept unknown free text
+
+**Depends on:** W8 — Friction feedback core: schema, fail-closed sanitizer, de-identified install key
+
+**done-when:** Sanitizer-proven export can land in per-skill intake without product-main credentials on recipient machines; red-team suite green; forked trees cannot export.
+
+- **Given** Opted-in install produces a clean Foreman friction record and a clean Crucible friction record, **when** transport delivers to intake, **then** records land under separate skill_id partitions with the same de-identified install key
+- **Given** Export payload includes an unknown free-text field, **when** intake edge validation runs, **then** payload is rejected and not stored
+- **Given** Local skills are sealed as forked, **when** export is attempted, **then** export is blocked until re-vendor
+
+====
+## Wave 9 — W9 — Dual-audience topology, CONTRIBUTING, release captain checklist
+
+**Intent:** Make consumer vs collaborator vs feedback paths git-honest and enforceable with one-way mirrors and a signed ship captain checklist — **independent of feedback transport** (C8: topology does not wait on W10).
+
+**Deliverables:** topology implementable design-as-code/config: private *-dev SoT + one-way public mirrors/releases; bot-only public write identity; collaborator invite checklist automation/docs-as-checked artifact: branch protection, CODEOWNERS, PR-only integrate, no force-push/direct main; CONTRIBUTING + public README write policy + three-path diagram (use / sanitized-feedback-export / collaborate); package-level README dual-audience lead + privacy/friction copy links; mirror lag badge + release cadence checklist; pin consumers to release artifacts not floating main; release captain checklist artifact: freeze tags filled (C4), clean-scan green, SOURCES complete, package matrix green, **named clean Windows stranger E2E for A and for B (C7)**, sanitizer red-team green (W8), feedback export path green when feedback-in-ship (W10); tests or validators that captain checklist fields are complete before ship-allowed stamp; **feedback channel docs state local-queue + user export + John pull — not product write access (C1)**
+
+**Depends on:** W7 — Onboard seats, feedback consent, Anchor desktop/service, pin-mismatch, unified prefs
+
+**done-when:** Captain checklist validator fails ship-allowed without freeze tags + clean-scan + matrix green + **named A and B Windows stranger E2E**; public README/CONTRIBUTING state write policy and separate feedback-export channel; W9 does not depend on W10.
+
+- **Given** Captain checklist lacks freeze tags or clean-scan green, **when** ship-allowed stamp is requested, **then** stamp is refused
+- **Given** Captain checklist lacks named clean Windows stranger E2E result for package A or package B, **when** ship-allowed stamp is requested, **then** stamp is refused (surrogate alone insufficient — C7)
+- **Given** A public consumer reads CONTRIBUTING/README, **when** write paths are listed, **then** issues and sanitized feedback **export** are allowed; arbitrary PRs into private upstream without invitation are forbidden; feedback is not product-main write access
+- **Given** Public mirror process is described/configured, **when** human hand-edit of public mirror is attempted under policy checks, **then** only bot identity may write; hand-edits are forbidden by process/access notes
+
+>>>>
+
+<<<<
+## Wave 10 — W10 — Dual-audience topology, CONTRIBUTING, release captain checklist
+
+**Intent:** Make consumer vs collaborator vs feedback paths git-honest and enforceable with one-way mirrors and a signed ship captain checklist.
+
+**Deliverables:** topology implementable design-as-code/config: private *-dev SoT + one-way public mirrors/releases; bot-only public write identity; collaborator invite checklist automation/docs-as-checked artifact: branch protection, CODEOWNERS, PR-only integrate, no force-push/direct main; CONTRIBUTING + public README write policy + three-path diagram (use / sanitized-feedback / collaborate); package-level README dual-audience lead + privacy/friction copy links; mirror lag badge + release cadence checklist; pin consumers to release artifacts not floating main; release captain checklist artifact: freeze tags, clean-scan green, SOURCES complete, package matrix green, stranger install smoke, sanitizer red-team green; tests or validators that captain checklist fields are complete before ship-allowed stamp
+
+**Depends on:** W9 — Feedback transport, per-skill intake, red-team, dogfood hooks
+
+**done-when:** Captain checklist validator fails ship-allowed without freeze tags + clean-scan + matrix green; public README/CONTRIBUTING state write policy and separate feedback channel.
+
+- **Given** Captain checklist lacks freeze tags or clean-scan green, **when** ship-allowed stamp is requested, **then** stamp is refused
+- **Given** A public consumer reads CONTRIBUTING/README, **when** write paths are listed, **then** issues and sanitized feedback are allowed; arbitrary PRs into private upstream without invitation are forbidden; feedback is not product-main write access
+- **Given** Public mirror process is described/configured, **when** human hand-edit of public mirror is attempted under policy checks, **then** only bot identity may write; hand-edits are forbidden by process/access notes
+
+====
+## Wave 10 — W10 — Feedback transport: local-queue + pull/export, per-skill intake, red-team, dogfood
+
+**Intent:** Deliver controlled recipient→John intake separated from product write access, partitioned per skill — **one transport model (C1): local-queue + user export + John pull**. Feedback trails works-on-arrival.
+
+**Deliverables:** recipient-side **local outbound queue** of sanitizer-proven JSON/NDJSON only; **user-initiated export command** writes a proven bundle to a user-chosen path (no auto network send; no credentials in distro); John-controlled **private feedback-intake** layout hard-partitioned by skill_id folders/tags; John **pull/ingest** tool or documented import path (issue attach / drop / CLI import) on his schedule; edge schema validation rejects unknown fields and any free-text; no auto-merge to skill sources; **zero feedback secrets in package scan**; docs hard-line: feedback export ≠ code contribution; immutability seal blocks export from forked trees (C10); red-team suite integrated: plant PII, absolute paths, secrets, session-purpose, free-text; assert drop/fail-closed; optional invited-collaborator dogfood auto-drop is **out of public v1 ship path** (if later: invite-scoped token with mint/rotate/revoke/abuse bounds — rate limit, max payload size, revoke on leak — never shipped in public package); yield metrics stub; kill-channel-cost honesty if yield zero; forward-compat rules so schema version bumps do not silently accept unknown free text; abuse bounds on export: max records per bundle, max bytes, consent must be valid at export time
+
+**Depends on:** W8 — Friction feedback core: strict allowlist schema, fail-closed sanitizer, de-identified install key
+
+**done-when:** Sanitizer-proven export produces a local bundle with zero network credentials; John ingest path can land records under per-skill intake partitions with de-identified install key; red-team suite green; forked trees cannot export; package secret-scan finds zero feedback tokens.
+
+- **Given** Opted-in install produces a clean Foreman friction record and a clean Crucible friction record, **when** user runs feedback export and John ingests the bundle, **then** records land under separate skill_id partitions with the same de-identified install key
+- **Given** Export payload includes an unknown free-text field, **when** export or intake edge validation runs, **then** payload is rejected and not stored
+- **Given** Local skills are sealed as forked, **when** export is attempted, **then** export is blocked until re-vendor
+- **Given** Public package/distro tree is scanned for secrets, **when** feedback credential patterns are checked, **then** zero feedback tokens/PATs/API keys are present
+- **Given** User never runs export, **when** system is idle after opted-in runs, **then** no network send occurs (local queue only)
+
+### Transport auth lifecycle (C1 — public path)
+
+| Action | Public v1 behavior | Done-when check |
+|--------|--------------------|-----------------|
+| Mint | No transport credential minted | Package scan: zero feedback secrets |
+| Rotate | N/A (no credential) | Same |
+| Revoke | N/A; opt-out stops export inclusion + optional install_key wipe | Opt-out GWT in W8 green |
+| Abuse bounds | Max records/bytes per export; consent required; forked seal blocks | Export rejects over-limit and forked |
+
+>>>>
+
+<<<<
+## Wave 11 — W11 — CI matrices, stranger E2E, execute freeze gate
+
+**Intent:** Prove money-safe no-leak works-on-arrival paths and bind execute/ship to skill freeze tags + John go-ahead before any live vendor of concurrent skill trees.
+
+**Deliverables:** Skills-only CI smoke matrix without Anchor process; Anchor+Skills CI asserts B⊇A and Doctor/Zombie/Tidy surfaces present per capability matrix; money-safe gate: mock CLI probes; network deny default; live probes opt-in env only; no paid spend; no recipient API keys in happy-path fixtures; governance golden + dual scrub fixtures required for publish job; stranger-install E2E design/tests (clean Windows path): scrubbed zip → onboard → seat probe → (B) local dashboard via desktop icon; no author secrets; readiness stamp present; non-admin Windows matrix for service + desktop .url path; execute re-validation gate: actual freeze tags must match SOURCES placeholders or plan amendment; ship gate checklist in plan workspace: concurrent skill-run merged + multi-repo tags + clean-scan + captain sign-off + John go-ahead; Foreman wave text template enforcement: reuse-proof mandatory; security/Tailscale/onboard2 reimplementation forbidden without gap-proof
+
+**Depends on:** W10 — Dual-audience topology, CONTRIBUTING, release captain checklist
+
+**done-when:** CI matrices green money-safe; stranger-install E2E (or automated surrogate) asserts no author secrets + readiness; execute gate blocks live skill vendoring until freeze tags match SOURCES and John go-ahead is present.
+
+- **Given** Skills-only CI matrix runs, **when** smoke suite executes, **then** no Anchor process is required and package A readiness/governance/seat paths are exercised with mocks
+- **Given** Package B CI matrix runs, **when** capability asserts execute, **then** B⊇A holds and Doctor/Zombie/Tidy surfaces are present per matrix
+- **Given** Concurrent skill-run is not merged or freeze tags do not match SOURCES placeholders, **when** execute/ship gate is evaluated, **then** live skill tree vendoring and public first release are hard-blocked
+
+====
+## Wave 11 — W11 — CI matrices, stranger E2E (A+B named Windows), execute freeze gate
+
+**Intent:** Prove money-safe no-leak works-on-arrival paths; **named clean Windows stranger E2E for A and B as ship-blockers (C7)**; bind execute/ship to skill freeze tags + John go-ahead before any live vendor of concurrent skill trees.
+
+**Deliverables:** Skills-only CI smoke matrix without Anchor process; Anchor+Skills CI asserts B⊇A and Doctor/Zombie/Tidy surfaces present per capability matrix; money-safe gate: mock CLI probes; network deny default; live probes opt-in env only; no paid spend; no recipient API keys in happy-path fixtures; governance golden + dual scrub fixtures required for publish job; **named stranger-install E2E (clean Windows path) for package A** and **for package B** (each is captain ship-blocker — **no surrogate-only ship**): scrubbed zip → onboard → seat probe → readiness stamp; B also: local dashboard via desktop icon; no author secrets; non-admin Windows matrix for service (`service_nonadmin` allowed) + desktop `.url` path; execute re-validation gate: actual freeze tags must match SOURCES placeholders (C4) **and** roster membership equals C5; ship gate checklist in plan workspace: concurrent skill-run merged + multi-repo tags filled + clean-scan + captain sign-off + John go-ahead; **ban live-tree skill vendoring** until freeze tags match; Foreman wave text template enforcement: reuse-proof mandatory; security/Tailscale/onboard2 reimplementation forbidden without gap-proof; feedback-in-ship items: W8 red-team + W10 export path green (WOA ship may stamp packages before feedback dogfood, but feedback channel not advertised ready until W10 done-when)
+
+**Depends on:** W9 — Dual-audience topology, CONTRIBUTING, release captain checklist
+
+**done-when:** CI matrices green money-safe; **named clean Windows stranger E2E green for A and for B** (both required for ship-allowed); execute gate blocks live skill vendoring until freeze tags match SOURCES and John go-ahead is present; pin matrix placeholders all filled or plan amendment recorded.
+
+- **Given** Skills-only CI matrix runs, **when** smoke suite executes, **then** no Anchor process is required and package A readiness/governance/seat paths are exercised with mocks
+- **Given** Package B CI matrix runs, **when** capability asserts execute, **then** B⊇A holds and Doctor/Zombie/Tidy surfaces are present per matrix
+- **Given** Named clean Windows stranger E2E for package A has not passed, **when** ship-allowed stamp is requested, **then** stamp is refused
+- **Given** Named clean Windows stranger E2E for package B has not passed, **when** ship-allowed stamp is requested, **then** stamp is refused
+- **Given** Concurrent skill-run is not merged or freeze tags do not match SOURCES placeholders, **when** execute/ship gate is evaluated, **then** live skill tree vendoring and public first release are hard-blocked
+- **Given** A pin matrix FREEZE_* placeholder is still unfilled, **when** ship-allowed stamp is requested, **then** stamp is refused
+
+>>>>

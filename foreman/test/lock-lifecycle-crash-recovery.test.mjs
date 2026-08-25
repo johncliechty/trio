@@ -7,7 +7,11 @@ import { BuildLock } from '../bin/resume-guard.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const REPO_ROOT = path.resolve(__dirname, '../../..');
+// 2026-08-25 (journal 0105): the engine (bin/resume-guard.mjs) resolves the lock at
+// bin/../.. = the TRIO root; this test resolved test/../../.. = C:\dev — one level too
+// high — so its planted lock was invisible to verifyResumeGate and every abort assertion
+// failed. The test now derives the path the SAME way the engine does.
+const REPO_ROOT = path.resolve(__dirname, '../..');
 const LOCK_FILE = path.join(REPO_ROOT, 'build-lock.json');
 
 test('lock-lifecycle/crash-recovery test (POSITIVE)', async (t) => {

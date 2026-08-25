@@ -28,10 +28,17 @@ test('preflightTestCommand HALTs on bare test/ directory gate', () => {
 });
 
 test('preflightTestCommand passes explicit files', () => {
+  // 2026-08-25 (journal 0105): with no projectDir this defaulted to cwd — the LIVE foreman
+  // repo — and the outside-import scan tripped on THIS file's own '../../../outside/…'
+  // fixture literals (a self-scan trap, red whenever run from the repo root). Hermetic now.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-preflight-explicit-'));
+  fs.mkdirSync(path.join(dir, 'test'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'test', 'a.test.mjs'), 'export {};\n');
+  fs.writeFileSync(path.join(dir, 'test', 'b.test.mjs'), 'export {};\n');
   const r = preflightTestCommand({
     command: 'node --test test/a.test.mjs test/b.test.mjs',
     source: 'plan declaration',
-  });
+  }, dir);
   assert.equal(r.command.includes('a.test.mjs'), true);
   assert.ok(Array.isArray(r.warnings));
 });

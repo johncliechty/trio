@@ -97,7 +97,7 @@ test('F3 anti-drift: ordinary ambiguity STILL hard-halts as bare ambiguity, NOT 
     });
 
     assert.equal(result.status, 'HALT', 'ambiguity still halts');
-    assert.match(result.haltReason, /ambiguity HALT/, 'it is the bare ambiguity halt');
+    assert.match(result.haltReason, /\[taxonomy:ambiguity\] HALT/, "it is the bare ambiguity halt (taxonomy-prefixed since the 2026-07-25 hardening; regex updated 2026-08-25)");
     assert.notEqual(result.haltSubType, 'PLAN-AMENDMENT-PROPOSAL', 'ambiguity is NOT a plan-amendment proposal');
     assert.equal(result.amendment, null, 'no amendment is attached to a bare ambiguity halt');
   } finally { cleanup(dir); }

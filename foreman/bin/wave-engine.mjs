@@ -39,7 +39,7 @@ import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 
 import { HaltError, newCheckpoint, writeCheckpointAtomic, renderDashboard, parseWaves, discoverTestCommand, locateDocs } from './foreman-lib.mjs';
-import { checkDeltaCoverage } from './delta-coverage-gate.mjs';
+import { checkDeltaCoverage, tokensFor as deltaTokensFor } from './delta-coverage-gate.mjs';
 
 // ---------------------------------------------------------------------------
 // Agent-wait heartbeat (0082 P0.3 / 2026-07-24 thrash cleanup)
@@ -1522,6 +1522,52 @@ export async function runWave(o) {
           testMentions,
           repoTestConvention: ['test/wNN-<subject>.test.mjs'],
         });
+        // F2-9 contract rescue (2026-08-25, journal 0105 — found via the 0104 red-suite
+        // investigation): a wave that CHANGES a source file covered by a PRE-EXISTING,
+        // unchanged test must not block — 0091's law targets surfaces with no test
+        // ANYWHERE, but only in-wave tests were ever read. Bounded repo-test scan; every
+        // rescue is RECORDED in the persisted verdict (never silent).
+        if (!delta.pass && Array.isArray(delta.uncovered) && delta.uncovered.length) {
+          try {
+            const corpus = [];
+            const walk = (dir, depth) => {
+              if (depth > 4 || corpus.length >= 200) return;
+              for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (corpus.length >= 200) return;
+                const full = path.join(dir, e.name);
+                if (e.isDirectory()) {
+                  if (/^(node_modules|\.git|\.foreman|dist|build|__pycache__)$/i.test(e.name)) continue;
+                  walk(full, depth + 1);
+                } else if (isTestFile(path.relative(projectDir, full))) {
+                  let text = '';
+                  try { text = fs.readFileSync(full, 'utf8').slice(0, 65536).toLowerCase(); } catch { /* skip */ }
+                  corpus.push({ file: full, stemTokens: deltaTokensFor(full), textLower: text });
+                }
+              }
+            };
+            walk(projectDir, 0);
+            const rescued = [];
+            const stillUncovered = [];
+            for (const u of delta.uncovered) {
+              const toks = deltaTokensFor(u.file);
+              const hit = corpus.find((c) => toks.some((t) => c.stemTokens.includes(t) || c.textLower.includes(t)));
+              if (hit) rescued.push({ ...u, coveredBy: path.relative(projectDir, hit.file) });
+              else stillUncovered.push(u);
+            }
+            if (rescued.length) {
+              delta.rescuedByExistingTests = rescued;
+              delta.uncovered = stillUncovered;
+              const rescueNote = `pre-existing tests cover: ${rescued.map((r) => `${r.file}→${r.coveredBy}`).join(', ')}`;
+              if (!stillUncovered.length) {
+                delta.pass = true;
+                delta.severity = 'OK';
+                delta.detail = `${rescued.length} surface change(s) covered by PRE-EXISTING tests (${rescueNote}) — in-wave scan alone had missed them (F2-9 contract)`;
+              } else {
+                delta.detail += ` RESCUED: ${rescueNote}.`;
+              }
+            }
+          } catch { /* rescue is best-effort; the gate's own verdict stands */ }
+        }
         try {
           fs.writeFileSync(
             path.join(foremanDir, `wave-${wave.n}-delta-coverage.json`),

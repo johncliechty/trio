@@ -36,14 +36,23 @@ export function isTestPath(p) {
     /(^|\/)test_[^/]+\.py$/i.test(p);
 }
 
-/** Strip directories/extensions down to identifier-ish tokens for name matching. */
-function tokensFor(p) {
+/** Strip directories/extensions down to identifier-ish tokens for name matching.
+ *  Exported 2026-08-25 so the wave-engine's pre-existing-test rescue (F2-9 contract)
+ *  matches with EXACTLY the same token rule. */
+export function tokensFor(p) {
   const base = String(p).split(/[\\/]/).pop() || '';
   const stem = base.replace(/\.[a-z0-9]+$/i, '').replace(/^test_/, '');
-  return stem
+  const toks = stem
     .split(/[^a-zA-Z0-9]+/)
     .filter((t) => t.length >= 4)
     .map((t) => t.toLowerCase());
+  if (toks.length) return toks;
+  // 2026-08-25 (journal 0105; found via the 0104 red-suite investigation): a short-stem
+  // file (f1.js, m.py) yielded ZERO tokens and was UNCONDITIONALLY uncovered — no test
+  // could ever rescue it, a false BLOCKER on every wave touching it. Zero tokens now
+  // falls back to the whole stem, so a test named for (or mentioning) the file counts.
+  const whole = stem.toLowerCase();
+  return whole ? [whole] : [];
 }
 
 /**

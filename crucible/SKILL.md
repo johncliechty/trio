@@ -17,6 +17,11 @@ description: >-
   current verified status lives in the foundry PLAN.md, never in this line.
 ---
 
+## North Star (LOCKED — John, 2026-08-25)
+
+Given an intent or a messy existing project, Crucible forges the shortest gold-standard, Foreman-ready plan that cannot drift from the user-locked North Star — right-sized to the stakes, with the user approving only three compact gates.
+
+
 <!-- ELEGANCE-LAW v2 -->
 ## The Elegance Law (locked by John — binding on this skill)
 

@@ -3,6 +3,11 @@ name: researchPrime
 description: Universal best-in-class research skill with an engine-backed, stakes-scaled adversarial verification loop. Runs a distinct PLANNING phase and a FRESH plan-only EXECUTION phase (true context isolation on sub-agent hosts; honest degraded mode elsewhere), then a Phase-3 that — on hosts with Node — drives a multi-round adversarial loop (heterogeneous >=2-agree reviewers, a separate context-free Judge, an active Deep-Think Synthesizer, convergence-until-dry, cross-lineage origin fusion) via a Node engine that IMPORTS, never forks, the trio's Crucible+Foreman machinery. Weights evidence on the OBSERVED>CORROBORATED>CLAIMED>UNVERIFIED>REFUTED ladder, reports correlated-blind-spot recall honestly, resists the bandwagon effect, refuses to flatter or hallucinate, and returns three summary levels (full report / executive / agent-implementation). Hosts without Node get a schema-conformant prose run stamped "adversarial verification did NOT run". Use for /researchPrime, "deep research with validation", or any high-stakes investigation.
 ---
 
+## North Star (LOCKED — John, 2026-08-25)
+
+Given any high-stakes question, researchPrime returns a decision-ready, source-graded answer at three summary levels whose every consequential claim survived stakes-scaled adversarial verification — honestly stamped when verification could not run — and never spends heavy rounds on a low-stakes ask.
+
+
 <!-- ELEGANCE-LAW v2 -->
 ## The Elegance Law (locked by John — binding on this skill)
 

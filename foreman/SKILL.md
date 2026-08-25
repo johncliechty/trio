@@ -11,6 +11,11 @@ description: >-
   currency lives in the foundry PLAN.md, never in this line.
 ---
 
+## North Star (LOCKED — John, 2026-08-25)
+
+Given a frozen plan, Foreman drives every wave to verified done — fresh-context executors, adversarial review, ground-truth gates run by the orchestrator, never a sub-agent — halting only on defined blockers and never burning the user's attention between gates.
+
+
 <!-- ELEGANCE-LAW v2 -->
 ## The Elegance Law (locked by John — binding on this skill)
 

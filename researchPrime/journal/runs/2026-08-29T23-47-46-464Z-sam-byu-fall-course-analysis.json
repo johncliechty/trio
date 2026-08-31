@@ -1,0 +1,52 @@
+{
+  "skill": "researchPrime",
+  "tier": "regular-live-chatgpt-ultra-grok",
+  "started": "2026-08-29T22:04:47.000Z",
+  "ended": "2026-08-29T23:47:46.464Z",
+  "input": "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\PLAN.md",
+  "inputs": [
+    "C:\\dev\\Help Sam",
+    "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\plan-inputs.json",
+    "https://commtech.byu.edu/noauth/classSchedule/index.php",
+    "https://cs.byu.edu/education/graduate/graduate-handbook-ms-program/"
+  ],
+  "params": {
+    "stakesTier": "regular",
+    "live": true,
+    "mainEffort": "ultra",
+    "term": "Fall 2026",
+    "termCode": "20265",
+    "userModelOverride": "ChatGPT Ultra main; Grok adversarial reviewer"
+  },
+  "output": "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\FINAL-SYNTHESIS.md",
+  "outputs": [
+    "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\FINAL-SYNTHESIS.md",
+    "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\FULL-REPORT.md",
+    "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\EXECUTIVE.md",
+    "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\evidence-ledger.json",
+    "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\recommended-schedule.json"
+  ],
+  "result": "conditionally sound: C S 580 plus consent-gated C S 670 is the academic spine; complete enrollment depends on written full-time/funding and admission-background requirements",
+  "outcome": "worked-with-conditions",
+  "cross_model": true,
+  "models": [
+    {
+      "seat": "main",
+      "model_served": "gpt-5.6-sol",
+      "effort": "ultra",
+      "transport": "host-native collaboration"
+    },
+    {
+      "seat": "adversarial-reviewer",
+      "model_served": "grok-build",
+      "transport": "grok.exe subscription CLI"
+    }
+  ],
+  "duration_s": 6179,
+  "journal_ref": "C:\\Users\\john\\.claude\\skills\\researchPrime\\journal\\0064-sam-byu-fall-course-analysis.md",
+  "gandalf": {
+    "output": "C:\\dev\\Help Sam\\researchPrime-out\\2026-08-29-byu-cs-ms-fall\\gandalf-read.json",
+    "cross_model": false,
+    "external_refuter": "grok-build"
+  }
+}

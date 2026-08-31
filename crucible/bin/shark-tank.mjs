@@ -22,6 +22,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { lookinAppendix, superviseSeat } from '../../drivers/swarm-lookin.mjs';
 
 import { HaltError, REVIEW_SCHEMA } from './crucible-lib.mjs';
 import { collectFindings } from '../../foreman/bin/wave-engine.mjs';
@@ -326,6 +327,8 @@ function sharkPrompt(role, angle, northStar, draft, research = null,
     `=== DRAFT UNDER REVIEW ===`,
     String(draft),
     `=== END DRAFT ===`,
+    ``,
+    lookinAppendix({ northStar }),
   ].join('\n');
 }
 
@@ -402,12 +405,14 @@ export function makeSharkDriver({ agent } = {}) {
       
       const markdownFirst = draft.length > 20000;
       
-      const out = await agent(
-        sharkPrompt(role, lens, northStar, draft, research, { priorBlockerIds, changelog, markdownFirst }), {
-          label: `shark:${role.role}:r${round}`,
-          role: 'shark',
-          schema: markdownFirst ? undefined : SHARK_SCHEMA,
-        });
+      const out = await superviseSeat({
+        run: () => agent(
+          sharkPrompt(role, lens, northStar, draft, research, { priorBlockerIds, changelog, markdownFirst }), {
+            label: `shark:${role.role}:r${round}`,
+            role: 'shark',
+            schema: markdownFirst ? undefined : SHARK_SCHEMA,
+          }),
+      });
 
       let answerable, note, findings;
       if (markdownFirst) {

@@ -25,6 +25,7 @@
 // `agent()` (text by default; the validated object when a `schema` is passed).
 
 import path from 'node:path';
+import { lookinAppendix, superviseSeat } from '../../drivers/swarm-lookin.mjs';
 
 // JSON Schema the REVIEW agent is forced to emit (mirrors the engine's finding
 // shape). Passed to the injected agent() as opts.schema in production.
@@ -142,6 +143,7 @@ function executePrompt(ctx) {
     `missing, a prerequisite is absent) or believe it is ALREADY DONE, do NOT`,
     `quietly finish with no changes — state the blocker/claim explicitly as your`,
     `final message; the orchestrator's guards, not you, decide how to proceed.`,
+    lookinAppendix(),
   ].join('\n');
 }
 
@@ -180,6 +182,7 @@ function reviewPrompt(ctx, gate) {
     `API not behaving as assumed) — distinct from mere ambiguity — you MAY attach a`,
     `plan_amendment {proposed_diff, rationale}; the orchestrator will HALT for human`,
     `approval and will NEVER apply it autonomously.`,
+    lookinAppendix(),
   ].join(' ');
 }
 
@@ -191,6 +194,7 @@ function fixPrompt(ctx, gate, findings) {
     `turns the gate GREEN; the orchestrator — not you — re-runs the gate to verify.`,
     `Do NOT run any git commands, terminal commands, or tests yourself. The orchestrator owns all testing and version control.`,
     `TESTS ARE FROZEN. Do not modify test files to force a pass. You may NEVER use pytest.skip, @pytest.mark.skip, or pytest.importorskip on failing tests. Solve the root cause in the product code.`,
+    lookinAppendix(),
   ].join(' ');
 }
 
@@ -206,7 +210,9 @@ export function makeAgentDriver({ agent }) {
     // TRIO_MODEL_<ROLE>, resolved inside the drivers) is reachable on the build path:
     // execute/fix pin to the strongest coder, review can fan out to another family.
     async execute(ctx) {
-      const out = await agent(executePrompt(ctx), { label: `execute:w${ctx.wave.n}`, role: 'execute' });
+      const out = await superviseSeat({
+        run: () => agent(executePrompt(ctx), { label: `execute:w${ctx.wave.n}`, role: 'execute' }),
+      });
       // 0102: a dead agent (typed { agent_failed } marker from the transport) must
       // never be labeled "complete" — forward the failure so the engine HALTs.
       if (out && typeof out === 'object' && out.agent_failed) {
@@ -215,10 +221,12 @@ export function makeAgentDriver({ agent }) {
       return { note: 'agent execute complete', raw: out };
     },
     async review(ctx, gate) {
-      const out = await agent(reviewPrompt(ctx, gate), {
-        label: `review:w${ctx.wave.n}#${ctx.reviewerIndex}`,
-        schema: REVIEW_SCHEMA,
-        role: 'review',
+      const out = await superviseSeat({
+        run: () => agent(reviewPrompt(ctx, gate), {
+          label: `review:w${ctx.wave.n}#${ctx.reviewerIndex}`,
+          schema: REVIEW_SCHEMA,
+          role: 'review',
+        }),
       });
       return {
         reviewer: `reviewer-${ctx.reviewerIndex}`,
@@ -238,7 +246,9 @@ export function makeAgentDriver({ agent }) {
       };
     },
     async fix(ctx, gate, findings) {
-      const out = await agent(fixPrompt(ctx, gate, findings), { label: `fix:w${ctx.wave.n}.${ctx.iteration}`, role: 'fix' });
+      const out = await superviseSeat({
+        run: () => agent(fixPrompt(ctx, gate, findings), { label: `fix:w${ctx.wave.n}.${ctx.iteration}`, role: 'fix' }),
+      });
       if (out && typeof out === 'object' && out.agent_failed) {
         return { note: `agent fix DIED (${out.exit_class})`, agent_failed: out };
       }

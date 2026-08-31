@@ -1,0 +1,20 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-08-26T20:59:51.255Z",
+  "ended": "2026-08-26T20:59:51.367Z",
+  "input": "C:\\dev\\Collapse of Marketing\\Emperical Paper JCR\\research-runs\\paywall-access-2026-08-26",
+  "params": {
+    "maxRounds": 4,
+    "live": false,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Collapse of Marketing\\Emperical Paper JCR\\research-runs\\paywall-access-2026-08-26\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

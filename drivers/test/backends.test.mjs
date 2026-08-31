@@ -151,33 +151,41 @@ for (const c of CASES) {
     assert.equal(out.answerable, 'yes');
   });
 
-  test(`${c.name}: schema reply unparseable twice -> ABSTAIN (answerable:no)`, async () => {
+  test(`${c.name}: schema reply unparseable twice fails verification closed`, async () => {
     const capture = { calls: [] };
-    const out = await runAgent({
-      driver: c.driver, prompt: 'review', schema: SCHEMA, label: `rev:${c.name}`,
+    let fallbackCalls = 0;
+    await assert.rejects(() => runAgent({
+      driver: c.driver, role: 'reviewer', prompt: 'review', schema: SCHEMA,
+      label: `reviewer:${c.name}`,
       apiKey: 'short-key', env: {}, fetchImpl: mockFetch(c.envelope('never json'), { capture }),
-    });
-    assert.equal(capture.calls.length, 2, 'initial + one retry, then abstain (no infinite retry)');
-    assert.equal(out.answerable, 'no');
-    assert.equal(out.transport_failed, true, 'unparseable-after-retry must carry transport_failed:true (degradable, not a hard ambiguity HALT)');
-    assert.deepEqual(out.findings, []);
-    assert.match(out.note, /not parseable/i);
+      runClaude: async () => {
+        fallbackCalls += 1;
+        throw new Error('verification fallback must not run');
+      },
+    }), (error) => error.receipt.status === 'verification_fail_closed'
+      && error.receipt.attempts[0].status === 'schema_exhausted');
+    assert.equal(capture.calls.length, 2, 'initial + one retry, then fail closed');
+    assert.equal(fallbackCalls, 0);
   });
 
   test(`${c.name}: a non-2xx response HALTs with the status`, async () => {
     await assert.rejects(
       runAgent({
-        driver: c.driver, prompt: 'x', apiKey: 'short-key', env: {},
+        driver: c.driver, role: 'reviewer', prompt: 'x', apiKey: 'short-key', env: {},
         fetchImpl: mockFetch({ error: 'boom' }, { ok: false, status: 500 }),
       }),
-      (e) => e instanceof HaltError && /HTTP 500/.test(e.reason),
+      (e) => e instanceof HaltError
+        && e.receipt.status === 'verification_fail_closed'
+        && /HTTP 500/.test(e.receipt.attempts[0].transport_attempts[0].error.message),
     );
   });
 
   test(`${c.name}: no key AND no injected transport HALTs (never a keyless request)`, async () => {
     await assert.rejects(
-      runAgent({ driver: c.driver, prompt: 'x', env: {} }),
-      (e) => e instanceof HaltError && /not set/i.test(e.reason),
+      runAgent({ driver: c.driver, role: 'reviewer', prompt: 'x', env: {} }),
+      (e) => e instanceof HaltError
+        && e.receipt.status === 'verification_fail_closed'
+        && /not set/i.test(e.receipt.attempts[0].error.message),
     );
   });
 }

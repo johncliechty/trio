@@ -1,0 +1,64 @@
+{
+  "skill": "researchPrime",
+  "tier": "high-heavy-live-chatgpt-ultra-grok",
+  "started": "2026-08-29T21:52:00.757Z",
+  "ended": "2026-08-29T23:27:00.000Z",
+  "input": "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research",
+  "inputs": [
+    "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\PHASE-1-PLAN.md",
+    "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\planInputs.json",
+    "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\reports\\FULL-REPORT-CHATGPT-ULTRA-DRAFT.md"
+  ],
+  "params": {
+    "maxRounds": 3,
+    "roundsUsed": 2,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "high",
+    "mainEffort": "ultra",
+    "round1PanelDeadMs": 90000,
+    "round2PanelDeadMs": 300000
+  },
+  "output": "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\reports\\FULL-REPORT.md",
+  "outputs": [
+    "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\reports\\FULL-REPORT.md",
+    "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\reports\\EXECUTIVE-SUMMARY.md",
+    "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\reports\\AGENT-IMPLEMENTATION-BRIEF.md",
+    "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\GROK-VALIDATION-RECEIPT.md",
+    "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\rp-run\\DELIVERABLE-ENGINE.json"
+  ],
+  "result": "validator CLEAN; final output qualified with engine-output caveats",
+  "outcome": "worked-with-caveats",
+  "cross_model": true,
+  "engine_cross_model": false,
+  "models": [
+    {
+      "seat": "main",
+      "model_served": "gpt-5.6-sol",
+      "effort": "ultra",
+      "transport": "host-native collaboration"
+    },
+    {
+      "seat": "validator",
+      "model_served": "grok-4.6",
+      "transport": "grok.exe subscription default",
+      "permission_mode": "plan"
+    }
+  ],
+  "duration_s": 5699,
+  "journal_ref": "C:\\dev\\trio\\researchPrime\\journal\\0063-anchor-email-calendar-chatgpt-ultra-grok.md",
+  "trio_head": "1f3acba2b404435049830df88b3ebe8a62ac1f18",
+  "trio_worktree_dirty": true,
+  "tests": {
+    "focused_engine": "30/30 passed",
+    "route_and_seams": "21/21 passed"
+  },
+  "operability": {
+    "phase2_launcher_deaths": 3,
+    "round1_false_death_restarts": 2,
+    "round1_abstentions": 1,
+    "round2_panel_surviving": 3,
+    "engine_verified_flag_accepted": false,
+    "engine_quorum_met": false
+  }
+}

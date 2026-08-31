@@ -47,6 +47,10 @@ import {
   // reused G3/G6 surface
   tallyFindings,
   normalizeFindingId,
+  isVacantReviews,
+  normalizePanelFindings,
+  runPanelRound,
+  countSurvivingPanel,
 } from '../bin/round.mjs';
 import { loadGate } from '../bin/gate-loader.mjs'; // satisfy static call-graph check
 
@@ -364,4 +368,92 @@ test('(h) no OTHER code path in the round layer increments independent_origins (
   assert.doesNotMatch(src, /origins\s*\+\+/, 'no hand-rolled origin increment');
   assert.doesNotMatch(src, /origins\s*\+=/, 'no hand-rolled origin accumulation');
   assert.doesNotMatch(src, /independent_origins\s*=/, 'the round layer never assigns independent_origins itself');
+});
+
+test('isVacantReviews: missing, empty, or all-zero findings are vacant; a single finding is not', () => {
+  assert.equal(isVacantReviews(undefined), true);
+  assert.equal(isVacantReviews([]), true);
+  assert.equal(isVacantReviews([{ reviewer: 'Skeptic', findings: [] }]), true);
+  assert.equal(isVacantReviews([{ reviewer: 'Skeptic', findings: [{ topic: 'x', traces_to_north_star: 'yes' }] }]), false);
+});
+
+test('normalizePanelFindings coerces booleans and HALTs on a missing traces_to_north_star', () => {
+  const coerced = normalizePanelFindings([
+    { topic: 'a', traces_to_north_star: true, message: 'yes-bool' },
+    { topic: 'b', traces_to_north_star: false },
+  ]);
+  assert.equal(coerced[0].traces_to_north_star, 'yes');
+  assert.equal(coerced[1].traces_to_north_star, 'no');
+  assert.equal(coerced[1].message, 'b');
+  assert.throws(() => normalizePanelFindings([{ topic: 'c' }]), /traces_to_north_star/);
+});
+
+test('runPanelRound spawns the SHARK_ROLES panel through the agent seam (journal 0058)', async () => {
+  const calls = [];
+  const agent = async (_p, opts = {}) => {
+    calls.push(opts.role);
+    return {
+      findings: [{
+        claim_id: String(opts.angle || calls.length),
+        topic: String(opts.angle || 't'),
+        severity: 'minor',
+        traces_to_north_star: 'yes',
+        message: 'panel',
+      }],
+    };
+  };
+  const reviews = await runPanelRound({ agent, round: 1, lineage: 'stub' });
+  assert.equal(reviews.length, 3, 'G3 roster is three Sharks');
+  assert.deepEqual(calls, ['reviewer', 'reviewer', 'reviewer']);
+  assert.equal(reviews[0].reviewer, 'Skeptic');
+  assert.equal(reviews[1].reviewer, 'Contrarian');
+  assert.equal(reviews[2].reviewer, 'Analyst');
+  assert.ok(reviews.every((r) => r.lineage === 'stub'));
+  assert.ok(reviews.every((r) => r.findings[0].traces_to_north_star === 'yes'));
+});
+
+test('a hung seat abstains; the other two still return (journal 0059)', async () => {
+  const t0 = Date.now();
+  const agent = async (_p, opts = {}) => {
+    if (String(opts.label || '').includes('Contrarian')) {
+      return new Promise((_, reject) => {
+        const t = setTimeout(() => reject(new Error('hang leftover')), 10_000);
+        if (typeof t.unref === 'function') t.unref();
+      });
+    }
+    return {
+      findings: [{
+        claim_id: String(opts.angle),
+        topic: String(opts.angle),
+        severity: 'minor',
+        traces_to_north_star: 'yes',
+        message: 'ok',
+      }],
+    };
+  };
+  const reviews = await runPanelRound({ agent, round: 1, checkInMs: 15, silentKillMs: 20, deadIdleMs: 50 });
+  assert.ok(Date.now() - t0 < 1500, 'must not wait on the hung seat');
+  assert.equal(reviews.length, 3);
+  assert.equal(countSurvivingPanel(reviews), 2);
+  const dead = reviews.find((r) => r.reviewer === 'Contrarian');
+  assert.equal(dead.answerable, 'no');
+  assert.match(dead.panel_fault, /DEAD|exceeded/);
+});
+
+test('an all-hung panel returns three abstains under the wall, never hangs the round', async () => {
+  const t0 = Date.now();
+  const reviews = await runPanelRound({
+    agent: () => new Promise((_, reject) => {
+      const t = setTimeout(() => reject(new Error('hang leftover')), 10_000);
+      if (typeof t.unref === 'function') t.unref();
+    }),
+    round: 1,
+    checkInMs: 15,
+    silentKillMs: 20,
+    deadIdleMs: 50,
+  });
+  assert.ok(Date.now() - t0 < 1500, 'wall must bound the panel');
+  assert.equal(reviews.length, 3);
+  assert.equal(countSurvivingPanel(reviews), 0);
+  assert.ok(reviews.every((r) => r.answerable === 'no'));
 });

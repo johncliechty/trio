@@ -32,6 +32,20 @@ import {
   KNOWN_AGY_LABELS, GEMINI_HEAVY_MODEL, GEMINI_STANDARD_MODEL,
   DEFAULT_GEMINI_CLI_MODEL, DEFAULT_GEMINI_APPROVAL_MODE,
 } from '../gemini-cli.mjs';
+import { PHYSICAL_RECEIPT_HOOK } from '../seat-contract.mjs';
+
+function acceptedGeminiReceipt() {
+  return {
+    ok: true,
+    status: 'success',
+    requested_model: 'Gemini 3.1 Pro',
+    model_family: 'gemini',
+    family_attested: true,
+    model_served: 'Gemini 3.1 Pro',
+    model_attested: true,
+    degraded: false,
+  };
+}
 
 // --- argv shaping (live agy contract) ------------------------------------------
 
@@ -211,15 +225,18 @@ test('env gate: live spawn HALTs unless CRUCIBLE_AGENT_LIVE=1 (no accidental bil
 test('runAgent(gemini-cli, no schema): returns plain text via injected runGemini', async () => {
   const out = await runAgent({
     driver: 'gemini-cli', prompt: 'say hi',
-    runGemini: async () => ({ text: 'hello from gemini', rec: { ok: true } }),
+    runGemini: async () => ({ text: 'hello from gemini', rec: acceptedGeminiReceipt() }),
   });
   assert.equal(out, 'hello from gemini');
 });
 
 test('runAgent(gemini-cli) + schema: fenced JSON reply is parsed', async () => {
   const out = await runAgent({
-    driver: 'gemini-cli', prompt: 'review', schema: { type: 'object' },
-    runGemini: async () => ({ text: '```json\n{"answerable":"yes","findings":[]}\n```', rec: {} }),
+    driver: 'gemini-cli', role: 'reviewer', prompt: 'review', schema: { type: 'object' },
+    runGemini: async () => ({
+      text: '```json\n{"answerable":"yes","findings":[]}\n```',
+      rec: acceptedGeminiReceipt(),
+    }),
   });
   assert.equal(out.answerable, 'yes');
   assert.deepEqual(out.findings, []);
@@ -228,28 +245,40 @@ test('runAgent(gemini-cli) + schema: fenced JSON reply is parsed', async () => {
 test('runAgent(gemini-cli) + schema: unparseable first reply retries once then succeeds', async () => {
   let calls = 0;
   const out = await runAgent({
-    driver: 'gemini-cli', prompt: 'review', schema: { type: 'object' },
-    runGemini: async () => { calls += 1; return { text: calls === 1 ? 'not json' : '{"answerable":"yes"}', rec: {} }; },
+    driver: 'gemini-cli', role: 'reviewer', prompt: 'review', schema: { type: 'object' },
+    runGemini: async () => {
+      calls += 1;
+      return {
+        text: calls === 1 ? 'not json' : '{"answerable":"yes"}',
+        rec: acceptedGeminiReceipt(),
+      };
+    },
   });
   assert.equal(calls, 2, 'one initial call + exactly one retry');
   assert.equal(out.answerable, 'yes');
 });
 
-test('runAgent(gemini-cli) + schema: unparseable twice -> ABSTAIN (answerable:no)', async () => {
+test('runAgent(gemini-cli) + schema: unparseable twice fails verification closed', async () => {
   let calls = 0;
-  const out = await runAgent({
-    driver: 'gemini-cli', prompt: 'review', schema: { type: 'object' }, label: 'rev:gem',
-    runGemini: async () => { calls += 1; return { text: 'never json', rec: {} }; },
+  let fallbackCalls = 0;
+  await assert.rejects(() => runAgent({
+    driver: 'gemini-cli', role: 'reviewer', prompt: 'review',
+    schema: { type: 'object' }, label: 'reviewer:gem',
+    runGemini: async () => {
+      calls += 1;
+      return { text: 'never json', rec: acceptedGeminiReceipt() };
+    },
+    runClaude: async () => {
+      fallbackCalls += 1;
+      throw new Error('verification fallback must not run');
+    },
+  }), (error) => {
+    assert.equal(error.receipt.status, 'verification_fail_closed');
+    assert.equal(error.receipt.attempts[0].status, 'schema_exhausted');
+    return true;
   });
-  assert.equal(calls, 2, 'initial + one retry, then abstain (no infinite retry)');
-  assert.equal(out.answerable, 'no');
-  // P0 2026-07-25 (foreman journals 0080/0081): an unparseable reply is a TRANSPORT
-  // failure — the marker lets Foreman's T10a degrade path drop the seat instead of
-  // firing a hard [taxonomy:ambiguity] HALT, while answerable:'no' still keeps the
-  // Crucible shark quorum honest (an unparsed shark is NOT an answered shark).
-  assert.equal(out.transport_failed, true, 'unparseable-after-retry must carry transport_failed:true');
-  assert.deepEqual(out.findings, []);
-  assert.match(out.note, /not parseable/i);
+  assert.equal(calls, 2, 'initial + one retry, then fail closed');
+  assert.equal(fallbackCalls, 0);
 });
 
 // --- registry + capability matrix ----------------------------------------------
@@ -271,7 +300,17 @@ test('capability matrix: gemini-cli is sub-agent-capable (a real HOST), gemini (
 
 test('makeForemanDriver forwards role + model to the backend (per-role tier reachable)', async () => {
   const captured = [];
-  registerDriver({ name: 'capture-role-backend', async runAgent(opts) { captured.push(opts); return 'ok'; } });
+  registerDriver({
+    name: 'capture-role-backend',
+    async runAgent(opts) {
+      captured.push(opts);
+      opts[PHYSICAL_RECEIPT_HOOK]({
+        kind: 'initial', outcome: 'accepted', label: opts.label,
+        receipt: acceptedGeminiReceipt(),
+      });
+      return 'ok';
+    },
+  });
   const drv = await makeForemanDriver({ driver: 'capture-role-backend', model: 'm-designated', role: 'judge' });
   const ctx = { wave: { n: 1, title: 't' }, reviewerIndex: 0, projectDir: '/p', iteration: 1 };
   await drv.execute(ctx);

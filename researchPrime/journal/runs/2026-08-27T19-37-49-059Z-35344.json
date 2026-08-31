@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-08-27T19:37:49.059Z",
+  "ended": "2026-08-27T19:38:55.344Z",
+  "input": "C:\\dev\\Ecgberht\\planning\\dashboard-home-2026-08-27\\rp-highseat",
+  "params": {
+    "maxRounds": 3,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\dashboard-home-2026-08-27\\rp-highseat\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "gemini"
+  ],
+  "duration_s": 66,
+  "journal_ref": null
+}

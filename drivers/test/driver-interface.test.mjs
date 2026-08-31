@@ -13,6 +13,20 @@ import { HaltError } from '../../foreman/bin/foreman-lib.mjs';
 import {
   runAgent, getDriver, listDrivers, registerDriver, makeForemanDriver, claudeDriver,
 } from '../index.mjs';
+import { PHYSICAL_RECEIPT_HOOK } from '../seat-contract.mjs';
+
+function acceptedClaudeReceipt() {
+  return {
+    ok: true,
+    status: 'success',
+    requested_model: 'claude-opus-5',
+    model_family: 'claude',
+    family_attested: true,
+    model_served: 'claude-opus-5',
+    model_attested: true,
+    degraded: false,
+  };
+}
 
 test('registry: claude is registered and is the default backend', () => {
   assert.ok(listDrivers().includes('claude'), 'claude is in the registry');
@@ -26,7 +40,7 @@ test('TRIO_DRIVER unset: runAgent dispatches to the Claude driver (plain text)',
   // Inject a stub transport so the Claude seam runs with no subprocess.
   const out = await runAgent({
     prompt: 'say hi',
-    runClaude: async () => ({ text: 'hello world' }),
+    runClaude: async () => ({ text: 'hello world', rec: acceptedClaudeReceipt() }),
   });
   assert.equal(out, 'hello world');
 });
@@ -35,7 +49,10 @@ test('runAgent + schema: a fenced JSON reply is parsed and returned (Claude seam
   const out = await runAgent({
     prompt: 'review',
     schema: { type: 'object' },
-    runClaude: async () => ({ text: '```json\n{"answerable":"yes","findings":[]}\n```' }),
+    runClaude: async () => ({
+      text: '```json\n{"answerable":"yes","findings":[]}\n```',
+      rec: acceptedClaudeReceipt(),
+    }),
   });
   assert.equal(out.answerable, 'yes');
   assert.deepEqual(out.findings, []);
@@ -48,25 +65,29 @@ test('runAgent + schema: unparseable first reply RETRIES once then succeeds', as
     schema: { type: 'object' },
     runClaude: async () => {
       calls += 1;
-      return { text: calls === 1 ? 'not json at all' : '{"answerable":"yes","findings":[]}' };
+      return {
+        text: calls === 1 ? 'not json at all' : '{"answerable":"yes","findings":[]}',
+        rec: acceptedClaudeReceipt(),
+      };
     },
   });
   assert.equal(calls, 2, 'one initial call + exactly one retry');
   assert.equal(out.answerable, 'yes');
 });
 
-test('runAgent + schema: still unparseable after retry => ABSTAIN (answerable:no)', async () => {
+test('runAgent + schema: still unparseable after retry fails without inventing ABSTAIN', async () => {
   let calls = 0;
-  const out = await runAgent({
+  await assert.rejects(() => runAgent({
     prompt: 'review',
     schema: { type: 'object' },
     label: 'rev#1',
-    runClaude: async () => { calls += 1; return { text: 'never json' }; },
-  });
-  assert.equal(calls, 2, 'initial + one retry, then abstain (no infinite retry)');
-  assert.equal(out.answerable, 'no');
-  assert.deepEqual(out.findings, []);
-  assert.match(out.note, /not parseable/i);
+    runClaude: async () => {
+      calls += 1;
+      return { text: 'never json', rec: acceptedClaudeReceipt() };
+    },
+  }), (error) => error.receipt.status === 'seat_unavailable'
+    && error.receipt.attempts[0].status === 'schema_exhausted');
+  assert.equal(calls, 2, 'initial + one retry, then fail (no infinite retry)');
 });
 
 test('registry: a custom backend can be registered and selected explicitly', async () => {
@@ -74,7 +95,14 @@ test('registry: a custom backend can be registered and selected explicitly', asy
   registerDriver({
     name: 'mock-test-backend',
     subAgentCapable: false,
-    async runAgent({ prompt }) { seen.push(prompt); return `mock:${prompt}`; },
+    async runAgent(opts) {
+      seen.push(opts.prompt);
+      opts[PHYSICAL_RECEIPT_HOOK]({
+        kind: 'initial', outcome: 'accepted', label: opts.label,
+        receipt: acceptedClaudeReceipt(),
+      });
+      return `mock:${opts.prompt}`;
+    },
   });
   assert.ok(listDrivers().includes('mock-test-backend'));
   const out = await runAgent({ driver: 'mock-test-backend', prompt: 'ping' });
@@ -102,7 +130,10 @@ test('foreman seam: makeForemanDriver builds {execute,review,fix} via the Claude
   // No injected agent => the seam's agent is built from the registry-selected
   // backend; a stub runClaude keeps it subprocess-free.
   const drv = await makeForemanDriver({
-    runClaude: async (_p, _l) => ({ text: '{"answerable":"yes","findings":[{"severity":"MAJOR","file":"a.js","line":1,"rule":"x"}]}' }),
+    runClaude: async (_p, _l) => ({
+      text: '{"answerable":"yes","findings":[{"severity":"MAJOR","file":"a.js","line":1,"rule":"x"}]}',
+      rec: acceptedClaudeReceipt(),
+    }),
   });
   const ctx = { wave: { n: 1, title: 't' }, reviewerIndex: 0, projectDir: '/p', iteration: 1 };
   assert.equal((await drv.execute(ctx)).note, 'agent execute complete');
@@ -133,7 +164,7 @@ test('belowFrontierClaudeModel is the standard (one-below-frontier) tier, not ha
   assert.equal(belowFrontierClaudeModel(), 'claude-opus-5');
 });
 
-test('runAgent: a seat_unavailable failure fails OVER to Claude (model-integrity rule, 2026-07-17)', async () => {
+test('runAgent: a coding seat_unavailable failure fails OVER to Claude', async () => {
   // A non-Claude backend that cannot deliver its attested model (agy silently served GPT-OSS).
   const fake = {
     name: 'fake-gemini-fo',
@@ -145,8 +176,11 @@ test('runAgent: a seat_unavailable failure fails OVER to Claude (model-integrity
   };
   registerDriver(fake);
   const out = await runAgent({
-    driver: 'fake-gemini-fo', prompt: 'review', schema: { type: 'object' }, label: 'shark:r1',
-    runClaude: async () => ({ text: '{"answerable":"yes","findings":[]}' }),
+    driver: 'fake-gemini-fo', role: 'execute', prompt: 'work',
+    schema: { type: 'object' }, label: 'execute:r1',
+    runClaude: async () => ({
+      text: '{"answerable":"yes","findings":[]}', rec: acceptedClaudeReceipt(),
+    }),
   });
   assert.equal(out.answerable, 'yes', 'the seat failed over to Claude and returned its result (no blind GPT-OSS, no throw)');
 });

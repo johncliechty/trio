@@ -137,4 +137,147 @@ describe('run-rounds governed path (T9 closure)', () => {
     assert.ok(res.runState, 'the run completes and writes state');
     assert.ok(fs.existsSync(path.join(runDir, 'RUN-STATE.json')));
   });
+
+  test('vacant reviews without spawn stay empty (replay does not invent a panel)', async () => {
+    const runDir = setupRunDir('vacant-no-spawn', { tier: 'low', reviews: [] });
+    await runRounds(runDir, { log: () => {} });
+    const round1 = JSON.parse(fs.readFileSync(path.join(runDir, 'round-1-result.json'), 'utf8'));
+    assert.strictEqual(round1.panelSpawned, false);
+    assert.strictEqual(round1.governor.skipped, true, 'empty pasted reviews remain a zero-AXIS skip');
+    assert.ok(!fs.existsSync(path.join(runDir, 'round-1-spawned-reviews.json')));
+  });
+
+  test('LIVE-equivalent spawn fills vacant reviews through the G3 panel (journal 0058)', async () => {
+    const runDir = setupRunDir('vacant-spawn', { tier: 'low', reviews: [] });
+    const artifact = path.join(runDir, 'ARTIFACT.md');
+    fs.writeFileSync(artifact, '# claims\n- c-panel: a test claim\n');
+    const inputPath = path.join(runDir, 'round-1-input.json');
+    const input = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
+    input.artifact = artifact;
+    fs.writeFileSync(inputPath, JSON.stringify(input, null, 2));
+
+    let reviewerCalls = 0;
+    const agent = async (_p, opts = {}) => {
+      if (opts.role === 'reviewer') {
+        reviewerCalls += 1;
+        return {
+          findings: [{
+            claim_id: `p-${opts.angle}`,
+            topic: `panel ${opts.angle}`,
+            severity: 'minor',
+            traces_to_north_star: 'yes',
+            message: 'from spawned panel',
+          }],
+        };
+      }
+      if (opts.role === 'judge') return { decision: 'CONVERGED', reasons: ['dry'] };
+      if (opts.role === 'synthesizer') return { lean: 'lock', suggestions: [] };
+      if (opts.role === 'debate') return { survivor: null };
+      return null;
+    };
+
+    const res = await runRounds(runDir, { log: () => {}, spawnPanel: true, agent });
+    assert.equal(reviewerCalls, 3, 'engine must call the three Shark reviewers — not wait for a paste');
+    const round1 = JSON.parse(fs.readFileSync(path.join(runDir, 'round-1-result.json'), 'utf8'));
+    assert.strictEqual(round1.panelSpawned, true);
+    assert.strictEqual(round1.panelSource, 'spawned');
+    assert.strictEqual(round1.panelSize, 3);
+    assert.strictEqual(round1.governor.skipped, false);
+    assert.ok(res.convergence.converged, 'unique minor findings from the panel still dry-converge at N=1');
+    const sidecar = JSON.parse(fs.readFileSync(path.join(runDir, 'round-1-spawned-reviews.json'), 'utf8'));
+    assert.equal(sidecar.reviews.length, 3);
+    assert.equal(sidecar.artifact, artifact);
+  });
+
+  test('spawn without an absolute artifact HALTs (journal 0002) and writes HALT-RECORD', async () => {
+    const runDir = setupRunDir('spawn-no-artifact', { tier: 'low', reviews: [] });
+    await assert.rejects(
+      () => runRounds(runDir, { log: () => {}, spawnPanel: true, agent: async () => ({ findings: [] }) }),
+      /PANEL SPAWN HALT/,
+    );
+    const halt = JSON.parse(fs.readFileSync(path.join(runDir, 'HALT-RECORD.json'), 'utf8'));
+    assert.strictEqual(halt.status, 'HALTED');
+    assert.match(halt.reason, /ABSOLUTE artifact path/);
+  });
+
+  test('supplied non-vacant reviews are not re-spawned even when spawnPanel is on', async () => {
+    const runDir = setupRunDir('supplied-no-respawn', { tier: 'low', reviews: dryReviews });
+    let reviewerCalls = 0;
+    const agent = async (_p, opts = {}) => {
+      if (opts.role === 'reviewer') reviewerCalls += 1;
+      if (opts.role === 'judge') return { decision: 'CONVERGED', reasons: ['dry'] };
+      if (opts.role === 'synthesizer') return { lean: 'lock', suggestions: [] };
+      return null;
+    };
+    await runRounds(runDir, { log: () => {}, spawnPanel: true, agent });
+    assert.equal(reviewerCalls, 0, 'a supplied panel must not be replaced');
+    const round1 = JSON.parse(fs.readFileSync(path.join(runDir, 'round-1-result.json'), 'utf8'));
+    assert.strictEqual(round1.panelSpawned, false);
+  });
+
+  test('existing spawned-reviews sidecar is loaded and the panel is not re-paid', async () => {
+    const runDir = setupRunDir('spawn-sidecar', { tier: 'low', reviews: [] });
+    const artifact = path.join(runDir, 'ARTIFACT.md');
+    fs.writeFileSync(artifact, '# already reviewed\n');
+    const inputPath = path.join(runDir, 'round-1-input.json');
+    const input = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
+    input.artifact = artifact;
+    fs.writeFileSync(inputPath, JSON.stringify(input, null, 2));
+    fs.writeFileSync(path.join(runDir, 'round-1-spawned-reviews.json'), JSON.stringify({
+      spawned: true,
+      artifact,
+      reviews: [
+        { reviewer: 'Skeptic', angle: 'security', lineage: 'stub', findings: [
+          { claim_id: 's1', topic: 'sidecar', severity: 'minor', traces_to_north_star: 'yes', message: 'cached' },
+        ] },
+        { reviewer: 'Contrarian', angle: 'operator', lineage: 'stub', findings: [
+          { claim_id: 's2', topic: 'sidecar-2', severity: 'minor', traces_to_north_star: 'yes', message: 'cached' },
+        ] },
+      ],
+    }, null, 2));
+
+    let reviewerCalls = 0;
+    const agent = async (_p, opts = {}) => {
+      if (opts.role === 'reviewer') reviewerCalls += 1;
+      if (opts.role === 'judge') return { decision: 'CONVERGED', reasons: ['dry'] };
+      if (opts.role === 'synthesizer') return { lean: 'lock', suggestions: [] };
+      return null;
+    };
+    await runRounds(runDir, { log: () => {}, spawnPanel: true, agent });
+    assert.equal(reviewerCalls, 0, 'sidecar must skip a second panel spend');
+    const round1 = JSON.parse(fs.readFileSync(path.join(runDir, 'round-1-result.json'), 'utf8'));
+    assert.strictEqual(round1.panelSpawned, true);
+    assert.strictEqual(round1.panelSource, 'sidecar');
+  });
+
+  test('an all-hung spawned panel HALTs (zero survivors is not a dry round)', async () => {
+    const runDir = setupRunDir('spawn-all-hang', { tier: 'low', reviews: [] });
+    const artifact = path.join(runDir, 'ARTIFACT.md');
+    fs.writeFileSync(artifact, '# claims\n');
+    const inputPath = path.join(runDir, 'round-1-input.json');
+    const input = JSON.parse(fs.readFileSync(inputPath, 'utf8'));
+    input.artifact = artifact;
+    fs.writeFileSync(inputPath, JSON.stringify(input, null, 2));
+    await assert.rejects(
+      () => runRounds(runDir, {
+        log: () => {},
+        spawnPanel: true,
+        agent: () => new Promise((_, reject) => {
+          const t = setTimeout(() => reject(new Error('hang leftover')), 10_000);
+          if (typeof t.unref === 'function') t.unref();
+        }),
+        env: {
+          ...process.env,
+          RESEARCHPRIME_PANEL_CHECKIN_MS: '15',
+          RESEARCHPRIME_PANEL_SILENT_KILL_MS: '20',
+          RESEARCHPRIME_PANEL_DEAD_MS: '50',
+        },
+      }),
+      /zero surviving seats/,
+    );
+    const halt = JSON.parse(fs.readFileSync(path.join(runDir, 'HALT-RECORD.json'), 'utf8'));
+    assert.strictEqual(halt.status, 'HALTED');
+    assert.ok(!fs.existsSync(path.join(runDir, 'round-1-spawned-reviews.json')),
+      'a zero-survivor panel must not be cached as a successful spawn');
+  });
 });

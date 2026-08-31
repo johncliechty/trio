@@ -9,34 +9,33 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { resolveClaudeModel, makeAgentSeam } from '../claude.mjs';
-import { makeRoleRoutedAgent, registerDriver, runAgent } from '../index.mjs';
+import { makeRoleRoutedAgent, registerDriver, resolveDriverFromFamilies } from '../index.mjs';
+import { PHYSICAL_RECEIPT_HOOK } from '../seat-contract.mjs';
 
-test('runAgent honors TRIO_DRIVER_<ROLE> env when no explicit driver is passed (the GLOBAL 5:1 rule)', async () => {
-  const calls = [];
-  registerDriver({ name: 'stub-env-verify', runAgent: async (o) => { calls.push(o.role || o.label); return 'env-routed'; } });
-  registerDriver({ name: 'stub-explicit', runAgent: async () => 'explicit' });
-  const saved = process.env.TRIO_DRIVER_SHARK;
-  const savedReview = process.env.REVIEW_FAMILY;
-  process.env.TRIO_DRIVER_SHARK = 'stub-env-verify';
-  // 2026-07-22 order: Anchor family prefs OUTRANK legacy TRIO_DRIVER_<ROLE>. Pin
-  // REVIEW_FAMILY to an unresolvable family so the prefs rung yields null and the
-  // legacy env rung under test is actually reached — hermetic on any host (a real
-  // host pref like review=grok would otherwise dispatch this test to a LIVE CLI).
-  process.env.REVIEW_FAMILY = 'test-unresolvable-family';
-  try {
-    // role field present
-    assert.equal(await runAgent({ prompt: 'p', role: 'shark', label: 'shark:Skeptic:r1' }), 'env-routed');
-    // role derived from the label prefix
-    assert.equal(await runAgent({ prompt: 'p', label: 'shark:Analyst:r2' }), 'env-routed');
-    // explicit driver ALWAYS wins over the env
-    assert.equal(await runAgent({ prompt: 'p', role: 'shark', driver: 'stub-explicit' }), 'explicit');
-    assert.equal(calls.length, 2);
-  } finally {
-    if (saved === undefined) delete process.env.TRIO_DRIVER_SHARK;
-    else process.env.TRIO_DRIVER_SHARK = saved;
-    if (savedReview === undefined) delete process.env.REVIEW_FAMILY;
-    else process.env.REVIEW_FAMILY = savedReview;
-  }
+function acceptedReceipt(family, model) {
+  return {
+    ok: true,
+    status: 'success',
+    requested_model: model,
+    model_family: family,
+    family_attested: true,
+    model_served: model,
+    model_attested: true,
+    degraded: false,
+  };
+}
+
+test('saved-family law ignores stale TRIO_DRIVER and family environment values', () => {
+  const env = {
+    TRIO_DRIVER_SHARK: 'stub-env-verify',
+    CODING_FAMILY: 'grok',
+    REVIEW_FAMILY: 'test-unresolvable-family',
+  };
+  assert.equal(
+    resolveDriverFromFamilies('shark', env),
+    'gemini-cli',
+    'with no saved prefs, the historical review default wins; stale env is not a family source',
+  );
 });
 
 test('resolveClaudeModel: explicit model wins over every env rung', () => {
@@ -82,22 +81,46 @@ test('makeAgentSeam threads per-call model/role through to the transport (3rd ar
   const seen = [];
   const runClaude = (prompt, label, callOpts) => {
     seen.push({ label, callOpts });
-    return Promise.resolve({ text: 'ok' });
+    return Promise.resolve({ text: 'ok', rec: acceptedReceipt('claude', 'claude-test') });
   };
   const { agent } = makeAgentSeam({ runClaude });
   await agent('p', { label: 'execute:w1', role: 'execute', model: 'claude-fable-5' });
   assert.equal(seen.length, 1);
-  assert.deepEqual(seen[0].callOpts, { model: 'claude-fable-5', role: 'execute' });
+  assert.deepEqual(seen[0].callOpts, {
+    model: 'claude-fable-5', role: 'execute', timeoutMs: undefined, signal: undefined,
+  });
   // 2-arg legacy stubs remain valid: callOpts is additive, never required.
-  const legacy = (prompt, label) => Promise.resolve({ text: 'ok' });
+  const legacy = (prompt, label) => Promise.resolve({
+    text: 'ok', rec: acceptedReceipt('claude', 'claude-test'),
+  });
   const { agent: agent2 } = makeAgentSeam({ runClaude: legacy });
   assert.equal(await agent2('p', { label: 'x' }), 'ok');
 });
 
 test('makeRoleRoutedAgent dispatches per role with the route model; default route catches the rest', async () => {
   const calls = [];
-  registerDriver({ name: 'stub-frontier', runAgent: async (o) => { calls.push(['frontier', o.role, o.model]); return 'f'; } });
-  registerDriver({ name: 'stub-swarm', runAgent: async (o) => { calls.push(['swarm', o.role, o.model]); return 's'; } });
+  registerDriver({
+    name: 'stub-frontier',
+    async runAgent(o) {
+      calls.push(['frontier', o.role, o.model]);
+      o[PHYSICAL_RECEIPT_HOOK]({
+        kind: 'initial', outcome: 'accepted', label: o.label,
+        receipt: acceptedReceipt('claude', o.model ?? 'claude-test'),
+      });
+      return 'f';
+    },
+  });
+  registerDriver({
+    name: 'stub-swarm',
+    async runAgent(o) {
+      calls.push(['swarm', o.role, o.model]);
+      o[PHYSICAL_RECEIPT_HOOK]({
+        kind: 'initial', outcome: 'accepted', label: o.label,
+        receipt: acceptedReceipt('gemini', o.model ?? 'gemini-test'),
+      });
+      return 's';
+    },
+  });
   const agent = makeRoleRoutedAgent({
     routes: {
       synthesizer: { driver: 'stub-frontier', model: 'claude-fable-5' },

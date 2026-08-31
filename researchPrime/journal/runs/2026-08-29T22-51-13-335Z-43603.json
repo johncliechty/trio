@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-08-29T22:51:13.335Z",
+  "ended": "2026-08-29T23:00:43.603Z",
+  "input": "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\rp-run",
+  "params": {
+    "maxRounds": 3,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "high"
+  },
+  "output": "C:\\dev\\plans\\2026-08-29-anchor-email-calendar-research\\rp-run\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "grok"
+  ],
+  "duration_s": 570,
+  "journal_ref": null
+}

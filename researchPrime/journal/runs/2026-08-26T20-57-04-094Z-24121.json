@@ -1,0 +1,20 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-08-26T20:57:04.094Z",
+  "ended": "2026-08-26T20:57:04.121Z",
+  "input": "C:\\dev\\Collapse of Marketing\\Emperical Paper JCR\\research-runs\\paywall-access-2026-08-26",
+  "params": {
+    "maxRounds": 3,
+    "live": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Collapse of Marketing\\Emperical Paper JCR\\research-runs\\paywall-access-2026-08-26\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

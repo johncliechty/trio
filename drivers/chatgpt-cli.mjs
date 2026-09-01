@@ -289,6 +289,7 @@ export function buildCodexExecArgs({
   reasoningEffort = 'high',
   sandbox = 'read-only',
   target = null,
+  platform = process.platform,
 } = {}) {
   if (!CODEX_REASONING_EFFORTS.includes(String(reasoningEffort))) {
     throw new TypeError(`unsupported Codex reasoning effort "${reasoningEffort}"`);
@@ -303,6 +304,14 @@ export function buildCodexExecArgs({
     '-c', 'approval_policy="never"',
     '-c', `model_reasoning_effort="${reasoningEffort}"`,
   ];
+  // 2026-09-01 (Gate 5 Foreman wave 1, proven live): on Windows the workspace-write sandbox
+  // needs a Windows sandbox implementation selected; `--ignore-user-config` drops the user's
+  // `[windows] sandbox = "unelevated"`, so Codex 0.151 fell back to READ-ONLY and every execute
+  // seat answered "workspace is read-only" while Foreman logged "execute complete". Select the
+  // unelevated Windows sandbox inline for write seats only; read-only seats stay untouched.
+  if (String(platform) === 'win32' && String(sandbox) === 'workspace-write') {
+    args.push('-c', 'windows.sandbox="unelevated"');
+  }
   if (target) args.push('--cd', target);
   if (model) args.push('--model', model);
   args.push('-');
@@ -428,7 +437,7 @@ export function defaultRunCodexCli(fullPrompt, label, {
     });
   }
   const args = buildCodexExecArgs({
-    model: mdl, reasoningEffort: effort, sandbox: box, target,
+    model: mdl, reasoningEffort: effort, sandbox: box, target, platform,
   });
   return processRunner({
     command: cmd,

@@ -84,6 +84,17 @@ test('Codex argv is ephemeral, config-isolated, prompt-on-stdin, read-only, JSON
   );
 });
 
+test('Codex write seats on Windows select the unelevated Windows sandbox inline (2026-09-01: --ignore-user-config dropped it and every execute seat was silently read-only)', () => {
+  const win = buildCodexExecArgs({ sandbox: 'workspace-write', target: 'C:\\work', platform: 'win32' });
+  assert.equal(win[win.indexOf('--sandbox') + 1], 'workspace-write');
+  assert.ok(win.includes('windows.sandbox="unelevated"'), 'workspace-write on win32 must name a Windows sandbox');
+  assert.ok(win.includes('--ignore-user-config'), 'user config stays ignored — the override is inline, not inherited');
+  const winRo = buildCodexExecArgs({ sandbox: 'read-only', target: 'C:\\work', platform: 'win32' });
+  assert.ok(!winRo.includes('windows.sandbox="unelevated"'), 'read-only seats never widen');
+  const posix = buildCodexExecArgs({ sandbox: 'workspace-write', target: '/work', platform: 'linux' });
+  assert.ok(!posix.includes('windows.sandbox="unelevated"'), 'POSIX argv is unchanged');
+});
+
 test('Codex sandbox is role-aware and restricted to least-privilege production values', () => {
   assert.equal(resolveCodexSandbox({ role: 'reviewer', env: {} }), 'read-only');
   assert.equal(resolveCodexSandbox({

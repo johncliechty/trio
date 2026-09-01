@@ -38,14 +38,18 @@ export function lookinAppendix({ heartbeatPath, northStar } = {}) {
   ].filter(Boolean).join(' ');
 }
 
-/** Read a heartbeat file the seat was told to write. Missing → null (silence, then look-in, then death). */
+/** Read a heartbeat file the seat was told to write. Missing → null (silence, then look-in, then death).
+ *  Progress time is the file's PHYSICAL write time. The seat's self-reported `ts` is kept as data but
+ *  never trusted as the clock: models write fake/ISO timestamps ("2026-09-01T00:00:00Z" was observed),
+ *  which made `mtime` a non-finite value, so a heartbeating seat still read as silent and was killed
+ *  mid-work (Gate 5 Foreman wave 1, 2026-09-01: 27 tool calls at 180 s, declared dead twice). */
 export function trailFromFile(filePath) {
   if (!filePath) return null;
   try {
     const st = fs.statSync(filePath);
     const parsed = parseHeartbeat(fs.readFileSync(filePath, 'utf8'));
     if (!parsed) return { mtime: st.mtimeMs };
-    return { ...parsed, mtime: parsed.ts || st.mtimeMs };
+    return { ...parsed, mtime: st.mtimeMs };
   } catch {
     return null;
   }

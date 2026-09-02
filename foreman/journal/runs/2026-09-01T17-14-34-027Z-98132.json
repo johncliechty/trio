@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-01T17:14:34.027Z",
+  "ended": "2026-09-01T20:23:18.132Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": true,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\gate5-kickoff-synthesis-2026-08-31\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:GO,3:GO,4:GO,5:GO,6:HALT — test-immutability HALT: fix agent added test file test/fixtures/kickoff-codex-session.json",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 11324,
+  "journal_ref": null
+}

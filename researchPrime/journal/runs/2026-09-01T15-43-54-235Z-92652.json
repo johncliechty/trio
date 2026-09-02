@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-01T15:43:54.235Z",
+  "ended": "2026-09-01T15:51:32.652Z",
+  "input": "C:/dev/Help Sam/researchPrime-out/2026-09-01-dallon-math636",
+  "params": {
+    "maxRounds": 3,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\Help Sam\\researchPrime-out\\2026-09-01-dallon-math636\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 458,
+  "journal_ref": null
+}

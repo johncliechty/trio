@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-01T20:26:13.131Z",
+  "ended": "2026-09-01T21:11:46.977Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\gate5-kickoff-synthesis-2026-08-31\\_foreman-status.log",
+  "result": "HALT: 6:GO,7:GO,8:HALT — [taxonomy:agent-died] HALT: the execute agent died (agent execute:w8 died: class error-result, 54 tool calls, 753629ms) — nothing was executed; the wave must not advance to the gate",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2734,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-02T05:56:01.456Z",
+  "ended": "2026-09-02T05:56:01.824Z",
+  "input": "C:\\dev\\Ecgberht",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": true,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Ecgberht\\planning\\gate5-kickoff-synthesis-2026-08-31\\_foreman-status.log",
+  "result": "DONE: none",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 0,
+  "journal_ref": null
+}

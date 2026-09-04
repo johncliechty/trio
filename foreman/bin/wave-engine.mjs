@@ -225,6 +225,58 @@ function snapshotHashes(root, foremanDir) {
 }
 
 /** relpaths whose content differs from (or did not exist in) the start snapshot. */
+/**
+ * (0106 E1, 2026-09-04) An execute phase that changed NOTHING in the project — once runtime
+ * noise (checkpoints, status logs) and the engine's own `.foreman/` files are set aside — is a
+ * wave that was not implemented, whatever the executor said. Deterministic: no reviewer opinion,
+ * no tool-call plumbing; a deletion counts as work.
+ */
+export function vacuousExecute(changed) {
+  const real = (changed || []).filter((rel) => {
+    const r = String(rel || '').replace(/\\/g, '/');
+    const base = r.replace(/\s*\(deleted\)\s*$/, '');
+    if (!base) return false;
+    if (base.startsWith('.foreman/') || base.includes('/.foreman/')) return false;
+    return !isRuntimeNoisePath(base);
+  });
+  return real.length === 0;
+}
+
+/** The plan's section for wave N (from its heading to the next wave heading), or ''. */
+export function waveSectionOf(planText, waveN) {
+  const lines = String(planText || '').split(/\r?\n/);
+  const head = /^#{1,6}\s*(?:wave|sprint|section)\s*(\d+)\b/i;
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(head);
+    if (!m) continue;
+    if (start >= 0) return lines.slice(start, i).join('\n');
+    if (Number(m[1]) === Number(waveN)) start = i;
+  }
+  return start >= 0 ? lines.slice(start).join('\n') : '';
+}
+
+/** Relative file paths a wave section NAMES as deliverables (path-like tokens with a code/doc extension). */
+export function namedWavePaths(planText, waveN) {
+  const section = waveSectionOf(planText, waveN);
+  const re = /(?:^|[\s`'"(\[])((?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.(?:mjs|cjs|js|ts|tsx|py|md|json|html|css|yml|yaml|txt|ps1|sh))\b/g;
+  const out = new Set();
+  let m;
+  while ((m = re.exec(section)) !== null) {
+    const rel = m[1].replace(/\\/g, '/');
+    if (rel.startsWith('http') || rel.includes('://')) continue;
+    out.add(rel);
+  }
+  return [...out];
+}
+
+/** The named deliverables of wave N that do NOT exist under projectDir after execute. */
+export function missingWaveDeliverables(projectDir, planText, waveN) {
+  return namedWavePaths(planText, waveN).filter((rel) => {
+    try { return !fs.existsSync(path.join(projectDir, rel)); } catch { return false; }
+  });
+}
+
 function changedSince(root, foremanDir, startSnap) {
   const now = snapshotHashes(root, foremanDir);
   const changed = [];
@@ -1236,6 +1288,30 @@ export async function runWave(o) {
     const changedPre = git ? git.changedVsHead() : changedSince(projectDir, foremanDir, hashStart);
     lastChanged = changedPre;
 
+    // ----- (0106 E1) wave-not-implemented: execute ran and changed nothing -----
+    // The 0106 wave: execute "complete" in 29 s with zero tool calls, the OLD suite went
+    // GREEN, a lean review could not block, and "Wave 2/6 GREEN" was written for a wave
+    // whose test file never existed. Caught here, deterministically, before the gate.
+    if (iteration === 0 && !skipExecute && vacuousExecute(changedPre)) {
+      // Journal 0106's own test: the wave's deliverables name files that do not exist after
+      // execute. A plan section that names no files cannot be judged this way (a fixture
+      // whose execute is a stub and whose work lands in the fix loop stays legal) — then the
+      // vacuous-GREEN guard after the gate keeps the watch.
+      const missing = missingWaveDeliverables(projectDir, planText, wave.n);
+      if (missing.length) {
+        const reason = `[taxonomy:wave-not-implemented] HALT: execute for wave ${wave.n} changed nothing in the project and the wave's named deliverable(s) do not exist afterwards (${missing.slice(0, 4).join(', ')}) — the wave was not implemented; the gate must not run on the previous wave's tree`;
+        steps.push(`✗ ${reason}`);
+        log(`execute: NOTHING changed and ${missing.length} named deliverable(s) missing — HALT wave-not-implemented (never "complete")`);
+        return finishHalt({
+          reason,
+          recommend: `[taxonomy:wave-not-implemented] the execute seat produced no change for wave ${wave.n} and ${missing[0]} does not exist. ` +
+            `Check the routing header (a seat that cannot run the execute prompt — e.g. a Codex seat on a ` +
+            `Claude-shaped prompt — reports "complete" with 0 tool calls), fix the seat, then re-invoke wave ${wave.n}.`,
+        });
+      }
+      log(`execute: changed nothing, but the wave section names no missing deliverable — continuing to the gate (vacuous-GREEN guard stands)`);
+    }
+
     // ----- Pre-gate syntax smoke (0082 P3.14) -----
     const smoke = preGateSyntaxSmoke(projectDir, changedPre);
     if (smoke) {
@@ -1914,7 +1990,8 @@ export function creditPriorWaveAttempt(root, foremanDir, waveN, { reach, exercis
 }
 
 export const _internals = {
-  inventory, checkTestWeakening, checkVacuousGreen, reachableFromTests,
+  inventory, checkTestWeakening, checkVacuousGreen, reachableFromTests, vacuousExecute,
+  waveSectionOf, namedWavePaths, missingWaveDeliverables,
   changedSince, snapshotHashes, parseCount, hasRealTestEvents, countTestEvents, findingId,
   isRuntimeNoisePath, isProvenDeliverablePath,
   // Wave 7 test-immutability guard:

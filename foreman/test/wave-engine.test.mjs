@@ -13,6 +13,45 @@ import path from 'node:path';
 
 import { locateDocs, parseWaves, discoverTestCommand, readCheckpoint, HaltError } from '../bin/foreman-lib.mjs';
 import { runWave, runGate, judge, collectFindings, _internals } from '../bin/wave-engine.mjs';
+
+// (0106 E1, 2026-09-04) an execute that changed nothing is wave-not-implemented.
+test('vacuousExecute: nothing changed, or only runtime noise / .foreman files, is a vacuous execute; real work is not', () => {
+  const { vacuousExecute } = _internals;
+  assert.equal(vacuousExecute([]), true);
+  assert.equal(vacuousExecute(['.foreman/wave-2-gate.json', '.foreman/phase-timings.jsonl']), true);
+  assert.equal(vacuousExecute(['_foreman-status.log', 'foreman-checkpoint.json']), true);
+  assert.equal(vacuousExecute(['src/accuracy.mjs']), false);
+  assert.equal(vacuousExecute(['test/accuracy.test.mjs (deleted)']), false);
+  assert.equal(vacuousExecute(['.foreman/x.json', 'src/a.mjs']), false);
+});
+
+test('missingWaveDeliverables: the wave section\'s named files that are absent after execute (0106)', () => {
+  const { namedWavePaths, missingWaveDeliverables, waveSectionOf } = _internals;
+  const plan = [
+    '## Wave 1 — Harness', '- deliverable: `src/harness.mjs`', '',
+    '## Wave 2 — Accuracy Harness', 'Deliverables: test/accuracy.test.mjs and build/reports/paper.structure.json.',
+    'See https://example.com/x.md for the spec.', '',
+    '## Wave 3 — Release', '- test/stamp.mjs',
+  ].join('\n');
+  assert.match(waveSectionOf(plan, 2), /Accuracy Harness/);
+  assert.doesNotMatch(waveSectionOf(plan, 2), /stamp\.mjs/);
+  assert.deepEqual(namedWavePaths(plan, 2), ['test/accuracy.test.mjs', 'build/reports/paper.structure.json']);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman-e1-'));
+  fs.mkdirSync(path.join(dir, 'build', 'reports'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'build', 'reports', 'paper.structure.json'), '{}');
+  assert.deepEqual(missingWaveDeliverables(dir, plan, 2), ['test/accuracy.test.mjs']);
+  assert.deepEqual(missingWaveDeliverables(dir, plan, 9), []);   // a section that names nothing judges nothing
+});
+
+// (0106 E2) a lean panel of one: a single BLOCKER blocks; the full panel keeps the 2-agree rule.
+test('judge: panelSize 1 lets one reviewer\'s BLOCKER block; panelSize 2 still needs agreement', () => {
+  const gate = { green: true, exit_code: 0, tap: { fail: 0 } };
+  const f = [{ id: 'x', severity: 'BLOCKER', status: 'open', agreement: 1, repro: { failing: true } }];
+  assert.equal(judge(gate, f, { panelSize: 1 }).go, false);
+  assert.equal(judge(gate, f, { panelSize: 2 }).go, true);
+  assert.equal(judge(gate, f).go, true);
+});
+
 import { makeScriptedDriver } from '../bin/drivers/scripted-driver.mjs';
 import { makeAgentDriver } from '../bin/wave-workflow.js';
 

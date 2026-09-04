@@ -46,7 +46,7 @@ test('mirror is canonical for non-Anchor hosts; absent prefs use historical defa
   });
   fs.unlinkSync(mirror);
   assert.deepEqual(loadModelFamilies({ USERPROFILE: fx.home, CODING_FAMILY: 'grok' }), {
-    coding: 'claude', review: 'gemini', cross_model: true, source: 'historical-default',
+    coding: 'claude', review: 'claude', cross_model: false, source: 'historical-default',
   });
 });
 
@@ -73,7 +73,7 @@ test('preference fields resolve independently settings then mirror then historic
 
   fs.writeFileSync(mirror, JSON.stringify({ coding_family: 'gemini' }));
   assert.deepEqual(loadModelFamilies({ USERPROFILE: fx.home, ANCHOR_DATA_DIR: fx.data }), {
-    coding: 'chatgpt', review: 'gemini', cross_model: true,
+    coding: 'chatgpt', review: 'claude', cross_model: true, // review falls to the Claude default (2026-09-04)
     source: path.join(fx.data, 'settings.json'),
   });
 });
@@ -107,7 +107,7 @@ test('family-value environment variables are ignored field-wise', (t) => {
     CODING_FAMILY: 'grok', REVIEW_FAMILY: 'chatgpt',
     TRIO_DRIVER_REVIEWER: 'grok-cli',
   }), {
-    coding: 'claude', review: 'gemini', cross_model: true,
+    coding: 'claude', review: 'claude', cross_model: false,
     source: 'historical-default',
   });
 });

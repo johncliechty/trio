@@ -97,7 +97,10 @@ export function loadModelFamilies(env = process.env) {
     return String(value).trim().toLowerCase();
   };
   const coding = selected('coding_family', 'claude');
-  const review = selected('review_family', 'gemini');
+  // (2026-09-04, John) no prefs anywhere ⇒ single-family Claude, honestly stamped — never a Gemini
+  // seat nobody selected (the dashboard is the source; this default only covers a host with
+  // no Anchor settings and no mirror).
+  const review = selected('review_family', 'claude');
   const source = settings
     ? settingsPath
     : mirror
@@ -145,7 +148,7 @@ export function buildRoutesFromFamilies({
 } = {}) {
   const families = loadModelFamilies(env);
   const codingDriver = familyToDriverName(families.coding) || 'claude';
-  const reviewDriver = familyToDriverName(families.review) || 'gemini-cli';
+  const reviewDriver = familyToDriverName(families.review) || 'claude';
   const routes = { default: { driver: codingDriver } };
   for (const role of codingRoles) {
     const r = normalizeRole({ role });
@@ -179,7 +182,7 @@ export function buildRoutesFromFamilies({
 export function applyFamilyPrefsToEnv(env = process.env) {
   const fams = loadModelFamilies(env);
   const codingDrv = familyToDriverName(fams.coding) || 'claude';
-  const reviewDrv = familyToDriverName(fams.review) || 'gemini-cli';
+  const reviewDrv = familyToDriverName(fams.review) || 'claude';
   const roleMap = {
     EXECUTE: codingDrv,
     FIX: codingDrv,

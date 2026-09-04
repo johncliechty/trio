@@ -364,15 +364,21 @@ function testHashSnapshot(root, foremanDir) {
  * reason string if the FIX loop touched a test file (modified/added/deleted) with
  * no plan citation, else null.
  */
-function checkTestImmutability(baseline, root, foremanDir, citation) {
+function checkTestImmutability(baseline, root, foremanDir, citation, { fixRan = true } = {}) {
   if (citation) return null; // an explicit plan citation authorizes the test change
   const now = testHashSnapshot(root, foremanDir);
+  // (0107 E6) at iteration 0 no fix agent has run: the writer is the executor's trailing write
+  // or the gate's own scripts — say so, never "fix agent" (a false sentence in a HALT costs a
+  // forensic round).
+  const who = fixRan
+    ? 'fix agent'
+    : 'something between execute and gate (no fix agent ran — likely the executor\'s trailing write or the gate\'s own scripts)';
   for (const rel of Object.keys(baseline)) {
-    if (!(rel in now)) return `fix agent deleted test file ${rel}`;
-    if (now[rel] !== baseline[rel]) return `fix agent modified test file ${rel}`;
+    if (!(rel in now)) return `${who} deleted test file ${rel}`;
+    if (now[rel] !== baseline[rel]) return `${who} modified test file ${rel}`;
   }
   for (const rel of Object.keys(now)) {
-    if (!(rel in baseline)) return `fix agent added test file ${rel}`;
+    if (!(rel in baseline)) return `${who} added test file ${rel}`;
   }
   return null;
 }
@@ -1022,10 +1028,13 @@ export function collectFindings(reviews) {
  * (a) >=2 reviewers agree on and (b) carries a failing repro command+output.
  * A RED gate is never GO regardless of any sub-agent prose (anti-forgery).
  */
-export function judge(gate, findings) {
+export function judge(gate, findings, { panelSize } = {}) {
+  // (0106 E2) agreement needs >=2 reviewers — on a LEAN round of one reviewer that guard could
+  // never fire, so a single reviewer's BLOCKER blocks; the full panel keeps the 2-agree rule.
+  const need = Number.isInteger(panelSize) && panelSize > 0 ? Math.min(2, panelSize) : 2;
   const blocking = findings.filter((f) =>
     (f.severity === 'BLOCKER' || f.severity === 'MAJOR') &&
-    f.status === 'open' && f.agreement >= 2);
+    f.status === 'open' && f.agreement >= need);
   if (!gate.green) {
     return { go: false, reason: `gate RED (exit ${gate.exit_code}, fail ${gate.tap.fail ?? '?'})`, blocking };
   }
@@ -1296,7 +1305,7 @@ export async function runWave(o) {
     }
 
     // ----- Wave 7 test-immutability guard: the FIX loop must not touch tests -----
-    const immutable = checkTestImmutability(testBaseline, projectDir, foremanDir, lastCitation);
+    const immutable = checkTestImmutability(testBaseline, projectDir, foremanDir, lastCitation, { fixRan: iteration > 0 });
     if (immutable) {
       const reason = `test-immutability HALT: ${immutable}`;
       steps.push(`✗ ${reason}`);
@@ -1473,7 +1482,7 @@ export async function runWave(o) {
     if (reviews.length) log(`review: ${reviews.length} reviewers · ${openBlockers.length} agreed BLOCKER/MAJOR`);
 
     // ----- JUDGE (reads only the gate artifact for pass/fail of record) -----
-    const verdict = judge(lastGate, findings);
+    const verdict = judge(lastGate, findings, { panelSize: reviews.length });
 
     if (verdict.go) {
       // ----- vacuous-GREEN guard before declaring convergence (§5) -----

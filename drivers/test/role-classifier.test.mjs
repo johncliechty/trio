@@ -46,7 +46,8 @@ test('the closed verification set is exact and drives family routing', () => {
   const env = {};
   for (const role of VERIFICATION_ROLES) {
     assert.equal(isVerificationRole({ role }), true, role);
-    assert.equal(resolveDriverFromFamilies(role, env), 'gemini-cli', role);
+    // (2026-09-04) no prefs ⇒ the review seat is Claude, honestly single-family
+    assert.equal(resolveDriverFromFamilies(role, env), 'claude', role);
   }
   for (const role of [null, 'gate', 'synthesizer', 'execute', 'fix', 'fresh-eyes']) {
     assert.equal(isVerificationRole({ role }), false, String(role));
@@ -54,18 +55,23 @@ test('the closed verification set is exact and drives family routing', () => {
   }
 });
 
-test('default family routes include every verifier and a coding default cannot capture one', async () => {
+test('default family routes include every verifier explicitly; a coding default cannot capture one', async () => {
   const built = buildRoutesFromFamilies({ env: {} });
   for (const role of VERIFICATION_ROLES) {
-    assert.equal(built.routes[role].driver, 'gemini-cli', role);
+    // every verifier carries its OWN route row (never captured by `default`), and with no prefs
+    // that row is Claude (2026-09-04) — stamped cross_model:false, never a Gemini nobody selected.
+    assert.ok(built.routes[role], role);
+    assert.equal(built.routes[role].driver, 'claude', role);
   }
+  assert.equal(built.families.cross_model, false);
   assert.equal(listDrivers().includes('gemini-cli-native'), false);
+  // An EXPLICIT verifier row is never captured by the coding default (the seam under test):
 
   let codingCalls = 0;
   let reviewCalls = 0;
   const agent = makeRoleRoutedAgent({
     env: {},
-    routes: { default: { driver: 'claude' } },
+    routes: { default: { driver: 'claude' }, analysis: { driver: 'gemini-cli' } },
     runClaude: async () => {
       codingCalls += 1;
       return { text: 'coding', rec: {

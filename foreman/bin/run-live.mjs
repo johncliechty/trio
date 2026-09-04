@@ -113,6 +113,9 @@ try {
     const R = role.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
     if (drv === 'claude') {
       if (!process.env[`CLAUDE_MODEL_${R}`]) process.env[`CLAUDE_MODEL_${R}`] = model;
+      // (0106 E3) pin the DRIVER too: a `claude:` entry used to set only the model, so the
+      // dashboard's coding_family (chatgpt) filled the empty driver slot and re-seated execute.
+      if (!process.env[`TRIO_DRIVER_${R}`]) process.env[`TRIO_DRIVER_${R}`] = 'claude';
     } else {
       if (!process.env[`TRIO_DRIVER_${R}`]) process.env[`TRIO_DRIVER_${R}`] = drv;
       if (!process.env[`TRIO_MODEL_${R}`]) process.env[`TRIO_MODEL_${R}`] = model;

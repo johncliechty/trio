@@ -33,8 +33,8 @@ test('saved-family law ignores stale TRIO_DRIVER and family environment values',
   };
   assert.equal(
     resolveDriverFromFamilies('shark', env),
-    'gemini-cli',
-    'with no saved prefs, the historical review default wins; stale env is not a family source',
+    'claude',
+    'with no saved prefs the review seat is Claude (single-family, honest) — never a Gemini nobody selected; stale env is not a family source',
   );
 });
 

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-05T01:08:03.291Z",
+  "ended": "2026-09-05T03:01:07.623Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\literature-review",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\literature-review\\_foreman-status.log",
+  "result": "DONE: 1:GO,2:GO,3:GO,4:GO,5:GO",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 6784,
+  "journal_ref": null
+}

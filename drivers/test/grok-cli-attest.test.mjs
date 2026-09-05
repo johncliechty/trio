@@ -11,7 +11,7 @@ const ENVELOPE = JSON.stringify({
 });
 
 test('parseGrokJsonOutput: the envelope yields the text and the single served model', () => {
-  assert.deepEqual(parseGrokJsonOutput(ENVELOPE), { text: 'PONG', servedModel: 'grok-4.6-build' });
+  assert.deepEqual(parseGrokJsonOutput(ENVELOPE), { text: 'PONG', servedModel: 'grok-4.6-build', stopReason: 'end_turn', numTurns: 1 });
   // narration glued before the envelope still parses
   assert.equal(parseGrokJsonOutput('thinking...\n' + ENVELOPE).servedModel, 'grok-4.6-build');
   // several served models: only the requested one attests

@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-04T23:52:33.612Z",
+  "ended": "2026-09-04T23:54:52.893Z",
+  "input": "C:/dev/Data Compression/3D Parametric Representation/report/researchprime-novelty",
+  "params": {
+    "maxRounds": 2,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Data Compression\\3D Parametric Representation\\report\\researchprime-novelty\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "gemini"
+  ],
+  "duration_s": 139,
+  "journal_ref": null
+}

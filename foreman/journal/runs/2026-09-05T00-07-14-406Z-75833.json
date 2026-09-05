@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-05T00:07:14.406Z",
+  "ended": "2026-09-05T00:11:15.833Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\literature-review",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\literature-review\\_foreman-status.log",
+  "result": "HALT: 1:HALT — [taxonomy:agent-died] HALT: the execute agent died (agent execute:w1 died: class error-result, 19 tool calls, 239812ms) — nothing was executed; the wave must not advance to the gate",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 241,
+  "journal_ref": null
+}

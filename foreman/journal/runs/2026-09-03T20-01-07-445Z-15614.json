@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-03T20:01:07.445Z",
+  "ended": "2026-09-03T20:06:55.614Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "DONE: 6:GO",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 348,
+  "journal_ref": null
+}

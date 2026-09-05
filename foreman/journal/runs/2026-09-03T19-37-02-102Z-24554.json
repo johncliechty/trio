@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-03T19:37:02.102Z",
+  "ended": "2026-09-03T19:57:04.554Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "HALT: 5:GO,6:HALT — test-immutability HALT: fix agent modified test file test/MANIFEST.json",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1202,
+  "journal_ref": null
+}

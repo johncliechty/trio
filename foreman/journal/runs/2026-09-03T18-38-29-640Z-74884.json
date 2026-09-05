@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-03T18:38:29.640Z",
+  "ended": "2026-09-03T19:17:54.884Z",
+  "input": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\BA 815\\Fall 2026\\_foreman-status.log",
+  "result": "HALT: 2:GO,3:GO,4:GO,5:HALT — [taxonomy:agent-died] HALT: the execute agent died (agent execute:w5 died: class error-result, 0 tool calls, 746ms) — nothing was executed; the wave must not advance to the gate",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2365,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-04T23:54:08.910Z",
+  "ended": "2026-09-04T23:59:45.674Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\literature-review",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\literature-review\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: wave reached green without proving its own deliverable was exercised — the wave changed no source file reachable by an executed test, so an already-green suite proves nothing about",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 337,
+  "journal_ref": null
+}

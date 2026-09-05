@@ -1234,14 +1234,22 @@ export async function runWave(o) {
     if (exec?.agent_failed) {
       const af = exec.agent_failed;
       const timedOut = /TIMEOUT/i.test(String(af.exit_class || ''));
-      const reason = `[taxonomy:agent-died] HALT: the execute agent died (${af.detail}) — nothing was executed; the wave must not advance to the gate`;
+      // (2026-09-04, John) a model session limit is its own, named stop — the
+      // seat's own words ride the reason so Anchor can tell him, not just stop.
+      const tax = af.usage_limit ? 'usage-limit' : 'agent-died';
+      const reason = af.usage_limit
+        ? `[taxonomy:usage-limit] HALT: the execute seat hit a model session/usage limit (${af.detail}) — nothing was executed; wait for the reset, then re-invoke wave ${wave.n}`
+        : `[taxonomy:agent-died] HALT: the execute agent died (${af.detail}) — nothing was executed; the wave must not advance to the gate`;
       steps.push(`✗ ${reason}`);
-      log(`execute: agent DIED (${af.exit_class}) — HALT, never "complete"`);
+      log(`execute: agent DIED (${af.exit_class}${af.usage_limit ? ', usage limit' : ''}) — HALT, never "complete"`);
       return finishHalt({ reason, recommend:
-        `[taxonomy:agent-died] execute for wave ${wave.n} died with class ${af.exit_class} after ${af.tools} tool call(s). ` +
-        (timedOut
-          ? `This is the per-call cap killing a still-working agent: raise --call-timeout-min (default 20; the 0102 wave needed 43) and re-invoke wave ${wave.n}.`
-          : `Check the engine CLI/auth (a <2s, 0-tool death is the 0082 launch-failure class — usage limits or a broken CLI), then re-invoke wave ${wave.n}.`) });
+        `[taxonomy:${tax}] execute for wave ${wave.n} died with class ${af.exit_class} after ${af.tools} tool call(s)` +
+        (af.last_words ? ` — it said: ${af.last_words}` : '') + `. ` +
+        (af.usage_limit
+          ? `The model's session limit is hit: wait for the reset it names, then re-invoke wave ${wave.n}.`
+          : timedOut
+            ? `This is the per-call cap killing a still-working agent: raise --call-timeout-min (default 20; the 0102 wave needed 43) and re-invoke wave ${wave.n}.`
+            : `Check the engine CLI/auth (a <2s, 0-tool death is the 0082 launch-failure class — usage limits or a broken CLI), then re-invoke wave ${wave.n}.`) });
     }
     steps.push(`▸ execute… ${exec?.note || 'done'}`);
     log(`execute: ${exec?.note || 'done'}`);

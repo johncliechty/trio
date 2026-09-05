@@ -100,7 +100,6 @@ export function defaultRunGrokCli(fullPrompt, label, {
   role = null,
   timeoutMs = (Number(env.GROK_CLI_TIMEOUT_MS) || DEFAULT_GROK_CLI_TIMEOUT_MS),
   maxTurns = (Number(env.GROK_CLI_MAX_TURNS) || DEFAULT_GROK_CLI_MAX_TURNS),
-  schema = null,
   signal = null,
   log = () => {},
   processRunner = runCloseBoundProcess,
@@ -127,9 +126,9 @@ export function defaultRunGrokCli(fullPrompt, label, {
     : (env.GROK_CLI_PERMISSION_MODE || 'acceptEdits');
   if (perm) args.push('--permission-mode', perm);
   if (Number.isFinite(maxTurns) && maxTurns > 0) args.push('--max-turns', String(maxTurns));
-  // (2026-09-05) grok's own structured output: the model is CONSTRAINED to the schema, so the
-  // envelope's `text` is the JSON the seat asked for — not the last line of an investigation.
-  if (schema && typeof schema === 'object') args.push('--json-schema', JSON.stringify(schema));
+  // NOT grok's `--json-schema`: under it the model answers on its FIRST turn without touching
+  // its tools (live smoke 2026-09-05 — a reviewer said "not answerable" in 8 s, 0 tool calls).
+  // The schema stays the prompt-suffix + parse contract (cli-schema.mjs); the cap is the fix.
   if (signal?.aborted) {
     return Promise.resolve({ text: '', rec: {
       label, cli_status: null, ok: false, status: 'aborted', aborted: true,
@@ -241,7 +240,6 @@ export function makeGrokCliAgentSeam(options = {}) {
         role: normalizeRole({ role: opts.role, label }),
         timeoutMs: opts.timeoutMs,
         signal: opts.signal,
-        schema: opts.schema,
       },
       driverOpts: opts,
       familyName: 'Grok',

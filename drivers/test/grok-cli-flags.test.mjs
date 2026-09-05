@@ -1,8 +1,8 @@
-// drivers/test/grok-cli-flags.test.mjs — the headless grok call carries a turn cap and, when
-// a schema is asked for, grok's own structured-output flag (2026-09-05: a reviewer that read
-// files stopped at grok's default turn cap mid-investigation; its last prose line was the whole
-// reply, schema-nonconforming twice, and every Foreman wave went GREEN as review:degraded).
-// Hermetic: an injected processRunner captures argv; no subprocess.
+// drivers/test/grok-cli-flags.test.mjs — the headless grok call carries an explicit turn cap and
+// NEVER grok's --json-schema (2026-09-05: a reviewer that read files stopped at grok's default turn
+// cap mid-investigation, its last prose line was the whole reply, schema-nonconforming twice, and
+// every Foreman wave went GREEN as review:degraded; under --json-schema the model instead answers on
+// its first turn without touching its tools). Hermetic: an injected processRunner captures argv.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -24,7 +24,7 @@ function capture() {
   return { seen, processRunner };
 }
 
-test('grok headless call: --max-turns is always passed (default 40, env-tunable) and --json-schema only with a schema', async () => {
+test('grok headless call: --max-turns is always passed (default 40, env-tunable); --json-schema never (it suppresses tool use)', async () => {
   const { seen, processRunner } = capture();
   const out = await defaultRunGrokCli('review this', 'review:w1#0', {
     env: { CRUCIBLE_AGENT_LIVE: '1' }, processRunner, platform: 'win32',
@@ -34,18 +34,15 @@ test('grok headless call: --max-turns is always passed (default 40, env-tunable)
   const i = a.indexOf('--max-turns');
   assert.ok(i >= 0, `--max-turns missing in ${a.join(' ')}`);
   assert.equal(a[i + 1], String(DEFAULT_GROK_CLI_MAX_TURNS));
-  const j = a.indexOf('--json-schema');
-  assert.ok(j >= 0, `--json-schema missing in ${a.join(' ')}`);
-  assert.deepEqual(JSON.parse(a[j + 1]).required, ['answerable']);
+  assert.ok(!a.includes('--json-schema'), 'a schema seat must still let grok use its tools');
   assert.equal(out.text, '{"answerable":"yes","findings":[]}');
   assert.equal(out.rec.stop_reason, 'end_turn');
   assert.equal(out.rec.num_turns, 3);
   assert.equal(out.rec.model_served, 'grok-4.6-build');
 
-  const plain = capture();
-  await defaultRunGrokCli('say hi', 'chat', { env: { CRUCIBLE_AGENT_LIVE: '1', GROK_CLI_MAX_TURNS: '7' }, processRunner: plain.processRunner, platform: 'win32' });
-  assert.ok(!plain.seen.args.includes('--json-schema'), 'no schema → no --json-schema');
-  assert.equal(plain.seen.args[plain.seen.args.indexOf('--max-turns') + 1], '7');
+  const tuned = capture();
+  await defaultRunGrokCli('say hi', 'chat', { env: { CRUCIBLE_AGENT_LIVE: '1', GROK_CLI_MAX_TURNS: '7' }, processRunner: tuned.processRunner, platform: 'win32' });
+  assert.equal(tuned.seen.args[tuned.seen.args.indexOf('--max-turns') + 1], '7');
 });
 
 test('parseGrokJsonOutput keeps stopReason and num_turns so a cap hit can be said aloud', () => {

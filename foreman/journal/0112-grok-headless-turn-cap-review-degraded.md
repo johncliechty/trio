@@ -21,10 +21,13 @@ the second family while the log stayed GREEN.
 ## The fix (drivers/grok-cli.mjs)
 
 - `--max-turns` is always passed (`GROK_CLI_MAX_TURNS`, default 40).
-- When a seat asks for a schema, the call carries grok's own `--json-schema <schema>`: the model is
-  constrained to the shape, so the envelope's `text` IS the requested JSON, not the last line of an
-  investigation. A live smoke with the review schema returned a conforming object with `modelUsage`
-  attesting `grok-4.6-build` and `stopReason: end_turn`.
+- NOT grok's `--json-schema`. It was tried first: the live smoke returned a conforming object — but on
+  the resumed run the reviewer answered "not answerable" in 8 seconds with 0 tool calls, and a second
+  smoke ("read VERSION and put its contents in note") answered `"I'll read VERSION now…"` without
+  reading it. Under that flag the model emits the structured object on its FIRST turn and never touches
+  its tools. Without the flag and with the cap, the same prompt used the file tool (2 turns) and returned
+  the JSON glued after one narration line, which the seam's parser already handles. The schema stays
+  the prompt-suffix + parse contract; the turn cap is the whole fix.
 - The receipt now carries `stop_reason` and `num_turns`, so a cap hit is visible on the record.
 
 Tests: `drivers/test/grok-cli-flags.test.mjs` (argv captured through an injected process runner);

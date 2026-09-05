@@ -51,6 +51,12 @@ RC-5 Earned or premature, by written trigger: scaffolding is EARNED when it carr
 RC-6 Critical path: does the locked North Star FAIL without this, or merely feel less complete?
   When uncertain: PARK it (zero further spend) and carry one line to the user — never pursue silently.
 RC-7 Tie-breaker only: elegance never overrides a requirement, a datum, or a failing test.
+RC-8 Wave count (Stage 2 only): a wave is a change a reviewer would want to see alone. Adjacent
+  waves that are ONE change merge, on the record: a parser without its renderer is invisible, a
+  module without its hooks is dead code, a backend that exists only for one link ships with the
+  link, a wave whose gate needs the NEXT wave's change to be tested is the same change. Waves that
+  touch different failure surfaces, or bury an irreversible / externally visible step beside a safe
+  one, stay apart.
 RC-G Guards (tests, gates, error handling, journals, run-records): forced by a NAMED hazard that
   obeys the same independence law (predates the proposal, the user named it, or its class has
   occurred on the record); the guard must actually SEE the failure it guards; its false-alarm cost
@@ -402,4 +408,115 @@ export async function runCriticalPathCheck({ items, northStar, agent, label = 'r
   const lines = parked.map((p) => 'possible rabbit hole: [' + p.id + '] ' + p.text.slice(0, 120) + ' because ' + (p.reason || 'not on the critical path') + ' — pursue or drop?');
   log('RC-6: ' + list.length + ' open item(s) → ' + critical.length + ' critical, ' + parked.length + ' parked');
   return { critical, parked, lines };
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// RC-8 — the wave-count question (John, 2026-09-05: seven emitted waves for three real changes went
+// through the element battery unchallenged; the battery judged elements, never the wave count).
+// The steering seat proposes merges of ADJACENT waves that are one change; the adversary (the other
+// family) disputes; only undisputed merges are applied by the caller. Pure over the reply.
+// ---------------------------------------------------------------------------------------------
+const RC8_SCHEMA = {
+  type: 'object', required: ['merges'],
+  properties: { merges: { type: 'array', items: {
+    type: 'object', required: ['waves', 'reason'],
+    properties: { waves: { type: 'array', items: { type: 'number' } }, reason: { type: 'string' } },
+  } } },
+};
+const RC8_DISPUTE_SCHEMA = {
+  type: 'object', required: ['disputes'],
+  properties: { disputes: { type: 'array', items: {
+    type: 'object', required: ['waves', 'severity', 'reason'],
+    properties: { waves: { type: 'array', items: { type: 'number' } }, severity: { enum: ['BLOCKER', 'MAJOR', 'MINOR'] }, reason: { type: 'string' } },
+  } } },
+};
+
+/** A merge is a run of ≥2 distinct, ascending, ADJACENT 1-based wave numbers inside 1..n; runs never overlap (first wins). */
+export function normalizeWaveMerges(raw, n) {
+  const out = [];
+  const taken = new Set();
+  for (const m of Array.isArray(raw) ? raw : []) {
+    const ws = Array.isArray(m?.waves) ? m.waves.map((x) => Number(x)).filter((x) => Number.isInteger(x)) : [];
+    if (ws.length < 2) continue;
+    const sorted = [...ws].sort((a, b) => a - b);
+    if (sorted[0] < 1 || sorted[sorted.length - 1] > n) continue;
+    let adjacent = true;
+    for (let i = 1; i < sorted.length; i++) if (sorted[i] !== sorted[i - 1] + 1) { adjacent = false; break; }
+    if (!adjacent || sorted.some((w) => taken.has(w))) continue;
+    sorted.forEach((w) => taken.add(w));
+    out.push({ waves: sorted, reason: String(m?.reason ?? '').slice(0, 400) });
+  }
+  return out;
+}
+
+function waveLine(w, i) {
+  const dels = Array.isArray(w?.deliverables) ? w.deliverables.map((d) => String(d ?? '').slice(0, 140)) : [];
+  return '[' + (i + 1) + '] ' + String(w?.title ?? '').slice(0, 160) +
+    (w?.dependsOn ? ' (depends on: ' + String(w.dependsOn).slice(0, 80) + ')' : '') +
+    String.fromCharCode(10) + '    done-when: ' + String(w?.doneWhen ?? '').slice(0, 260) +
+    (dels.length ? String.fromCharCode(10) + dels.map((d) => '    - ' + d).join(String.fromCharCode(10)) : '');
+}
+
+/**
+ * RC-8 over a wave list. Returns `{ merges, confirmed, disputes, lines }` — `confirmed` are the merges
+ * no MAJOR/BLOCKER dispute touched. A list of fewer than two waves asks nothing.
+ */
+export async function runWaveCountCheck({ waves, northStar, agent, label = 'rc8-wave-count', log = () => {} } = {}) {
+  const list = Array.isArray(waves) ? waves : [];
+  if (list.length < 2) return { merges: [], confirmed: [], disputes: [], lines: [] };
+  if (typeof agent !== 'function') throw new ElegancePassError('runWaveCountCheck requires an agent() seam');
+  const NL = String.fromCharCode(10);
+  const shown = list.map(waveLine).join(NL);
+  const prompt = [
+    'You are the STEERING seat asking ONE question (RC-8, the wave-count question) about a wave decomposition:',
+    'is each wave a change a reviewer would want to see alone? Adjacent waves that are ONE change merge:',
+    'a parser without its renderer is invisible; a module without its hooks is dead code; a backend that',
+    'exists only for one link ships with the link; a wave whose gate needs the NEXT wave\'s change to be',
+    'TESTED is the same change. Do NOT merge waves that touch different failure surfaces, or that would',
+    'bury an irreversible / externally visible step beside a safe one. Name only ADJACENT runs',
+    '([n, n+1] or [n, n+1, n+2]); an empty list means every wave stands alone. Return JSON only.',
+    '',
+    'NORTH STAR:',
+    String(northStar || '').slice(0, 4000),
+    '',
+    'WAVES:',
+    shown,
+    '',
+    'Output: {"merges":[{"waves":[n,m],"reason"}]}',
+  ].join(NL);
+  const reply = await agent(prompt, { role: 'synthesizer', label, schema: RC8_SCHEMA });
+  const merges = normalizeWaveMerges(parseJsonReply(reply)?.merges, list.length);
+  let disputes = [];
+  if (merges.length) {
+    const advPrompt = [
+      'You are an independent ADVERSARIAL reviewer (a different model family from the steering seat) attacking',
+      'proposed MERGES of waves in a decomposition (RC-8, the wave-count question). Refute a merge that would',
+      'combine changes a reviewer must see separately: different failure surfaces; an irreversible or externally',
+      'visible step buried beside a safe one; a wave whose gate is meaningful alone and whose separate GREEN is',
+      'worth having. Do not restate agreement; only disputes. Return JSON only.',
+      '',
+      'NORTH STAR:',
+      String(northStar || '').slice(0, 4000),
+      '',
+      'WAVES:',
+      shown,
+      '',
+      'PROPOSED MERGES:',
+      ...merges.map((m) => '- waves ' + m.waves.join('+') + ' — ' + m.reason),
+      '',
+      'Output: {"disputes":[{"waves":[n,m],"severity":"BLOCKER"|"MAJOR"|"MINOR","reason"}]}',
+    ].join(NL);
+    const advReply = await agent(advPrompt, { role: 'shark', label: label + '-adversary', schema: RC8_DISPUTE_SCHEMA });
+    disputes = (parseJsonReply(advReply)?.disputes ?? []).filter((d) => Array.isArray(d?.waves)).map((d) => ({
+      waves: d.waves.map((x) => Number(x)).filter(Number.isInteger).sort((a, b) => a - b),
+      severity: ['BLOCKER', 'MAJOR', 'MINOR'].includes(d.severity) ? d.severity : 'MINOR',
+      reason: String(d.reason ?? '').slice(0, 400),
+    }));
+  }
+  const blocked = (m) => disputes.some((d) => (d.severity === 'BLOCKER' || d.severity === 'MAJOR') && d.waves.some((w) => m.waves.includes(w)));
+  const confirmed = merges.filter((m) => !blocked(m));
+  const lines = confirmed.map((m) => 'RC-8: merge waves ' + m.waves.join('+') + ' — ' + (m.reason || 'one change'));
+  log('RC-8: ' + list.length + ' wave(s) → ' + merges.length + ' merge(s) proposed, ' + disputes.length + ' dispute(s), ' + confirmed.length + ' confirmed');
+  return { merges, confirmed, disputes, lines };
 }

@@ -39,7 +39,7 @@
 // `runWellFormednessGate` (spawning Foreman's real resolver); the approval gate reuses
 // crucible-lib's `haltForHuman` + the canonical `HALT_GATES`. Stage 2 ORCHESTRATES.
 
-import { runPlanElegancePass, elegancePassSection } from './elegance-hooks.mjs';
+import { runPlanElegancePass, elegancePassSection, runWaveCountPass, waveCountSection } from './elegance-hooks.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -816,6 +816,19 @@ export async function runStage2({
     } catch (e) {
       log(`!! elegance pass failed (non-fatal — waves unchanged, said aloud): ${e?.message || e}`);
     }
+    // RC-8 (John, 2026-09-05): the wave-count question, asked AFTER the element verdicts and BEFORE
+    // the Sharks — the steering seat proposes merges of adjacent waves that are one change, the
+    // adversary disputes, only undisputed merges are applied; the record rides the draft.
+    let waveCount = null;
+    try {
+      waveCount = await withPhaseProgress({
+        phase: 'stage2-wave-count', log, progressPath, guards,
+        fn: () => runWaveCountPass({ waves, northStar, agent, artifactsDir: stateDir, log, fileTag: '-stage2' }),
+      });
+      if (Array.isArray(waveCount?.waves) && waveCount.waves.length) waves = waveCount.waves;
+    } catch (e) {
+      log(`!! RC-8 wave-count check failed (non-fatal — waves unchanged, said aloud): ${e?.message || e}`);
+    }
     live.waves = waves;
     try {
       fs.writeFileSync(
@@ -873,7 +886,7 @@ export async function runStage2({
         guards,
         fn: () => runMasterPlanLoop({
           agent, northStar, criteria,
-          draft: plan + elegancePassSection(elegance), research, acceptanceCriteria, roundCap, artifactsDir: stateDir, log,
+          draft: plan + elegancePassSection(elegance) + waveCountSection(waveCount), research, acceptanceCriteria, roundCap, artifactsDir: stateDir, log,
           sharkRoles: band.sharkRoles,
           capPendingAction: 'stage2-round-cap',
           // 2026-08-25: name what THIS gate actually locks (the reused loop used to say

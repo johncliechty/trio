@@ -144,7 +144,7 @@ test('fallback reprompt exhaustion attaches four transports and calls no callbac
   assert.equal(callbackCount, 0);
 });
 
-test('verification schema exhaustion and unattested service fail closed without fallback', async () => {
+test('verification schema exhaustion fails closed without fallback; an unattested-MODEL verifier is accepted with the stamp (John 2026-09-05)', async () => {
   let claudeCalls = 0;
   await assert.rejects(() => runAgent({
     driver: 'chatgpt-cli', role: 'judge', label: 'judge:schema',
@@ -158,17 +158,22 @@ test('verification schema exhaustion and unattested service fail closed without 
     return true;
   });
 
-  await assert.rejects(() => runAgent({
+  const receipts = [];
+  const out = await runAgent({
     driver: 'chatgpt-cli', role: 'reviewer', label: 'reviewer:unattested',
     model: 'gpt-primary', prompt: 'review', schema: SCHEMA,
     runCodexCli: codexSequence(['{"passed":true}'], [acceptedRec('chatgpt', null, 'gpt-primary')]),
     runClaude: async () => { claudeCalls += 1; },
-  }), (error) => {
-    assert.equal(error.receipt.status, 'verification_fail_closed');
-    assert.equal(error.receipt.attempts[0].transport_attempts[0].status, 'accepted');
-    assert.equal(error.receipt.attempts[0].error.code, 'served_unattested');
-    return true;
+    onReceipt: (r) => receipts.push(r),
   });
+  assert.deepEqual(out, { passed: true });
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].status, 'success');
+  assert.equal(receipts[0].verification, true);
+  assert.equal(receipts[0].served.family, 'chatgpt');
+  assert.equal(receipts[0].served.family_attested, true);
+  assert.equal(receipts[0].served.model_attested, false);
+  assert.equal(receipts[0].failover.allowed, false);
   assert.equal(claudeCalls, 0);
 });
 

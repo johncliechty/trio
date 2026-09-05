@@ -250,29 +250,38 @@ test('role-routed wrapper preserves cancellation and receipt callbacks', async (
   assert.equal(receipts[0].status, 'success');
 });
 
-test('production verification roles fail closed before preflight or spawn', async () => {
+test('production verification roles run READ-ONLY after preflight and stamp the model unattested (John 2026-09-05)', async () => {
   let preflightCalls = 0;
-  let processCalls = 0;
+  let seenArgs = null;
+  const jsonl = [
+    JSON.stringify({ type: 'thread.started', thread_id: 't-1' }),
+    JSON.stringify({ type: 'turn.started' }),
+    JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'VERDICT' } }),
+    JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 5, output_tokens: 2 } }),
+  ].join('\n');
   const result = await defaultRunCodexCli('review this', 'reviewer:preflight', {
     env: { CRUCIBLE_AGENT_LIVE: '1', TRIO_TIER: 'heavy' },
     role: 'reviewer',
     preflightImpl: () => {
       preflightCalls += 1;
-      throw new Error('hermetic gate: preflight must not run');
+      return { ok: true, status: 'ready', auth: 'chatgpt', subscription_auth: true, model: 'gpt-5.6', effort: 'high' };
     },
-    processRunner: () => {
-      processCalls += 1;
-      throw new Error('hermetic gate: process must not spawn');
+    processRunner: async ({ args }) => {
+      seenArgs = args;
+      return { stdout: jsonl, stderr: '', code: 0, terminal: 'closed', kill_status: null };
     },
   });
-  assert.equal(result.rec.status, 'unattested_verification_model');
-  assert.equal(result.rec.preflight_skipped, 'served_model_unavailable');
-  assert.equal(result.rec.subscription_auth, null);
-  assert.equal(preflightCalls, 0);
-  assert.equal(processCalls, 0);
+  assert.equal(preflightCalls, 1, 'preflight runs for a verification seat too');
+  assert.ok(Array.isArray(seenArgs), 'the seat spawns');
+  assert.equal(seenArgs[seenArgs.indexOf('--sandbox') + 1], 'read-only', 'a reviewer never writes');
+  assert.equal(result.text, 'VERDICT');
+  assert.equal(result.rec.ok, true);
+  assert.equal(result.rec.model_family, 'chatgpt');
+  assert.equal(result.rec.family_attested, true);
+  assert.equal(result.rec.model_attested, false, 'Codex names no served model — stamped, not refused');
 });
 
-test('coding seat emits honest unattested receipt; verification seat fails closed', async () => {
+test('coding seat emits honest unattested receipt; verification seat is accepted with the model-unattested stamp (John 2026-09-05)', async () => {
   const receipts = [];
   const runCodexCli = async () => ({
     text: 'answer',
@@ -291,18 +300,31 @@ test('coding seat emits honest unattested receipt; verification seat fails close
   assert.equal(receipts[0].served.family, 'chatgpt');
   assert.equal(receipts[0].served.model, null);
   assert.equal(receipts[0].served.model_attested, false);
+  // ChatGPT reviews: family attested by the binary, model unattested — stamped, said, accepted.
+  const said = [];
+  assert.equal(await runAgent({
+    driver: 'chatgpt-cli', prompt: 'review', role: 'reviewer', runCodexCli,
+    onReceipt: (receipt) => receipts.push(receipt), log: (m) => said.push(m),
+  }), 'answer');
+  const rv = receipts[1];
+  assert.equal(rv.status, 'success');
+  assert.equal(rv.verification, true);
+  assert.equal(rv.served.family, 'chatgpt');
+  assert.equal(rv.served.family_attested, true);
+  assert.equal(rv.served.model_attested, false);
+  assert.ok(said.some((m) => /UNATTESTED model/.test(m)), 'the acceptance is said aloud');
+  assert.equal(await runAgent({
+    driver: 'chatgpt-cli', prompt: 'review', label: 'reviewer:derived', runCodexCli,
+    onReceipt: (receipt) => receipts.push(receipt),
+  }), 'answer');
+  assert.equal(receipts[2].role, 'reviewer');
+  assert.equal(receipts[2].served.model_attested, false);
+  // a seat that cannot attest its FAMILY still fails closed
+  const noFamily = async () => ({ text: 'x', rec: { ok: true, status: 'success', requested_model: 'm',
+    model_family: null, family_attested: false, model_served: null, model_attested: false, degraded: true } });
   await assert.rejects(
-    () => runAgent({
-      driver: 'chatgpt-cli', prompt: 'review', role: 'reviewer', runCodexCli,
-    }),
+    () => runAgent({ driver: 'chatgpt-cli', prompt: 'review', role: 'reviewer', runCodexCli: noFamily }),
     (error) => error.receipt.status === 'verification_fail_closed'
       && error.receipt.attempts[0].error.code === 'served_unattested',
-  );
-  await assert.rejects(
-    () => runAgent({
-      driver: 'chatgpt-cli', prompt: 'review', label: 'reviewer:derived', runCodexCli,
-    }),
-    (error) => error.receipt.status === 'verification_fail_closed'
-      && error.receipt.role === 'reviewer',
   );
 });

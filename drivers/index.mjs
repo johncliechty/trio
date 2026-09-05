@@ -497,11 +497,19 @@ async function runDispatcherAttempt(driver, opts, ordinal, kind) {
         ? 'aborted'
         : 'seat_unavailable';
     error = errorInfo(last.error?.code || 'seat_unavailable', last.error?.message || 'transport failed');
-  } else if (verification
-      && (!last.served?.family_attested || !last.served?.model_attested)) {
+  } else if (verification && !last.served?.family_attested) {
     status = 'seat_unavailable';
-    error = errorInfo('served_unattested', 'verification requires attested served family and model');
+    error = errorInfo('served_unattested', 'verification requires an attested served family');
   } else {
+    // (John, 2026-09-05) a verification seat whose FAMILY is attested but whose served MODEL
+    // is not (the Codex CLI names no model; Grok plain output did not) is ACCEPTED with the
+    // honest stamp `model_attested:false` on its receipt — family independence is what a
+    // reviewer must prove; the model tier is stamped, never inferred. Said on the log so no
+    // run is blind to it. A family that cannot be attested still fails closed above.
+    if (verification && !last.served?.model_attested) {
+      const say = typeof opts.log === 'function' ? opts.log : () => {};
+      say(`⚠ ${opts.label ?? opts.role ?? 'seat'}: ${driver.name} verification seat served family "${last.served?.family ?? '?'}" with an UNATTESTED model — accepted, stamped model_attested:false`);
+    }
     status = transportAttempts.length === 2 ? 'success_after_schema_reprompt' : 'success';
     served = last.served;
   }

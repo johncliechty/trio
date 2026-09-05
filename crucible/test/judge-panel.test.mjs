@@ -163,6 +163,24 @@ test('RED: a degraded (unattested) second judge cannot manufacture a second fami
   assert.throws(() => requireTwoFamilies(panel), (e) => e instanceof HaltError);
 });
 
+// --- GREEN (2026-09-05): a family-attested, model-unattested member IS a second origin --------
+
+test('GREEN: a ChatGPT judge whose family is attested but whose model is not counts as a second family', async () => {
+  const panel = await runRubricPanel({
+    doc: litReviewClean, pack,
+    members: [
+      member({ family: 'claude', servedModel: 'claude-opus-4-8' }),
+      member({ family: 'chatgpt', probeCrossModel: () => ({ model: 'gpt-5.6', family: 'chatgpt' }),
+        attest: { model_served: null, model_attested: false, degraded: true, family: 'chatgpt', family_attested: true } }),
+    ],
+  });
+  assert.equal(panel.members[1].attestation.model_attested, false);
+  assert.equal(panel.members[1].family_served, 'gpt');
+  assert.deepEqual(panel.attestedFamilies, ['claude', 'gpt']);
+  assert.equal(panel.independentOrigins, 2);
+  assert.equal(panel.crossFamily, true);
+});
+
 // --- RED PROBE 4: the closed lineage enum gates off-enum families --------------------------
 
 test('RED: two OFF-ENUM attested families collapse to one capped origin (closed lineage enum gates them)', async () => {

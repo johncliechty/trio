@@ -43,3 +43,27 @@ cross-family review and adversary before GO, then waves 2–3.
 
 - The GREEN line in EXECUTION-LOG.md must carry `review:degraded` when it was (already on the list).
 - A seat that fails verification twice in one run should HALT the run, not degrade every wave.
+
+## Addendum (same evening): the second cause, found in grok's own event log
+
+With the turn cap in place a reviewer STILL dropped on wave 1's third review. `~/.grok/sessions/<project>/
+<session>/events.jsonl` ended every failed review the same way:
+
+    permission_requested run_terminal_command → permission_resolved decision: cancelled →
+    turn_ended outcome: cancelled, cancellation_category: permission_cancelled
+
+The reviewer ran 26 turns and 95 tools, 94 asks auto-allowed, then one chained / redirected PowerShell
+command (`… 2>$null ; if (Test-Path …) { … } else { … }`) needed an approval, headless mode cancelled
+it, and grok ended the turn with no answer — the envelope says `stopReason: "cancelled"` and its text is
+one narration line. Reproduced on demand with that command shape in plan AND dontAsk modes; plain
+single commands (pytest, git log, python -c) never ask. So the first failures of the day were most
+likely this class too, not the turn cap alone.
+
+Fixes (drivers): a verification seat's prompt opens with the read-only constraint
+(`GROK_HEADLESS_READONLY_NOTE`); the receipt carries `turn_cancelled`; the shared schema retry says
+"turn was CANCELLED (a tool ask cannot be answered headless)" instead of "schema-nonconforming", re-prompts
+with the constraint, and a second cancel fails closed with an error that says so. Tests:
+`drivers/test/cli-schema-cancelled.test.mjs`; drivers suite 210/210.
+
+Owed: grok exposes no "deny and continue" for headless asks; if a future grok adds one, prefer it to the
+prompt rule.

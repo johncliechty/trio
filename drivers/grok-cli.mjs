@@ -29,6 +29,13 @@ export const DEFAULT_GROK_CLI_TIMEOUT_MS = 20 * 60 * 1000;
 // the whole reply (schema-nonconforming twice → verification failed closed; every Foreman
 // wave then went GREEN as review:degraded). The cap is now explicit and generous.
 export const DEFAULT_GROK_CLI_MAX_TURNS = 40;
+// (2026-09-05, foreman journal 0112 addendum) a tool ask that headless mode cannot answer CANCELS
+// the whole turn (stopReason 'cancelled', no reply) — seen with chained (;), branching (if/else) and
+// redirected (2>$null) shell commands in plan AND dontAsk modes. A verification seat is told first.
+export const GROK_HEADLESS_READONLY_NOTE =
+  'READ-ONLY SEAT (headless grok): a shell command that chains (;), branches (if/else) or redirects '
+  + '(2>$null, >) needs an approval no one can give here and ENDS your turn unanswered. Use plain single '
+  + 'commands or your file tools, and always finish with the JSON you were asked for.';
 
 /** True only for ids the Grok CLI will accept — reject stale Gemini/Claude setx pins. */
 export function isPlausibleGrokModelId(m) {
@@ -136,6 +143,7 @@ export function defaultRunGrokCli(fullPrompt, label, {
       family_attested: false, model_attested: false, degraded: true,
     } });
   }
+  if (isVerificationRole({ role, label })) fullPrompt = GROK_HEADLESS_READONLY_NOTE + String.fromCharCode(10, 10) + fullPrompt;
   const useFile = Buffer.byteLength(fullPrompt, 'utf8') > 24000;
   let tmpPath = null;
   if (useFile) {
@@ -193,6 +201,7 @@ export function defaultRunGrokCli(fullPrompt, label, {
       timed_out: status === 'timeout',
       stop_reason: parsed?.stopReason ?? null,
       num_turns: parsed?.numTurns ?? null,
+      turn_cancelled: parsed?.stopReason === 'cancelled',
       aborted: status === 'aborted',
       kill_status: result.kill_status,
     };

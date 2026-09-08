@@ -1,0 +1,84 @@
+{
+  "started": "2026-09-08T13:40:29.429Z",
+  "ended": "2026-09-08T13:44:29.212Z",
+  "verdict": {
+    "passed": true,
+    "rationale": "The proposal serves the North Star: Codex execute/fix was burning attention on no-op loops (same 78/79 RED) because the prompt forbade the only file channel that host has; ConPTY already covers the focus hazard. Gates, git, and tests stay orchestrator-owned in the authoring copy; review prompts are untouched; YOLO is opt-in and authoring-only. The patch matches those two behaviors and no more: authoringToolRule keeps the old ban unless FOREMAN_CODEX_CONPTY=1 and CODING_FAMILY=chatgpt; danger-full-access is allowlisted in the argv builder but resolveCodexSandbox still forces read-only for verification, synthesizer, unknown, and empty roles, and leaves default execute/fix at workspace-write. Windows unelevated is asserted absent on the YOLO argv path. No new transport, GO-rule edit, or product-plan change is in the diff.",
+    "findings": [
+      {
+        "severity": "MINOR",
+        "detail": "Sharing one helper changes the default fix prompt on every host: it now appends '; strictly just edit the source files.' which the pre-patch fix string lacked. That is a tightening, not a widen, but it is not 'default text remains unchanged' as written."
+      },
+      {
+        "severity": "NIT",
+        "detail": "The Codex exception still leads with 'Use dedicated file tools where available' and only then grants terminal when they are absent. That is the same search-first stall journaled for GPT-6-Astra; it matches the proposal's wording, so it is residual ineffectiveness risk, not a spec miss."
+      }
+    ]
+  },
+  "receipt": {
+    "schema": "trio.seat.v1",
+    "ok": true,
+    "status": "success",
+    "label": "chekhov-host-compat-patch",
+    "role": "judge",
+    "verification": true,
+    "structured": true,
+    "requested": {
+      "driver": "grok-cli",
+      "family": "grok",
+      "model": null
+    },
+    "served": {
+      "driver": "grok-cli",
+      "family": "grok",
+      "model": "grok-4.6-build",
+      "family_attested": true,
+      "model_attested": true
+    },
+    "attempts": [
+      {
+        "ordinal": 1,
+        "kind": "primary",
+        "requested": {
+          "driver": "grok-cli",
+          "family": "grok",
+          "model": null
+        },
+        "ok": true,
+        "status": "success",
+        "served": {
+          "driver": "grok-cli",
+          "family": "grok",
+          "model": "grok-4.6-build",
+          "family_attested": true,
+          "model_attested": true
+        },
+        "transport_attempts": [
+          {
+            "ordinal": 1,
+            "kind": "initial",
+            "label": "chekhov-host-compat-patch",
+            "ok": true,
+            "status": "accepted",
+            "provider_status": "success",
+            "served": {
+              "driver": "grok-cli",
+              "family": "grok",
+              "model": "grok-4.6-build",
+              "family_attested": true,
+              "model_attested": true
+            },
+            "error": null
+          }
+        ],
+        "error": null
+      }
+    ],
+    "failover": {
+      "allowed": false,
+      "used": false,
+      "blocked_reason": "verification_seat"
+    },
+    "error": null
+  }
+}

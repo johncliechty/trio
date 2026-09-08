@@ -1,0 +1,14 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-09-08T13:33:00Z",
+  "ended": "2026-09-08T13:46:00Z",
+  "input": "planning/chekhov-host-compat-20260908/PROPOSAL.md",
+  "params": {"cycle":"formal Foundry improvement","branch":"fix/chekhov-codex-host-compat-20260908","ticket":"0116","related_prior_context":"0106","scope":"Codex ConPTY authoring file tools and explicitly opted-in unrestricted authoring only"},
+  "output": ["planning/chekhov-host-compat-20260908/TEST-RESULTS.md","planning/chekhov-host-compat-20260908/proposal-verdict.json","planning/chekhov-host-compat-20260908/patch-verdict.json"],
+  "result": "PROMOTED: Grok proposal/patch checks pass; five new tests pass; no regression in full package suite vs untouched HEAD. Full repository remains RED with eight identical baseline failures and five existing skips.",
+  "cross_model": true,
+  "models": {"coding":{"family":"chatgpt","requested":"gpt-6-astra","served":null,"model_attested":false},"judge":{"family":"grok","served":"grok-4.6-build","model_attested":true}},
+  "duration_s": 780,
+  "journal_ref": "foreman/journal/0117-codex-host-compat-promoted.md"
+}

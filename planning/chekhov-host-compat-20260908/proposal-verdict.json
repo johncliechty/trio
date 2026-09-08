@@ -1,0 +1,84 @@
+{
+  "started": "2026-09-08T13:36:34.421Z",
+  "ended": "2026-09-08T13:37:59.536Z",
+  "verdict": {
+    "passed": true,
+    "rationale": "Proposal-gate North Star check only (no patch, no tools). The reproduced Codex no-op (execute plus two fix passes on the same 78/79 RED, zero source edits) is an executor that cannot read the frozen plan’s files, so waves do not reach verified done and attention is burned between gates. Change 1 restores file work on execute/fix only, default prompt text unchanged, dual-gated to FOREMAN_CODEX_CONPTY=1 and Anchor CODING_FAMILY=chatgpt, verification prompts untouched, git and test suites still orchestrator-only — that preserves ground-truth gates on the orchestrator and the ConPTY reason for the original shell ban. Change 2 is the authorized YOLO opt-in, not a silent default: WRITE_ROLES only, execute/fix default remains workspace-write, verification/judge/shark stay read-only, unknown/synthesis never gain danger-full-access, Windows unelevated stays workspace-write, receipt records the sandbox actually selected. CUT list holds: no new transport, wrapper, polling engine, model defaults, fallback ladder, checkpoint, GO-rule, or Chekhov product change; first frozen human writing sitting remains a halt. Refutations of scope creep, role widening, and ineffective compatibility therefore do not hold at proposal grade.",
+    "findings": [
+      {
+        "severity": "MINOR",
+        "detail": "Helper phrase “necessary in-scope implementation operations” is looser than the failure (Codex has no nonterminal file reader) and looser than the proposed tests (“file work”). Pin helper copy to batched terminal read/search plus in-workspace file create/edit/delete when dedicated file tools are absent; keep the existing git/test orchestrator-only ban. Otherwise a later patch can smuggle installs, servers, or self-run suites under YOLO without changing this proposal’s sentence."
+      },
+      {
+        "severity": "NIT",
+        "detail": "Sandbox YOLO and the ConPTY prompt gate are independent. Keep them independent in the patch: danger-full-access must not imply terminal permission, and FOREMAN_CODEX_CONPTY=1 must not imply unrestricted sandbox. Receipt already required to stamp the sandbox actually selected, including the Windows unelevated workspace-write path."
+      }
+    ]
+  },
+  "receipt": {
+    "schema": "trio.seat.v1",
+    "ok": true,
+    "status": "success",
+    "label": "chekhov-host-compat-proposal",
+    "role": "judge",
+    "verification": true,
+    "structured": true,
+    "requested": {
+      "driver": "grok-cli",
+      "family": "grok",
+      "model": null
+    },
+    "served": {
+      "driver": "grok-cli",
+      "family": "grok",
+      "model": "grok-4.6-build",
+      "family_attested": true,
+      "model_attested": true
+    },
+    "attempts": [
+      {
+        "ordinal": 1,
+        "kind": "primary",
+        "requested": {
+          "driver": "grok-cli",
+          "family": "grok",
+          "model": null
+        },
+        "ok": true,
+        "status": "success",
+        "served": {
+          "driver": "grok-cli",
+          "family": "grok",
+          "model": "grok-4.6-build",
+          "family_attested": true,
+          "model_attested": true
+        },
+        "transport_attempts": [
+          {
+            "ordinal": 1,
+            "kind": "initial",
+            "label": "chekhov-host-compat-proposal",
+            "ok": true,
+            "status": "accepted",
+            "provider_status": "success",
+            "served": {
+              "driver": "grok-cli",
+              "family": "grok",
+              "model": "grok-4.6-build",
+              "family_attested": true,
+              "model_attested": true
+            },
+            "error": null
+          }
+        ],
+        "error": null
+      }
+    ],
+    "failover": {
+      "allowed": false,
+      "used": false,
+      "blocked_reason": "verification_seat"
+    },
+    "error": null
+  }
+}

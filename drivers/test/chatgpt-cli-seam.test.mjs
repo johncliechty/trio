@@ -3,6 +3,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { VERIFICATION_ROLES } from '../roles.mjs';
 
 import {
   runAgent, familyToDriverName, listDrivers, makeRoleRoutedAgent,
@@ -79,7 +80,7 @@ test('Codex argv is ephemeral, config-isolated, prompt-on-stdin, read-only, JSON
   assert.ok(args.includes('model_reasoning_effort="ultra"'));
   assert.ok(args.includes('approval_policy="never"'));
   assert.throws(
-    () => buildCodexExecArgs({ sandbox: 'danger-full-access' }),
+    () => buildCodexExecArgs({ sandbox: 'invented-sandbox' }),
     /unsupported Codex sandbox/,
   );
 });
@@ -95,7 +96,7 @@ test('Codex write seats on Windows select the unelevated Windows sandbox inline 
   assert.ok(!posix.includes('windows.sandbox="unelevated"'), 'POSIX argv is unchanged');
 });
 
-test('Codex sandbox is role-aware and restricted to least-privilege production values', () => {
+test('Codex sandbox defaults are role-aware; verification outranks requested write posture', () => {
   assert.equal(resolveCodexSandbox({ role: 'reviewer', env: {} }), 'read-only');
   assert.equal(resolveCodexSandbox({
     role: 'judge', sandbox: 'workspace-write', env: { CODEX_CLI_SANDBOX: 'workspace-write' },
@@ -106,9 +107,52 @@ test('Codex sandbox is role-aware and restricted to least-privilege production v
   assert.equal(resolveCodexSandbox({ role: 'execute', env: {} }), 'workspace-write');
   assert.equal(resolveCodexSandbox({ role: 'fix', env: {} }), 'workspace-write');
   assert.throws(
-    () => resolveCodexSandbox({ sandbox: 'danger-full-access', env: {} }),
+    () => resolveCodexSandbox({ sandbox: 'invented-sandbox', env: {} }),
     /unsupported Codex sandbox/,
   );
+});
+
+test('explicit unrestricted sandbox is authoring-only; default and checking seats remain bounded', () => {
+  const env = { CODEX_CLI_SANDBOX: 'danger-full-access' };
+  for (const role of ['execute', 'fix', 'builder', 'coding', 'implement']) {
+    assert.equal(resolveCodexSandbox({ role, env }), 'danger-full-access', role);
+    assert.equal(resolveCodexSandbox({ role, env: {} }), 'workspace-write', `${role} default`);
+  }
+  assert.equal(resolveCodexSandbox({ role: 'execute', sandbox: 'danger-full-access', env: {} }), 'danger-full-access');
+  assert.equal(resolveCodexSandbox({ role: 'execute', sandbox: 'read-only', env }), 'read-only', 'per-call narrowing wins');
+  for (const role of [...VERIFICATION_ROLES, 'synthesizer', 'unknown', undefined, '']) {
+    assert.equal(resolveCodexSandbox({ role, env }), 'read-only', `${role} env`);
+    assert.equal(resolveCodexSandbox({ role, sandbox: 'danger-full-access', env: {} }), 'read-only', `${role} explicit`);
+  }
+});
+
+test('explicit authoring YOLO reaches production argv and receipt without widening a judge', async () => {
+  const jsonl = [
+    {type:'thread.started', thread_id:'host-compat'},
+    {type:'item.completed', item:{type:'agent_message', text:'DONE'}},
+    {type:'turn.completed', usage:{input_tokens:1,output_tokens:1}},
+  ].map((event) => JSON.stringify(event)).join('\n');
+  for (const role of ['execute', 'fix', 'judge', 'shark', 'synthesizer']) {
+    let launched;
+    const result = await defaultRunCodexCli('work', `host-compat:${role}`, {
+      role, model:'gpt-6-astra', reasoningEffort:'ultra', platform:'win32',
+      env:{CRUCIBLE_AGENT_LIVE:'1',CODEX_CLI_SANDBOX:'danger-full-access',OPENAI_API_KEY:'secret'},
+      preflightImpl:() => ({ok:true,status:'ready',subscription_auth:true}),
+      processRunner:async (request) => {
+        launched=request;
+        return {stdout:jsonl,stderr:'',code:0,terminal:'closed',kill_status:null};
+      },
+    });
+    const expected = ['execute','fix'].includes(role) ? 'danger-full-access' : 'read-only';
+    assert.equal(launched.args[launched.args.indexOf('--sandbox')+1], expected, role);
+    assert.equal(result.rec.sandbox, expected, 'receipt records actual posture');
+    assert.ok(launched.args.includes('approval_policy="never"'));
+    assert.ok(launched.args.includes('model_reasoning_effort="ultra"'));
+    assert.equal(launched.args[launched.args.indexOf('--model')+1], 'gpt-6-astra');
+    assert.ok(!launched.args.includes('windows.sandbox="unelevated"'));
+    assert.equal(launched.options.env.OPENAI_API_KEY, undefined);
+    assert.equal(result.rec.model_attested, false, 'request is never relabelled served');
+  }
 });
 
 test('subscription-only child env scrubs API credentials and endpoint overrides', () => {

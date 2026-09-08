@@ -1,0 +1,7 @@
+- id: 0116
+- skill: foreman
+- situation: coding worker cannot use host file tools
+- context: Chekhov handoff, GPT-6-Astra ultra, 2026-09-08; related prior no-op coding-seat evidence in 0106.
+- observation: Worker prompt prohibits all terminal commands while Codex has no dedicated local reader. Execute and two fix passes made no source changes; orchestrator repeated 78/79 RED. Main stopped its exact ConPTY tree before another no-op pass. Current driver also rejects explicitly requested danger-full-access.
+- outcome: friction
+- provenance: genuine-execution

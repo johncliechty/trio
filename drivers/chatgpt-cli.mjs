@@ -39,7 +39,7 @@ const WRITE_ROLES = new Set([
   'implement', 'implementation',
 ]);
 
-const CODEX_SANDBOXES = new Set(['read-only', 'workspace-write']);
+const CODEX_SANDBOXES = new Set(['read-only', 'workspace-write', 'danger-full-access']);
 
 /** True only for ids Codex will accept — reject stale Claude/Gemini/Grok pins. */
 export function isPlausibleCodexModelId(m) {
@@ -295,7 +295,7 @@ export function buildCodexExecArgs({
     throw new TypeError(`unsupported Codex reasoning effort "${reasoningEffort}"`);
   }
   if (!CODEX_SANDBOXES.has(String(sandbox))) {
-    throw new TypeError(`unsupported Codex sandbox "${sandbox}" (expected read-only|workspace-write)`);
+    throw new TypeError(`unsupported Codex sandbox "${sandbox}" (expected read-only|workspace-write|danger-full-access)`);
   }
   const args = [
     'exec', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config',
@@ -319,15 +319,21 @@ export function buildCodexExecArgs({
 }
 
 export function resolveCodexSandbox({ sandbox, role, env = process.env } = {}) {
-  const verification = isVerificationRole({ role });
+  const normalizedRole = normalizeRole({ role });
+  const verification = isVerificationRole({ role: normalizedRole });
   const explicit = sandbox || env.CODEX_CLI_SANDBOX;
+  // Explicit operator YOLO is authoring-only. A shared launch env must never
+  // widen a reviewer, synthesizer, or unclassified seat (Foreman journal 0116).
+  const unrestricted = explicit === 'danger-full-access';
   const selected = verification
     ? 'read-only'
-    : explicit || (WRITE_ROLES.has(String(role || '').toLowerCase())
+    : unrestricted && !WRITE_ROLES.has(normalizedRole)
+      ? 'read-only'
+      : explicit || (WRITE_ROLES.has(normalizedRole)
       ? 'workspace-write' : 'read-only');
   if (!CODEX_SANDBOXES.has(String(selected))) {
     throw new TypeError(
-      `unsupported Codex sandbox "${selected}" (expected read-only|workspace-write)`,
+      `unsupported Codex sandbox "${selected}" (expected read-only|workspace-write|danger-full-access)`,
     );
   }
   return String(selected);

@@ -1,0 +1,7 @@
+- id: 0117
+- skill: foreman
+- situation: coding worker cannot use host file tools
+- context: Formal bounded Foundry improvement from 0116 and prior 0106 no-op evidence; Chekhov takeover requested by John, 2026-09-08.
+- observation: Grok grok-4.6-build passed both North-Star proposal and actual-patch reviews with attested receipts. Full untouched/candidate suites have identical eight failures and five skips; candidate adds five passing tests (986 to 991 passes). Explicit ConPTY Codex file-tool adaptation and authoring-only danger-full-access; verification remains read-only. Full suite remains RED from reproduced baseline debt.
+- outcome: worked
+- provenance: genuine-execution

@@ -101,3 +101,19 @@ test('a seat reply that is text with a JSON object inside still parses; no JSON 
   assert.equal(res.verdicts[0].verdict, 'KEEP');
   await assert.rejects(() => runRabbitCatcher({ elements: ['x'], northStar: NS, agent: async () => 'no json here' }), /no JSON object/);
 });
+
+test('the adversary never demotes a KEEP whose need is user-ratified (crucible journal 0099); a record-backed KEEP still can be', async () => {
+  const catcher = { verdicts: [
+    { id: 'A', verdict: 'KEEP', text: 'the per-project lab manager', need: 'John 2026-09-07: "the jupyter notebooks need to come up"', provenance: 'user-ratified', rc2: 'no lab' },
+    { id: 'B', verdict: 'KEEP', text: 'a CLI mirror', need: 'the repo convention', provenance: 'record', rc2: 'nothing user-facing breaks' },
+  ] };
+  const agent = async () => ({ disputes: [
+    { id: 'A', disputed_verdict: 'KEEP', proposed_verdict: 'HOLD', reason: 'ask John to pick (A) or (B)', severity: 'MAJOR', trigger: 'John picks' },
+    { id: 'B', disputed_verdict: 'KEEP', proposed_verdict: 'HOLD', reason: 'the convention is the R&D CLI, not this', severity: 'MAJOR', trigger: 'a user asks for it' },
+  ] });
+  const out = await runRabbitCatcherAdversary({ catcher, elements: [], northStar: 'ns', agent });
+  assert.equal(out.disputes.length, 2, 'both disputes are recorded');
+  assert.equal(out.verdicts.find((v) => v.id === 'A').verdict, 'KEEP', 'the user-locked KEEP stands');
+  assert.equal(out.verdicts.find((v) => v.id === 'B').verdict, 'HOLD', 'the record-backed KEEP is demoted');
+  assert.deepEqual(out.demoted, ['B']);
+});

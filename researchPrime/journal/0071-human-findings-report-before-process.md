@@ -1,0 +1,7 @@
+- id: 0071-human-findings-report-before-process
+- skill: researchPrime; user feedback on Hierarchical AR Networks research outputs, 2026-09-08
+- situation: John's first serious reading of the literature output found its material/presentation inaccessible; the researchPrime plan was opaque and the actual results hard to identify.
+- context: Campaign conversation turn bc046fb1-58c2-44ec-a73e-564c8f186184; report v3.2/literature v2 had led with process limitations and closed before independent verification was complete.
+- observation: John requires executive findings, established work, possible contribution and decisive tests first; explanatory figures and nearby references; details by relevant area; search/snowballing method near the bottom; agent/review/model process last. Plans must explain the research plainly and results must be explicitly registered.
+- outcome: Rule promoted into canonical Skill Foundry/AGENTS.md and ELEGANCE.md; campaign research step reopened to rebuild the report and finish recoverable verification. Do not confuse mechanical checks or an engine completion flag with the scientific or human-facing deliverable.
+- provenance: genuine user feedback on prior campaign execution; this entry does not claim a new researchPrime engine run. Applies to the next human-facing output, with rendered-page inspection and explicit result links.

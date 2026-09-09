@@ -1,0 +1,27 @@
+{
+  "skill": "researchPrime",
+  "tier": "supplemental-direct-report-review",
+  "started": "2026-09-09T20:43:20.187Z",
+  "ended": "2026-09-09T20:49:18.275Z",
+  "input": "C:\\dev\\Mathematics Problems\\Transformer Math\\Hierarchical AR Networks\\literature\\structured-masks\\final-artifact.md",
+  "params": {
+    "clock_scope": "final direct accuracy review only",
+    "source": "current Anchor preferences",
+    "governed_loop_repeated": false
+  },
+  "output": "C:\\dev\\Mathematics Problems\\Transformer Math\\Hierarchical AR Networks\\literature\\structured-masks\\REPORT.pdf",
+  "result": "PASS, one typography nit resolved; no empirical certification",
+  "cross_model": true,
+  "models": {
+    "author": "ChatGPT family; exact served model unavailable; prior author/source receipts retained",
+    "review": {
+      "driver": "grok-cli",
+      "family": "grok",
+      "model": "grok-4.6-build",
+      "family_attested": true,
+      "model_attested": true
+    }
+  },
+  "duration_s": 358,
+  "journal_ref": "0075-hierarchical-mask-final-report-check.md"
+}

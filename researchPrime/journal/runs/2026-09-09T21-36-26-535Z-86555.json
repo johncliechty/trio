@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-09T21:36:26.535Z",
+  "ended": "2026-09-09T21:36:26.555Z",
+  "input": "C:\\dev\\Mathematics Problems\\Transformer Math\\Hierarchical AR Networks\\foundations\\examples\\researchprime",
+  "params": {
+    "maxRounds": 1,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\Mathematics Problems\\Transformer Math\\Hierarchical AR Networks\\foundations\\examples\\researchprime\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

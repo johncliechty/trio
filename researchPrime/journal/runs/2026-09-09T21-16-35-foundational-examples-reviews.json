@@ -1,0 +1,38 @@
+{
+  "skill": "researchPrime",
+  "tier": "bounded-foundation-with-actual-independent-review",
+  "started": "2026-09-09T21:16:35.174Z",
+  "ended": "2026-09-09T21:41:17.815Z",
+  "input": "C:\\dev\\Mathematics Problems\\Transformer Math\\Hierarchical AR Networks\\foundations\\examples\\PLAN.md",
+  "output": "C:\\dev\\Mathematics Problems\\Transformer Math\\Hierarchical AR Networks\\foundations\\examples\\FOUNDATIONAL-EXAMPLES.pdf",
+  "result": "Source constraints incorporated; independent final PASS; actual governed dry reconciliation with raw attribution caveat",
+  "cross_model": true,
+  "models": [
+    {
+      "driver": "chatgpt-cli",
+      "family": "chatgpt",
+      "model": null,
+      "family_attested": true,
+      "model_attested": false
+    },
+    {
+      "driver": "grok-cli",
+      "family": "grok",
+      "model": "grok-4.6-build",
+      "family_attested": true,
+      "model_attested": true
+    }
+  ],
+  "identity_basis": "Successful source and final provider receipts; not the zero-call engine fallback",
+  "engine_record": "2026-09-09T21-36-26-535Z-86555.json",
+  "engine_cross_model": false,
+  "engine_attribution_limitation": "No engine model calls; hard-coded claude fallback is not served identity",
+  "params": {
+    "stakes": "low",
+    "source_findings": 9,
+    "final_findings": 0,
+    "checks": 36,
+    "reconciliation_rounds": 1
+  },
+  "journal_ref": "0076-five-model-foundations-actual-reviews.md"
+}

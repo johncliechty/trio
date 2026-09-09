@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-09T01:14:03.682Z",
+  "ended": "2026-09-09T01:15:28.596Z",
+  "input": "literature/rp2/revision",
+  "params": {
+    "maxRounds": 2,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "literature\\rp2\\revision\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 85,
+  "journal_ref": "0072-human-report-recovery-two-origins.md"
+}

@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-09T02:51:11.432Z",
+  "ended": "2026-09-09T02:53:27.448Z",
+  "input": "C:\\dev\\Mathematics Problems\\Transformer Math\\Hierarchical AR Networks\\literature\\structured-masks\\researchprime",
+  "params": {
+    "maxRounds": 1,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Mathematics Problems\\Transformer Math\\Hierarchical AR Networks\\literature\\structured-masks\\researchprime\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 136,
+  "journal_ref": "0074-hierarchical-mask-two-origin-reconciliation.md"
+}

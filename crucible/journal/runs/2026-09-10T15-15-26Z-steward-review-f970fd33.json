@@ -1,0 +1,85 @@
+{
+  "skill": "crucible",
+  "tier": "not-applicable",
+  "started": "2026-09-10T15:15:26.424656+00:00",
+  "ended": "2026-09-10T15:15:26.424656+00:00",
+  "input": "User requested journaling of Crucible/Foreman findings for future improvement",
+  "params": {
+    "mode": "retrospective-review-intake",
+    "executed_engine": false,
+    "stakes": "medium"
+  },
+  "output": [
+    "C:\\dev\\trio\\crucible\\journal\\0102-steward-review-engine-value-and-friction.md",
+    "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\REVIEW-AND-PLAN.md"
+  ],
+  "result": "OPEN proposals; historical evidence distinguished from current reproduction; no engine changes",
+  "cross_model": false,
+  "models": [
+    {
+      "family": "chatgpt",
+      "model_served": null,
+      "model_attested": false,
+      "role": "session evidence synthesis"
+    }
+  ],
+  "duration_s": null,
+  "journal_ref": "0102-steward-review-engine-value-and-friction.md",
+  "evidence": [
+    "C:/dev/Ecgberht/journal/0100-gate5-three-days-lessons-learned.md",
+    "C:/dev/trio/crucible/journal/0097-rc8-wave-count-in-the-stage2-pass.md",
+    "C:/dev/trio/crucible/journal/0100-chekhov-stage2-seat-loss-and-resume-2026-09-07.md"
+  ],
+  "future_acceptance": "Replay current code with seat loss after decomposition, available configured-family failover, changed final draft, and three changes initially split into seven waves; require honest coverage/quorum, no stale lockable output, no repeated paid stages and correct retained/merged boundaries.",
+  "follow_up": {
+    "source": "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\review-2.json",
+    "model_served": "grok-4.6-build",
+    "scope": "plan review and source-confirmed Stage 2 input limitation, not engine performance test",
+    "disposition": "Pinned table plus existing hardening lint/direct implementation proposed at design review; prior bounded-live-Stage-2 proposal superseded"
+  },
+  "current_probe": {
+    "receipt": "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\hardening-check.json",
+    "observation": "Nonempty placeholder property declarations pass the current lint; not proof of test adequacy or execution"
+  },
+  "review_timing_evidence": {
+    "scope": "Actual standalone Grok review durations; not a Crucible/Foreman performance comparison",
+    "reviews": [
+      {
+        "run": "review-1",
+        "elapsed_s": 22.9,
+        "ok": false,
+        "turns": 2,
+        "source": "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\review-1.json"
+      },
+      {
+        "run": "review-recovery",
+        "elapsed_s": 503.0,
+        "ok": true,
+        "turns": 15,
+        "source": "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\review-recovery.json"
+      },
+      {
+        "run": "review-2",
+        "elapsed_s": 507.3,
+        "ok": true,
+        "turns": 14,
+        "source": "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\review-2.json"
+      },
+      {
+        "run": "review-final",
+        "elapsed_s": 230.6,
+        "ok": true,
+        "turns": 1,
+        "source": "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\review-final.json"
+      },
+      {
+        "run": "review-adopt",
+        "elapsed_s": 68.0,
+        "ok": true,
+        "turns": 1,
+        "source": "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\review-adopt.json"
+      }
+    ],
+    "lesson": "Future correction reviews should reuse immutable evidence and focus on changed or unresolved claims; retain source checks when newly necessary. Fewer tool turns are not by themselves a quality measure."
+  }
+}

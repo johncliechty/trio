@@ -1,0 +1,7 @@
+- id: 0133
+- skill: foreman
+- situation: Direct implementation review timing and real nested-effort acceptance
+- context: User requested future engine-improvement journaling; neither Crucible nor Foreman executed this implementation.
+- observation: Grok integration passes took529.415s,652.813s,1507.433s; compact inline correction review cleared in623.020s/one turn with attested grok-4.6-build/xhigh. Real deployment still exposed a nested-effort routing omission masked by root-registered browser fixtures. Existing post helper fixes it; five nested browser cases pass; final focused review pending.
+- outcome: OPEN evidence: use representative deployment topology, actual entrypaths and ordinary launcher authentication; separate coding, transport, review, recovery and host-tool overhead. Compact review timing is not a controlled performance comparison. No engine changes made.
+- provenance: User-authorized retrospective; ENGINE-LESSONS.md, review-continuation-receipts.json, nested-open-preflight.json and Anchor friction2026-09-11-02 under C:\dev\Skill Foundry\planning\steward-refinement-2026-09-10.

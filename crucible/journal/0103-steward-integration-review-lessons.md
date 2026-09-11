@@ -1,0 +1,7 @@
+- id: 0103
+- skill: crucible
+- situation: Steward integration review and execution-value follow-up
+- context: User requested future-improvement journaling while implementing the full Steward/Anchor plan; this engine was not run.
+- observation: A 529.415-second Grok review found real completion-loop, lock, provenance and bundle defects after focused tests passed. Declared plan gates did not replace entry-path tests; explicit human-close invariants can require rejecting a reviewer implementation suggestion.
+- outcome: OPEN improvement evidence: retain bounded independent review; require actual entry-path and failure-delivery tests; measure build, review, recovery and host overhead separately. No causal speed comparison or engine patch.
+- provenance: Real user-requested retrospective intake; detailed evidence in C:/dev/Skill Foundry/planning/steward-refinement-2026-09-10/ENGINE-LESSONS.md.

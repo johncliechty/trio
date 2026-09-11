@@ -1,0 +1,7 @@
+- id: 0132
+- skill: foreman
+- situation: Steward integration review and execution-value follow-up
+- context: User requested future-improvement journaling while implementing the full Steward/Anchor plan; this engine was not run.
+- observation: Direct bounded implementation still required cross-language completion tests, source-preserving release preflight and real pane acknowledgements. Native read-tool absence caused root excerpt-passing overhead; classify it as host capability cost. Broad legacy failures reproduced unchanged, so expanding scope to repair them would not improve this delivery.
+- outcome: OPEN improvement evidence: retain bounded independent review; require actual entry-path and failure-delivery tests; measure build, review, recovery and host overhead separately. No causal speed comparison or engine patch.
+- provenance: Real user-requested retrospective intake; detailed evidence in C:/dev/Skill Foundry/planning/steward-refinement-2026-09-10/ENGINE-LESSONS.md.

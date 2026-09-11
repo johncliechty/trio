@@ -1,0 +1,7 @@
+- id: 0105
+- skill: crucible
+- situation: Migration and review overhead lessons for future crucible improvement
+- context: John explicitly requested current-project consistency and ongoing Crucible/Foreman lessons; authorized cumulative refinement and appropriate adversarial review.
+- observation: Neither Crucible nor Foreman ran. Grok attempts2/12turns exhausted controllercaps; useful staleStrip finding retained. Compact packet review READY98.348s and focused adapter review READY127.934s, actualgrok-4.6-build/xhigh. Real legacydata and current/historyUI exposed defects emptyfixtures missed. Automaticmetadata jobs should not enter teaching-work-product handoffs.
+- outcome: Future intake: benchmark matched scope; separate migration, model transport, review, deployment and recovery time. Use bounded complete review packets, actualsavedstate and source/ownedcursor guards. No engine speed ranking or permanent crucible change asserted.
+- provenance: C:\dev\Skill Foundry\planning\steward-refinement-2026-09-10\campaign-migration-20260911/COMPLETE.md; ENGINE-LESSONS.md; SESSION.md; FINAL-STATE.json; final-status-delivery.json; summary-fix/PLAN.md and grok-review.json; Anchor friction2026-09-11-03.

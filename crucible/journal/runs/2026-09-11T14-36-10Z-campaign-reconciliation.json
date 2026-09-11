@@ -1,0 +1,26 @@
+{
+  "skill": "crucible",
+  "tier": "regular",
+  "started": "2026-09-11T13:33:28Z",
+  "ended": "2026-09-11T14:36:10.633538+00:00",
+  "input": "Reconcile current project contents with updated Steward and Anchor",
+  "params": {
+    "executed_engine": false,
+    "mode": "observation-only retrospective",
+    "formal_anchor_correction": true
+  },
+  "output": [
+    "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\campaign-migration-20260911\\COMPLETE.md",
+    "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\campaign-migration-20260911\\ENGINE-LESSONS.md"
+  ],
+  "result": "lessons journaled; engine not run",
+  "cross_model": false,
+  "models": [],
+  "duration_s": 3762.633538,
+  "usage": {
+    "tokens": null,
+    "cost_usd": null,
+    "coverage": "host usage unavailable; exact delegated receipts retained"
+  },
+  "journal_ref": "0105-current-campaign-reconciliation.md"
+}

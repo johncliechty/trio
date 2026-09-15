@@ -1,0 +1,14 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-15T15:43:22.163Z",
+  "ended": "2026-09-15T15:53:55.486Z",
+  "input": "C:/dev/Nutrition/Bread/research/claim-verdicts/round-1-input.json",
+  "params": {"attempt": 1, "live": true, "stakesTier": "medium", "maxRounds": 8, "completed_rounds": 0},
+  "output": "C:/dev/Nutrition/Bread/research/claim-verdicts/HALT-RECORD-attempt-1.json",
+  "result": "HALT: zero surviving seats after heartbeat silence; not an empty or dry round. Successful recovery is recorded separately.",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 633,
+  "journal_ref": "0082-bread-useful-panel-unmet-quorum"
+}

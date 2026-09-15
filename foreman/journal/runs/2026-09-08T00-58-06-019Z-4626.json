@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-08T00:58:06.019Z",
+  "ended": "2026-09-08T02:33:24.626Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\chekhov",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\chekhov\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:HALT — [taxonomy:agent-died] HALT: the fix agent died (agent fix:w2.1 died: class error-result, 20 tool calls, 259128ms; it said: You've hit your session limit · resets 8:50pm (America/Denver)) — iteration 1",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 5719,
+  "journal_ref": null
+}

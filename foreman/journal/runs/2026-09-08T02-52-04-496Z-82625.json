@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-08T02:52:04.496Z",
+  "ended": "2026-09-08T03:06:22.625Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\chekhov",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\chekhov\\_foreman-status.log",
+  "result": "HALT: 2:HALT — vacuous-GREEN HALT: wave reached green without proving its own deliverable was exercised — the wave changed no source file reachable by an executed test, so an already-green suite proves nothing about",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 858,
+  "journal_ref": null
+}

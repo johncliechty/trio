@@ -1,0 +1,9 @@
+- id: 0130
+- skill: foreman
+- situation: Approved Chekhov W7 correction independently verified; only the required real first capture remains
+- context: Corrected wrapper18756,2026-09-09T02:29:34.027Z to02:42:33Z; fullGrok2/cap0/W7only/gitfalse, actual ChatGPT/Grok families, served models unobserved.
+- observation: Main reproduced three focused failures before the bounded source/receipt correction, then3/3GREEN. Normal resume re-entered a98s verification-only EXECUTE preflight despite gate seed; no new product delta. Authoritative147/145/2/0skip at02:31:21; both final Grok originals zero findings. Normal HALT solely for the missing actual snapshot/recording, no W7GO. Read-only sizing found469 sections/24 batches, completed0; full morning readiness very unlikely and user told immediately. Startup55340 quoting failure is0129; two exact generated logs preserved recoverably after a safe UTC comparison refusal/correction. Final documentation read used one wrong cwd-relative path, no mutation; used exact known absolute record. Full20:30/20:39 statuses timely, final human-boundary status follows.
+- outcome: friction
+- provenance: genuine-execution
+
+Next: John's HUMAN.md record-first command, repeat while backlog positive; require backlog0/exit0/explicit recording-complete message, otherwise preserve failed output. Then normal gate/Grok before W7GO/W8. No further code/review round before new evidence. Active Elegance/Rabbit-Catcher stopped at this first dry required panel and cut redundant prompts; permanent semantic-finding identity, heartbeat/cadence and unnecessary resume-preflight lessons remain future formal Foundry tickets, not engine patches. No build/model workers remain; close sole observer for the human boundary. Machine companion: Chekhov/journal/runs/2026-09-09T02-29-34Z-codex-w7-source-validation.json.

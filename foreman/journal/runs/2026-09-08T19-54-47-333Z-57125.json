@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-09-08T19:54:47.333Z",
+  "ended": "2026-09-08T20:12:37.125Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\chekhov",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": "1",
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\chekhov\\_foreman-status.log",
+  "result": "BUDGET-STOP: 6:GO — budget stop (waves): wave budget exhausted (1/1 wave(s) already started this run)",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1070,
+  "journal_ref": null
+}

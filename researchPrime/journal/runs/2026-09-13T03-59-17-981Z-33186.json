@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-13T03:59:17.981Z",
+  "ended": "2026-09-13T04:05:33.186Z",
+  "input": "research\\rp-continuation",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "high"
+  },
+  "output": "research\\rp-continuation\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "grok"
+  ],
+  "duration_s": 375,
+  "journal_ref": null
+}

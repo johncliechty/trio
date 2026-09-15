@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-06T12:26:35.916Z",
+  "ended": "2026-09-06T12:29:41.500Z",
+  "input": "C:/dev/Teaching/Econ 588/Student Summaries/research/week-01/researchPrime",
+  "params": {
+    "maxRounds": 2,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Teaching\\Econ 588\\Student Summaries\\research\\week-01\\researchPrime\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "claude",
+    "grok"
+  ],
+  "duration_s": 186,
+  "journal_ref": null
+}

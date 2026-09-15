@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-08T20:04:27.401Z",
+  "ended": "2026-09-08T20:16:14.100Z",
+  "input": "literature/rp2",
+  "params": {
+    "maxRounds": 3,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "literature\\rp2\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 707,
+  "journal_ref": null
+}

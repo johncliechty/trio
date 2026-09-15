@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-06T03:21:17.232Z",
+  "ended": "2026-09-06T03:47:09.492Z",
+  "input": "C:\\dev\\Anchor-reports-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Anchor-reports-build\\planning\\reports-links-2026-09-05\\_foreman-status.log",
+  "result": "HALT: 2:GO,3:HALT — [taxonomy:agent-died] HALT: the execute agent died (agent execute:w3 died: class error-result, 25 tool calls, 161750ms; it said: You've hit your session limit · resets 1:10am (America/Denver)) — nothi",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1552,
+  "journal_ref": null
+}

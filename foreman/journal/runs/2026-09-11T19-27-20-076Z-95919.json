@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-11T19:27:20.076Z",
+  "ended": "2026-09-11T19:34:55.919Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\chekhov",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 0,
+    "maxWaves": "1",
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\chekhov\\.foreman\\first-sitting-20260911\\foreman-w7-resume.log",
+  "result": "HALT: 7:HALT — non-convergence HALT: hit MAX_ITERS=0 without GO (GREEN gate blocked by 3 verified repro finding(s))",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 456,
+  "journal_ref": null
+}

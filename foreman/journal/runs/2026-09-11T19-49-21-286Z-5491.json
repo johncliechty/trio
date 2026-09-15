@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-11T19:49:21.286Z",
+  "ended": "2026-09-11T19:50:05.491Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\chekhov",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": "1",
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\chekhov\\.foreman\\first-sitting-20260911\\foreman-w7-repair.log",
+  "result": "HALT: 7:HALT — [taxonomy:wave-not-implemented] HALT: execute for wave 7 changed nothing in the project and the wave's named deliverable(s) do not exist afterwards (test/w07-product-binding.test.mjs) — the wave was n",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 44,
+  "journal_ref": null
+}

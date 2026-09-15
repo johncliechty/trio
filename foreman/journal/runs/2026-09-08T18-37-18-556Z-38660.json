@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-09-08T18:37:18.556Z",
+  "ended": "2026-09-08T18:37:18.660Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\chekhov",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": "1",
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\chekhov\\_foreman-status.log",
+  "result": "HALT: 6:HALT — [taxonomy:wave-not-implemented] HALT: wave 6 is missing required test file(s): test/w06-commit-accept.test.mjs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 0,
+  "journal_ref": null
+}

@@ -11,7 +11,8 @@
   },
   "output": [
     "C:\\dev\\trio\\foreman\\journal\\0131-steward-review-engine-value-and-friction.md",
-    "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\REVIEW-AND-PLAN.md"
+    "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\REVIEW-AND-PLAN.md",
+    "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\ENGINE-LESSONS.md"
   ],
   "result": "OPEN proposals; historical evidence distinguished from current reproduction; no engine changes",
   "cross_model": false,
@@ -78,5 +79,31 @@
       }
     ],
     "lesson": "Future correction reviews should reuse immutable evidence and focus on changed or unresolved claims; retain source checks when newly necessary. Fewer tool turns are not by themselves a quality measure."
-  }
+  },
+  "implementation_followup": {
+    "at": "2026-09-10T19:38:08.348764+00:00",
+    "kind": "direct-development evidence, no engine execution",
+    "plan_call_durations_s": [
+      461.573,
+      156.585,
+      36.021
+    ],
+    "code_call_durations_s": [
+      638.052,
+      364.286
+    ],
+    "served_model": "grok-4.6-build",
+    "served_effort": "xhigh",
+    "no_speed_comparison_claim": true,
+    "outcome": "first increment independently reviewed and committed in isolation; usage scope added; no deployment claim"
+  },
+  "followup_observations": [
+    {
+      "at": "2026-09-10T20:16:11.733132+00:00",
+      "type": "session_review_timeout_and_recovery",
+      "note": "Usage correction review recovery: first real usage review took649.421seconds21turns; followup95KBpacket hit720second session-harness timeout with no returned verdict. No served-model attestation claimed for interrupted call. Recovery preserves all current runtime source in62KBpacket, removes repeated complete test bodies while retaining names/results, and uses1800second workload safeguard through unchanged Grok subscription driver. This is session review setup friction, not a Crucible or Foreman execution failure. Future engine lesson: size review packets and operational timeouts from observed workload, preserve interrupted receipts, and do not confuse a timeout with an accepted or failed product.",
+      "engine_executed": false,
+      "receipt": "C:\\dev\\Skill Foundry\\planning\\steward-refinement-2026-09-10\\review-usage-fix.json"
+    }
+  ]
 }

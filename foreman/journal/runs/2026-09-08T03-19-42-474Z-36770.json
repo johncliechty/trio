@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-08T03:19:42.474Z",
+  "ended": "2026-09-08T04:17:16.770Z",
+  "input": "C:\\dev\\Skill Foundry\\skills\\chekhov",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "output": "C:\\dev\\Skill Foundry\\skills\\chekhov\\_foreman-status.log",
+  "result": "HALT: 3:GO,4:HALT — [taxonomy:agent-died] HALT: the execute agent died (agent execute:w4 died: class error-result, 37 tool calls, 743483ms; it said: You've reached your Fable limit. Switch to another model, or manage usa",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 3454,
+  "journal_ref": null
+}

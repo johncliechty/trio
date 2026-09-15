@@ -1,0 +1,9 @@
+- id: 0122
+- skill: foreman
+- situation: approved Chekhov prerequisite repair; false advancement, persistent data sessions, and excessive process overhead
+- context: Formal Foundry cycle2026-09-08T16:22:10Z to18:32:12Z on isolated60e43bb; ChatGPT subscription authoring requested Astraultra, independent Grok adversarial/judges; concurrent canonical policy edits preserved.
+- observation: Added shared same-process/thread read-only data API, required-test readiness/recovery, narrow wave-wide finding aggregation and durable panel evidence. R2 explicit-caller mismatch reproduced then fixed; both R3 Grok judges approved18:30:03/25Z, servedgrok-4.6-build attested. Final91/91 repair tests; isolated1095/1082/8/5 and canonical1186/1126/55/5 retain exact original failures. Installed canonical three-turn smoke passed; tool isolation and actual Codex served model remain honestly unattested. Chekhov100/100, W6 not yet implemented. Original W6 Grok findings were recovered after0121 and confirm different citation identities split their votes.
+- outcome: friction
+- provenance: genuine-execution
+
+John's explicit follow-up: actively apply Elegance/Rabbit-Catcher during this run, without reviewer/judge scope inflation; Chekhov AGENTS now carries the bounded rule. Permanent Foreman improvement ticket: this prerequisite cycle took130minutes with repeated scope/evidence passes and missed status relays; review/scope prompts already carry RC rules, but no onLookin callback is supplied and rabbit indications default to KEEP. Later formal Foundry work should address the supervision/status connection using this incident; do not add that machinery during Chekhov. Cuts: further tool-inventory research, unrelated baseline cleanup, optional polish, approval streaks. Evidence: planning/chekhov-sessions-review-20260908/RELEASE.md and paired runs/2026-09-08T16-22-10Z-chekhov-sessions-review-cycle.json. No push or author acceptance.

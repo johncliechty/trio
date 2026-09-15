@@ -1,0 +1,16 @@
+# 0101 — Chekhov Stage 2: Fable's independent review, ChatGPT adversarial pass, hardening round — 2026-09-07
+
+**Run:** `C:\dev\Writing\planning\writing-skill-2026-09-05\crucible\` — FABLE-REVIEW.md (10:1x), `_chatgpt-plan-review.mjs` (codex seat, 200 s, artifact 136 KB, checked 21, findings 14, model_attested:false), `_harden-plan.mjs` (129 structured edits over the round-1 revised draft; 21 → 20 waves; hardening gate PASS).
+
+**What happened**
+1. John asked, after Stage 2 parked, for Fable to review the whole plan with the elegance filter and the Rabbit-Catcher against five qualities (elegant, essential, functional, easy to use, helpful) and his riders 6 (programmatic, not prose) and 7 (Steward-guided, cockpit-first). The review found the core elegant and the surface not: 17 verbs ordered by prose, YAML fences in the writer's bible, a self-inflicted schema migration, two keyboard sittings, a brief competing with the cockpit.
+2. ChatGPT (codex) reviewed plan + review with the same criteria. Agreed on the engine, cockpit, pack-as-data and one-sitting changes; **disagreed on two of Fable's cuts with the locked North Star in hand** (essays: the NS names the Prosecution pack as shipping; W21: the first outline lock needs promise capture). Found four BLOCKERs the sharks and Fable both missed: property-gate ids absent from their wave test files; T1 tables mutate an "append-only" verdict log; the blind-rewrite rider was not yet a mechanism; the voice guard validated on Sing only but gating all drafting.
+3. Hardening: a lossless parser for the rendered wave format (the engine's `parseWavesFromMarkdown` is a raw-reply fallback and mangles the rendered format), edits as asserted string replacements on structured waves, re-render through `renderImplementationPlan`. Every edit is in HARDENING-CHANGELOG.md.
+
+**Defects / lessons**
+- **A first ChatGPT pass reviewed an empty artifact** (28 KB): `plan.indexOf(l)` on a duplicated heading returned the first occurrence, so the slice was empty. Killed at 60 s; relaunched with all 21 waves. Lesson: assert the embedded artifact's size and wave count before dispatching a seat.
+- **Git Bash heredocs mangle backslashes on this host** (twice this session): `\n` in a python-written JS string became a real newline. Use the Write/Edit tools for any file containing backslashes.
+- **Both reviewers treated the writer's own prose edits as violations.** The engine text (mine) and ChatGPT's M4 fix put the bible in the unmanaged-edit manifest; a writer who works in Word would open a reconciliation HALT every session. Fixed: two manifest classes — John's prose (a change is new material for commit) and engine-owned files (a change is a violation).
+- **Review economics:** Shark rounds produced 36/23/27/37 single-reviewer findings with dedupe gaps; one adversarial cross-family pass over plan + review, with a mandatory verbatim `checked` array, produced 14 findings of which 4 were BLOCKER-grade and all traceable. Worth making the "review the review" pass a standard Stage-2 step before Foreman.
+
+**Human step:** John's direction on the leftover list in HARDENING-REPORT.md (sidecar; embedding column; essays in v1; W21 slim; the reconciliation-HALT noise; the two extra voice-validation sittings), then emit → Foreman.

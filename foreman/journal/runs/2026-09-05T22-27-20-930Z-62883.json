@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-05T22:27:20.930Z",
+  "ended": "2026-09-05T22:46:02.883Z",
+  "input": "C:\\dev\\Anchor-reports-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor-reports-build\\planning\\reports-links-2026-09-05\\_foreman-status.log",
+  "result": "HALT: 1:HALT — PLAN-AMENDMENT-PROPOSAL HALT: the frozen plan is wrong/incomplete for wave 1",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1122,
+  "journal_ref": null
+}

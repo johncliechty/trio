@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-06T02:48:50.670Z",
+  "ended": "2026-09-06T02:56:03.180Z",
+  "input": "C:\\dev\\Writing\\planning\\writing-skill-2026-09-05\\research\\run",
+  "params": {
+    "maxRounds": 2,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Writing\\planning\\writing-skill-2026-09-05\\research\\run\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "claude",
+    "grok"
+  ],
+  "duration_s": 433,
+  "journal_ref": null
+}

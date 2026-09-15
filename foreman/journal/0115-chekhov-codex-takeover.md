@@ -1,0 +1,7 @@
+- id: 0115
+- skill: foreman
+- situation: coding-seat quota handoff
+- context: Chekhov twenty-wave build; John explicitly replaces Fable with Codex best-model ultra and keeps Grok checking, 2026-09-08.
+- observation: Wave 4 quota death left unverified edits; W3 gate 65/65; W2 prior 37/37 operator attestation; git=false. Installed GPT-6-Astra advertises ultra. Main host unrestricted; existing Codex worker driver supports workspace-write only. run-live --help unexpectedly started contract resolution in Writing and stopped with zero calls. Raw engine capture omits Grok cross-family status and model names.
+- outcome: friction
+- provenance: genuine-execution

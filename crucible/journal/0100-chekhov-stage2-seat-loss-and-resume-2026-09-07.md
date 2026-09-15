@@ -1,0 +1,16 @@
+# 0100 — Chekhov Stage 2 (LITE): claude seat lost mid-run, resumed from the saved decomposition — 2026-09-07
+
+**Run:** `C:\dev\Writing\planning\writing-skill-2026-09-05\crucible\` — `_stage2.mjs` (20:12–20:34, 2026-09-06) then `_stage2-resume.mjs` (00:04–00:43, 2026-09-07). Band LITE (roundCap 1, sharks 2 grok-cli), synthesizer/revise claude. Inputs factored into `_stage2-inputs.mjs` (lean NS + DECISIONS + Foreman expectations; 14 acceptance criteria incl. riders A/B).
+
+**What happened**
+1. 20:12 run: decomposition → 21 waves (Phases 0–5, two HALT waves). Then `trio seat seat_unavailable: rabbit-catcher`, `rc8-wave-count`, `synthesizer:direct:r1` in sequence — the claude driver hit the account's session limit (the Jumper icon sub-agent had already 429'd at ~19:00). The engine treated the elegance pass and RC-8 as non-fatal ("waves unchanged, said aloud"), ran the Shark round (DRY, 29 findings), then died at the synthesizer and force-emitted an **un-passed** draft to `handoff/_human-lockable-draft`.
+2. Resume (after the limit reset): loaded `wave-decomposition.json`, ran the engine's own remaining steps by seam — `runPlanElegancePass` (149 elements → keep 145 · hold 4 · cut 0; the adversary restored the one CUT to HOLD), `runWaveCountPass` (21 → 21, no merges), `renderImplementationPlan` + `enforceHardeningGate` (PASS, 4 properties), `runMasterPlanLoop` roundCap 1 → BLOCKED on 2 agreed blockers (both rider-vs-criterion-9: "Steward not wired" occupying brief line 1; the accept backlog census in waiting_on_john), synthesizer direction, revise r1 (15 changes), round-cap HALT with 37 open findings. Verified on the text: W10 GWT now "line 1 byte-identical to the wired run … line 2 reads steward: not wired"; "neither the brief, STATUS.json nor the heartbeat flags contain a candidate count".
+
+**Defects / lessons**
+- **Non-fatal elegance/RC-8 on seat loss is a silent law violation.** The Elegance Law makes the Rabbit-Catcher pass mandatory; when the seat is gone the engine proceeds to the Sharks and emits a draft that never had the pass. It should HALT (resumable) rather than continue. The resume launcher here is the manual workaround; worth a `--resume-from-waves` path in `runStage2`.
+- **`forceEmitStage2HumanLockable` emits from the structured waves, not the Shark-revised draft**, so the emitted `_human-lockable-draft` is pre-revise. The approval emit must render from the revised text (as the engine's approved path does).
+- **`triage_track=FULL` in the emitted foreman.config.json** comes from the Stage-0 triage lock, not the Stage-2 depth; for a 21-wave build FULL Foreman is the right band, but the label should be a deliberate choice, not an inheritance.
+- **The elegance table rides the draft unrevised**: W11.2 HOLD's text still describes the batch rule "printed on the brief" after the revise moved it to accept's census line. Stale verdict rows in a locked draft — note at emit.
+- Round-cap message advises "treat as human-lockable if Sharks were dry" — here they were not dry; the two agreed blockers were fixed by the drafter without a reviewer confirming. Checked mechanically on the text instead; John decides.
+
+**Human step:** John's approve/challenge on `IMPLEMENTATION-PLAN-DRAFT.md`; then emit + Foreman.

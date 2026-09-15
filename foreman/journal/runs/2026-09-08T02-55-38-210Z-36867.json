@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-09-08T02:55:38.210Z",
+  "ended": "2026-09-08T04:20:36.867Z",
+  "input": "C:\\dev\\Anchor-codewin-build",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\dev\\Anchor-codewin-build\\planning\\code-windows-2026-09-07\\_foreman-status.log",
+  "result": "HALT: 1:GO,2:HALT — [taxonomy:agent-died] HALT: the elegance fix agent died (agent fix:w2.1 died: class error-result, 0 tool calls, 566ms; it said: You've reached your Fable limit. Switch to another model, or manage usag",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 5099,
+  "journal_ref": null
+}

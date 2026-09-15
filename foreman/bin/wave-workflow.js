@@ -204,8 +204,8 @@ function reviewPrompt(ctx, gate) {
   const notImplementedRule = [
     `MANDATORY: if the changed-file list is empty, or nothing in it could plausibly`,
     `implement this wave's stated deliverables (e.g. only regenerated data/doc`,
-    `artifacts or log noise), you MUST report a BLOCKER finding titled`,
-    `"wave-not-implemented" — do NOT approve an unimplemented wave because the`,
+    `artifacts or log noise), you MUST report a BLOCKER finding with`,
+    `rule: "wave-not-implemented" (title optional) — do NOT approve an unimplemented wave because the`,
     `gate is green.`,
   ];
   return [
@@ -277,7 +277,7 @@ export function makeAgentDriver({ agent }) {
       });
       return {
         reviewer: `reviewer-${ctx.reviewerIndex}`,
-        answerable: out?.answerable ?? 'yes',
+        answerable: out?.answerable,
         note: out?.note,
         // T10a: drivers stamp transport_failed on unparseable-after-retry (with
         // answerable:'no'). Forward it so wave-engine degrades the seat BEFORE the
@@ -289,7 +289,9 @@ export function makeAgentDriver({ agent }) {
         ...(out?.plan_amendment ? { plan_amendment: out.plan_amendment } : {}),
         // `claim` is intentionally absent: in production the judge reads only the
         // orchestrator gate, never reviewer prose, so there is nothing to forge.
-        findings: Array.isArray(out?.findings) ? out.findings : [],
+        // Preserve an absent/malformed field for engine validation. Defaulting it
+        // to [] would manufacture a clean vote from a failed model response.
+        findings: out?.findings,
       };
     },
     // (2026-09-05, John) THE ELEGANCE / RABBIT-CATCHER REVIEW of a GREEN wave: the steering

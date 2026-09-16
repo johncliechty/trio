@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-16T22:37:18.692Z",
+  "ended": "2026-09-16T22:46:18.777Z",
+  "input": "C:\\dev\\MBA Teaching AI\\.ecgberht\\ai-video-research-20260916\\researchprime",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\.ecgberht\\ai-video-research-20260916\\researchprime\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "grok"
+  ],
+  "duration_s": 540,
+  "journal_ref": null
+}

@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-17T12:10:59.800Z",
+  "ended": "2026-09-17T12:20:33.753Z",
+  "input": "C:\\dev\\Open Source Token Source\\Basic Infastructure\\research\\benchmark-study",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Open Source Token Source\\Basic Infastructure\\research\\benchmark-study\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 574,
+  "journal_ref": "0091-local-token-benchmark-decision-refocus.md"
+}

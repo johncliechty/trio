@@ -33,10 +33,10 @@ import { randomUUID } from 'node:crypto';
 /**
  * Anchor attribution sink (Wave 2 S3). When Anchor spawned the process that runs
  * this seat, `ANCHOR_RECEIPTS_DIR` names a folder; every physical receipt that
- * carries a receipt object is dropped there as ONE small JSON file, with the ids
- * the process inherited (project, effort dir, job, session) and the seat's own
- * session, usage and cost. Anchor sweeps the folder through its usage seam.
- * Best-effort: an observer must never break the seat.
+ * carries a receipt object is dropped there as ONE small JSON file: the ids the
+ * process inherited (project, effort dir, job, session), the seat's own session,
+ * family, served model, usage, cost. Anchor sweeps the folder through its usage
+ * seam. Best-effort: an observer must never break the seat.
  */
 export function sinkAnchorReceipt(driver, opts, entry, env = process.env) {
   const dir = env?.ANCHOR_RECEIPTS_DIR;
@@ -44,16 +44,9 @@ export function sinkAnchorReceipt(driver, opts, entry, env = process.env) {
   if (!dir || !rec || typeof rec !== 'object') return null;
   try {
     const body = {
-      schema: 'anchor.receipt.v1',
       at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
-      driver: bounded(driver?.name, 'unknown-driver'),
-      family: rec.model_family || requestedFamilyForDriver(driver?.name),
-      label: bounded(opts?.label ?? entry?.label, '(unlabeled)'),
       kind: entry?.kind ?? null,
-      outcome: entry?.outcome ?? null,
-      ok: rec.ok === true,
-      status: rec.status ?? null,
-      requested_model: rec.requested_model ?? null,
+      family: rec.model_family || requestedFamilyForDriver(driver?.name),
       model_served: rec.model_served ?? null,
       model_attested: rec.model_attested === true,
       native_id: rec.thread_id ?? rec.session_id ?? null,
@@ -62,7 +55,6 @@ export function sinkAnchorReceipt(driver, opts, entry, env = process.env) {
         : typeof rec.total_cost_usd === 'number' ? rec.total_cost_usd : null,
       duration_ms: typeof rec.duration_ms === 'number' ? rec.duration_ms : null,
       cwd: process.cwd(),
-      pid: process.pid,
       env: {
         project_id: env.ANCHOR_PROJECT_ID || null,
         effort_dir: env.ANCHOR_EFFORT_DIR || null,

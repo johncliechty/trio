@@ -71,9 +71,11 @@ export function resolveGrokCliModel({ model, role, env = process.env } = {}) {
 
 /**
  * Parse `grok --output-format json` stdout: `{ text, modelUsage: { "<served>": {...} }, ... }`.
- * Returns `{ text, servedModel }` — `servedModel` is the single served model, or the requested
- * one when several are reported, else null (unattested). Null when stdout is not that envelope
- * (the caller then treats stdout as plain text, unattested).
+ * Returns `{ text, servedModel, ..., sessionId, usage, total_cost_usd }` — `servedModel` is the
+ * single served model, else null (several contributors stay honestly unattested);
+ * `usage` is the envelope's usage block, else the per-model token counts summed into the same
+ * shape; `total_cost_usd` the envelope's, else the per-model charges summed. Null when stdout is
+ * not that envelope (the caller then treats stdout as plain text, unattested).
  */
 export function parseGrokJsonOutput(stdout, { requested = null } = {}) {
   const raw = String(stdout || '').trim();
@@ -85,9 +87,24 @@ export function parseGrokJsonOutput(stdout, { requested = null } = {}) {
     if (i >= 0) { try { obj = JSON.parse(raw.slice(i + 1)); } catch { obj = null; } }
   }
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
-  const usage = obj.modelUsage && typeof obj.modelUsage === 'object' ? Object.keys(obj.modelUsage) : [];
+  const perModel = obj.modelUsage && typeof obj.modelUsage === 'object' ? obj.modelUsage : {};
+  const names = Object.keys(perModel);
   let servedModel = null;
-  if (usage.length === 1) servedModel = usage[0];
+  if (names.length === 1) servedModel = names[0];
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  let usage = obj.usage && typeof obj.usage === 'object' ? obj.usage : null;
+  if (!usage && names.length) {
+    usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 };
+    for (const m of Object.values(perModel)) {
+      usage.input_tokens += num(m?.inputTokens);
+      usage.output_tokens += num(m?.outputTokens);
+      usage.cache_read_input_tokens += num(m?.cachedInputTokens ?? m?.cacheReadInputTokens);
+    }
+  }
+  let cost = typeof obj.total_cost_usd === 'number' ? obj.total_cost_usd : null;
+  if (cost === null && names.some((n) => typeof perModel[n]?.costUSD === 'number')) {
+    cost = Object.values(perModel).reduce((acc, m) => acc + num(m?.costUSD), 0);
+  }
   return {
     text: typeof obj.text === 'string' ? obj.text.trim()
       : typeof obj.result === 'string' ? obj.result.trim() : '', servedModel,
@@ -95,6 +112,10 @@ export function parseGrokJsonOutput(stdout, { requested = null } = {}) {
       || Boolean(obj.error) || (Array.isArray(obj.errors) && obj.errors.length > 0),
     stopReason: typeof obj.stopReason === 'string' ? obj.stopReason : null,
     numTurns: Number.isFinite(obj.num_turns) ? obj.num_turns : null,
+    sessionId: typeof obj.sessionId === 'string' ? obj.sessionId
+      : typeof obj.session_id === 'string' ? obj.session_id : null,
+    usage,
+    total_cost_usd: cost,
   };
 }
 

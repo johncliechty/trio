@@ -11,13 +11,23 @@ const ENVELOPE = JSON.stringify({
 });
 
 test('parseGrokJsonOutput: the envelope yields the text and the single served model', () => {
-  assert.deepEqual(parseGrokJsonOutput(ENVELOPE), { text: 'PONG', servedModel: 'grok-4.6-build', stopReason: 'end_turn', numTurns: 1 });
+  assert.deepEqual(parseGrokJsonOutput(ENVELOPE), {
+    text: 'PONG', servedModel: 'grok-4.6-build', isError: false, stopReason: 'end_turn', numTurns: 1,
+    sessionId: 's', usage: { input_tokens: 1, output_tokens: 1 }, total_cost_usd: 0.01,
+  });
+  // no usage block: the per-model counts and charges sum into the same shape (Anchor S3)
+  const perModel = parseGrokJsonOutput(JSON.stringify({ text: 'x', modelUsage: {
+    'grok-4.6-build': { inputTokens: 5, outputTokens: 2, cachedInputTokens: 7, costUSD: 0.02 },
+  } }));
+  assert.deepEqual(perModel.usage, { input_tokens: 5, output_tokens: 2, cache_read_input_tokens: 7 });
+  assert.equal(perModel.total_cost_usd, 0.02);
+  assert.equal(perModel.sessionId, null);
   // narration glued before the envelope still parses
   assert.equal(parseGrokJsonOutput('thinking...\n' + ENVELOPE).servedModel, 'grok-4.6-build');
-  // several served models: only the requested one attests
+  // several served models stay honestly unattested, even the requested one (seat-contract test)
   const multi = JSON.stringify({ text: 'x', modelUsage: { a: {}, b: {} } });
   assert.equal(parseGrokJsonOutput(multi).servedModel, null);
-  assert.equal(parseGrokJsonOutput(multi, { requested: 'b' }).servedModel, 'b');
+  assert.equal(parseGrokJsonOutput(multi, { requested: 'b' }).servedModel, null);
   // plain text is not the envelope
   assert.equal(parseGrokJsonOutput('just prose'), null);
   assert.equal(parseGrokJsonOutput(''), null);

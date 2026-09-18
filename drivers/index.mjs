@@ -28,6 +28,57 @@ import { openChatgptDataSession, DataSessionError } from './chatgpt-session.mjs'
 export { DataSessionError } from './chatgpt-session.mjs';
 import { normalizeRole, isVerificationRole, VERIFICATION_ROLES } from './roles.mjs';
 import { PHYSICAL_RECEIPT_HOOK } from './seat-contract.mjs';
+import { randomUUID } from 'node:crypto';
+
+/**
+ * Anchor attribution sink (Wave 2 S3). When Anchor spawned the process that runs
+ * this seat, `ANCHOR_RECEIPTS_DIR` names a folder; every physical receipt that
+ * carries a receipt object is dropped there as ONE small JSON file, with the ids
+ * the process inherited (project, effort dir, job, session) and the seat's own
+ * session, usage and cost. Anchor sweeps the folder through its usage seam.
+ * Best-effort: an observer must never break the seat.
+ */
+export function sinkAnchorReceipt(driver, opts, entry, env = process.env) {
+  const dir = env?.ANCHOR_RECEIPTS_DIR;
+  const rec = entry?.receipt;
+  if (!dir || !rec || typeof rec !== 'object') return null;
+  try {
+    const body = {
+      schema: 'anchor.receipt.v1',
+      at: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      driver: bounded(driver?.name, 'unknown-driver'),
+      family: rec.model_family || requestedFamilyForDriver(driver?.name),
+      label: bounded(opts?.label ?? entry?.label, '(unlabeled)'),
+      kind: entry?.kind ?? null,
+      outcome: entry?.outcome ?? null,
+      ok: rec.ok === true,
+      status: rec.status ?? null,
+      requested_model: rec.requested_model ?? null,
+      model_served: rec.model_served ?? null,
+      model_attested: rec.model_attested === true,
+      native_id: rec.thread_id ?? rec.session_id ?? null,
+      usage: rec.usage && typeof rec.usage === 'object' ? rec.usage : null,
+      cost_usd: typeof rec.cost_usd === 'number' ? rec.cost_usd
+        : typeof rec.total_cost_usd === 'number' ? rec.total_cost_usd : null,
+      duration_ms: typeof rec.duration_ms === 'number' ? rec.duration_ms : null,
+      cwd: process.cwd(),
+      pid: process.pid,
+      env: {
+        project_id: env.ANCHOR_PROJECT_ID || null,
+        effort_dir: env.ANCHOR_EFFORT_DIR || null,
+        job_id: env.ANCHOR_JOB_ID || null,
+        session_id: env.ANCHOR_SESSION_ID || null,
+      },
+    };
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `${randomUUID()}.json`);
+    fs.writeFileSync(`${file}.part`, JSON.stringify(body));
+    fs.renameSync(`${file}.part`, file);
+    return file;
+  } catch {
+    return null;
+  }
+}
 const DEFAULT_DRIVER = process.env.ANTIGRAVITY_AGENT ? 'gemini-cli' : 'claude';
 
 // Roles whose seats are filled by REVIEW_FAMILY (adversarial / judge / check).
@@ -446,6 +497,7 @@ async function runDispatcherAttempt(driver, opts, ordinal, kind) {
           if (typeof callerHook === 'function') {
             try { callerHook(entry); } catch { /* observer must never break the seat */ }
           }
+          sinkAnchorReceipt(driver, opts, entry);
         },
       });
     } catch (error) {

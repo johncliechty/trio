@@ -218,6 +218,10 @@ export function defaultRunGrokCli(fullPrompt, label, {
       turn_cancelled: parsed?.stopReason === 'cancelled',
       aborted: status === 'aborted',
       kill_status: result.kill_status,
+      // Attribution (Anchor S3): session, usage and cost for the dispatcher's sink.
+      session_id: typeof parsed?.sessionId === 'string' ? parsed.sessionId : null,
+      usage: parsed?.usage && typeof parsed.usage === 'object' ? parsed.usage : null,
+      cost_usd: typeof parsed?.total_cost_usd === 'number' ? parsed.total_cost_usd : null,
     };
     if (!ok) log(`!! ${label}: grok-cli ${status}. stderr=${result.stderr.slice(0, 300)}`);
     return { text, rec };

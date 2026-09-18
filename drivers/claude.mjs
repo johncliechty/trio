@@ -109,6 +109,10 @@ export function parseClaudeFrames(stdout, {
     duration_ms: finalEnv?.duration_ms ?? null, tools,
     output_tokens: finalEnv?.usage?.output_tokens ?? null,
     cost_usd: finalEnv?.total_cost_usd ?? null,
+    // Attribution (Anchor S3): the seat's own session and its measured usage ride
+    // the internal physical receipt so the dispatcher's sink can record them.
+    session_id: typeof finalEnv?.session_id === 'string' ? finalEnv.session_id : null,
+    usage: finalEnv?.usage && typeof finalEnv.usage === 'object' ? finalEnv.usage : null,
     ...attestStamp(servedModel), // SR-5 served-model stamp
   };
   rec.model_family = rec.ok ? 'claude' : null;

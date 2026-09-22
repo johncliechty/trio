@@ -1,0 +1,15 @@
+{
+  "skill": "researchPrime",
+  "tier": "high",
+  "started": "2026-09-22T12:20:00Z",
+  "ended": "2026-09-22T12:29:00Z",
+  "input": "C:/dev/Midway House/Economics of Keeping House/research/mortgage-v1/plan-inputs.json",
+  "params": {"phase": 1, "research_branches": 3, "approval": "pending", "import_probe": "go"},
+  "output": "C:/dev/Midway House/Economics of Keeping House/PLAN.md",
+  "result": "Phase 1 prepared; no evidence gathering or adversarial verification executed; first plan approval pending.",
+  "cross_model": false,
+  "models": {"planning_host": "Codex; served model not independently attested", "execution": null, "review": null},
+  "duration_s": null,
+  "journal_ref": "0095-ben-mortgage-plan-preparation.md",
+  "time_qualification": "Phase timing approximate; exact wall-clock duration not captured."
+}

@@ -1,0 +1,7 @@
+id: 0107-mba-homework1-recovery-quorum-sep30
+skill: researchPrime@2026-09-30
+situation: Resume authorized Homework 1 revision after an interrupted handback.
+context: John e7cb6731 requests original images and worksheet checkpoints; John 742359a4 asks why the revision stopped and requests a journal.
+observation: Actual recovery used the unchanged approved three-branch plan and retained Phase 2 primary sources/26 independent JavaScript arithmetic checks. Original panel had no terminal record and no matching process; exact termination cause unknown, reused PID left untouched. Recovery engine launched three reviewers, returned two Grok assessments and one abstention. Both flagged stale RStudio source line references; stable setWorkingDirToActiveDoc documentation resolves the citation, menu instruction remains correct. One dry round ended as specified. Engine DELIVERABLE-ENGINE.json says verified=true despite calibration.met=false (1 origin, 2 required); training tier label live-cross-family also exceeds actual lineage. Raw records retained; human reports explicitly call this limited external review, not independent corroboration. No hidden-nonce isolation attestation, fresh installation, RStudio GUI rehearsal or new-page panel review claimed. General verify-participation rule already applies; no shared engine patch made in this course campaign.
+outcome: friction
+provenance: genuine-execution; C:/dev/MBA Teaching AI/.ecgberht/homework1-illustrated-20260930/

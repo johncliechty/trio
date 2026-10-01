@@ -1,0 +1,26 @@
+{
+  "skill": "researchPrime",
+  "tier": "regular",
+  "started": null,
+  "ended": "2026-10-01T01:45:56.453368+00:00",
+  "input": "C:/dev/AI Club/MIT Lectures/.ecgberht/conversation-log.json",
+  "params": {
+    "scope": "Scoped Transformer evidence and one pinned BERT example"
+  },
+  "output": [
+    "C:/dev/AI Club/MIT Lectures/transformers/refinement-1/evidence/report.html",
+    "C:/dev/AI Club/MIT Lectures/journal/0010-focused-transformer-evidence.md"
+  ],
+  "result": "Pinned BERT measurements executed; three original Grok 4.7 Build reviews completed with no findings but the 90-second idle supervisor discarded returns and respawned. Exact native sessions and served models recovered, then canonical replay produced one empty DRY round, zero blockers, no formal CLEAN convergence. Stopped on first empty round under John's rule. Replay legacy claude substrate label is qualified by exact native provenance. No engine patch; separate Foundry improvement needed for productive-seat supervision and return capture.",
+  "cross_model": true,
+  "models": {
+    "author": "ChatGPT",
+    "reviewer": "grok-4.7-build",
+    "reviewer_family": "grok",
+    "review_count": 3,
+    "independent_review_families": 1,
+    "provenance": "researchprime/run/recovered/recovery-receipt.json"
+  },
+  "duration_s": null,
+  "journal_ref": "0108-mit-station-evidence-review-recovery.md"
+}

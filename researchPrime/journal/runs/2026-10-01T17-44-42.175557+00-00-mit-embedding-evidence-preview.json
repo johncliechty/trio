@@ -1,0 +1,26 @@
+{
+  "skill": "researchPrime",
+  "tier": "regular",
+  "started": null,
+  "ended": "2026-10-01T17:44:42.175557+00:00",
+  "input": "C:/dev/AI Club/MIT Lectures/.ecgberht/conversation-log.json",
+  "params": {
+    "scope": "Primary-source examples and measured embedding geometry with repair review"
+  },
+  "output": [
+    "C:/dev/AI Club/MIT Lectures/transformers\\refinement-2\\embeddings\\RESEARCH.html",
+    "C:/dev/AI Club/MIT Lectures/transformers\\refinement-2\\embeddings\\researchprime\\RUN-STATE.json"
+  ],
+  "result": "Actual frozen-plan/Phase2 and installed Phase3 engine ran. First panel returned a broad softmax citation issue plus individual projection, phase-label, distance-name and lecture-range findings. Corrected every applicable item; preserved first-round receipts and used a frozen repair packet. Second returned verdict=DRY, empty=False, dry=True; engine tracker={'converged': True, 'mode': 'dry', 'stamp': None, 'dryStreak': 1, 'emptyStreak': 0, 'rounds': 2, 'countedRounds': 2, 'counted': True, 'empty': False}. No claim of convergence beyond that returned state. All reviewer contexts use the configured Grok family; three replies are not three independent lineages. Shared source-origin counter used without automatic grade promotion. Supported idle safeguards prevented the prior premature90second cancellation. Suggestions: freeze the concrete artifact before review; make phase boundaries clear when combining gathered sources with main-session measurements; distinguish useful correction from aggregate engine labels.",
+  "cross_model": true,
+  "models": {
+    "author_family": "chatgpt",
+    "panel_lineages": [
+      "grok"
+    ],
+    "isolation": "approximated",
+    "model_attestation": "see per-run driver records; do not infer models from family strings"
+  },
+  "duration_s": null,
+  "journal_ref": "0109-mit-embedding-evidence-preview.md"
+}

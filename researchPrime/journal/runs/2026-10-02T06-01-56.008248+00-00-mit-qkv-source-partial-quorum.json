@@ -1,0 +1,32 @@
+{
+  "skill": "researchPrime",
+  "tier": "regular",
+  "started": "2026-10-02T05:22:47.056649+00:00",
+  "ended": "2026-10-02T05:33:34.086949+00:00",
+  "input": "C:\\dev\\AI Club\\MIT Lectures\\transformers\\refinement-2\\qkv\\researchprime\\round-1-input.json",
+  "params": {
+    "scope": "QKV original-paper evidence and one bounded validation round",
+    "round_cap": 1,
+    "stakes": "low",
+    "independent_quorum_met": false
+  },
+  "output": [
+    "C:\\dev\\AI Club\\MIT Lectures\\transformers\\refinement-2\\qkv\\RESEARCH.html",
+    "C:\\dev\\AI Club\\MIT Lectures\\transformers\\refinement-2\\qkv\\researchprime\\round-1-result.json"
+  ],
+  "result": "Installed planner/import/live-round runtime ran; three Grok panel returns supplied citation, station-order and mask-label corrections. Returned DRY but origin quorum was one of two required, not met. Corrections applied; not independently converged research or completed Phase-3 certification. Six source locators are in one paper. Frozen historical packets preserved.",
+  "cross_model": false,
+  "models": {
+    "planner_family": "chatgpt",
+    "reviewer_lineages": [
+      "grok"
+    ],
+    "quorum": {
+      "origins": 1,
+      "required": 2,
+      "met": false
+    }
+  },
+  "duration_s": 647.0303,
+  "journal_ref": "0116-mit-qkv-source-partial-quorum.md"
+}

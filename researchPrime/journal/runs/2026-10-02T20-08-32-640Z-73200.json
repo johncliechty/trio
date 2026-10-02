@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-10-02T20:08:32.640Z",
+  "ended": "2026-10-02T20:14:33.200Z",
+  "input": "C:/dev/Campaign/research/gandalf-comparison-2026-10-02",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\Campaign\\research\\gandalf-comparison-2026-10-02\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "grok"
+  ],
+  "duration_s": 361,
+  "journal_ref": null
+}

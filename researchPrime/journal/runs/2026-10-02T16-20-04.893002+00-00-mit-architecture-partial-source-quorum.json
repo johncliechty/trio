@@ -1,0 +1,47 @@
+{
+  "skill": "researchPrime",
+  "tier": "Heavy",
+  "started": "2026-10-02T15:37:57.830976+00:00",
+  "ended": "2026-10-02T15:45:41.940531+00:00",
+  "input": "C:\\dev\\AI Club\\MIT Lectures\\transformers\\refinement-2\\architecture\\researchprime\\round-1-input.json",
+  "params": {
+    "scope": "Original-diagram sources and examples; one bounded source-review round",
+    "requested_tier": "regular",
+    "runtime_triage": "Heavy/FULL default",
+    "round_cap": 1,
+    "governor": {
+      "tier": "low",
+      "skipped": false,
+      "axisFindingCount": 1,
+      "reason": "tier=low < medium: Synthesizer/Judge/debate EXCLUDED (low-stakes fires zero high-tier agents, crit-4)",
+      "policy": {
+        "synthesize": false,
+        "judge": false,
+        "debate": false
+      }
+    },
+    "independent_quorum_met": false,
+    "product": "Refinement 2 Section 4 design v1",
+    "acceptance": "Only John; open, no slice closure"
+  },
+  "output": [
+    "C:\\dev\\AI Club\\MIT Lectures\\transformers\\refinement-2\\architecture\\RESEARCH.html",
+    "C:\\dev\\AI Club\\MIT Lectures\\transformers\\refinement-2\\architecture\\researchprime\\round-1-result.json"
+  ],
+  "result": "Installed planner/import and live runtime actually ran one bounded round. Two reviewers returned and Contrarian abstained after verification failed closed. Skeptic supplied a useful decoder-outline omission, corrected in the same plan. DRY/tracker-converged labels do not override the unmet two-origin quorum (1/2). Three primary sources have separate roles, not three independent review votes. Runtime intake defaulted Heavy/FULL despite requested regular bounded scope; the low-stakes governor excluded synthesis/judge/debate and round cap was one. Preserve this tier mismatch and partial result; no engine policy repair or complete independent research certification claimed.",
+  "cross_model": false,
+  "models": {
+    "planner_family": "chatgpt",
+    "reviewer_lineages": [
+      "grok"
+    ],
+    "quorum": {
+      "origins": 1,
+      "required": 2,
+      "met": false
+    },
+    "individual_model_attestation": "No served model inferred from lineage-only panel return"
+  },
+  "duration_s": 464.109555,
+  "journal_ref": "0117-mit-architecture-partial-source-quorum.md"
+}

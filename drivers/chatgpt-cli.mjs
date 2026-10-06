@@ -314,7 +314,11 @@ export function buildCodexExecArgs({
   // `[windows] sandbox = "unelevated"`, so Codex 0.151 fell back to READ-ONLY and every execute
   // seat answered "workspace is read-only" while Foreman logged "execute complete". Select the
   // unelevated Windows sandbox inline for write seats only; read-only seats stay untouched.
-  if (String(platform) === 'win32' && String(sandbox) === 'workspace-write') {
+  // 2026-10-05 (Foreman code jobs, proven live): READ-ONLY seats need it too. Without a Windows
+  // sandbox implementation Codex refuses EVERY command ("rejected: blocked by policy"), so every
+  // ChatGPT reviewer/judge/refuter on Windows ran blind and still answered. The setting picks the
+  // enforcer, it does not widen: a read-only seat with it reads files and is still denied writes.
+  if (String(platform) === 'win32' && String(sandbox) !== 'danger-full-access') {
     args.push('-c', 'windows.sandbox="unelevated"');
   }
   if (target) args.push('--cd', target);

@@ -91,7 +91,10 @@ test('Codex write seats on Windows select the unelevated Windows sandbox inline 
   assert.ok(win.includes('windows.sandbox="unelevated"'), 'workspace-write on win32 must name a Windows sandbox');
   assert.ok(win.includes('--ignore-user-config'), 'user config stays ignored — the override is inline, not inherited');
   const winRo = buildCodexExecArgs({ sandbox: 'read-only', target: 'C:\\work', platform: 'win32' });
-  assert.ok(!winRo.includes('windows.sandbox="unelevated"'), 'read-only seats never widen');
+  assert.ok(winRo.includes('windows.sandbox="unelevated"'), 'read-only seats need an enforcer too, else every command is blocked by policy (2026-10-05)');
+  assert.equal(winRo[winRo.indexOf('--sandbox') + 1], 'read-only', 'the sandbox itself never widens');
+  const winFull = buildCodexExecArgs({ sandbox: 'danger-full-access', target: 'C:\work', platform: 'win32' });
+  assert.ok(!winFull.includes('windows.sandbox="unelevated"'), 'no sandbox, no enforcer');
   const posix = buildCodexExecArgs({ sandbox: 'workspace-write', target: '/work', platform: 'linux' });
   assert.ok(!posix.includes('windows.sandbox="unelevated"'), 'POSIX argv is unchanged');
 });

@@ -12,6 +12,7 @@
 
 import fs from 'node:fs';
 import os from 'node:os';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { HaltError } from '../foreman/bin/foreman-lib.mjs';
 import { extractJson } from './claude.mjs';
@@ -38,6 +39,77 @@ export const GROK_HEADLESS_READONLY_NOTE =
   'READ-ONLY SEAT (headless grok): a shell command that chains (;), branches (if/else) or redirects '
   + '(2>$null, >) needs an approval no one can give here and ENDS your turn unanswered. Use plain single '
   + 'commands or your file tools, and always finish with the JSON you were asked for.';
+// (2026-10-06) The note alone did not hold: both Grok reviewers of an Anchor code job chained a
+// command after minutes of work and the turn was cancelled with no review. A cancelled turn is now
+// RESUMED in the same session (`--resume <id>`, proven live 2026-10-06: the resumed turn read the
+// file instead and ended end_turn with the JSON) up to GROK_CLI_PERMISSION_RESUMES times.
+export const DEFAULT_GROK_CLI_PERMISSION_RESUMES = 2;
+export const GROK_RESUME_AFTER_REFUSAL =
+  'Continue the task using your file tools only: your last shell command needed an approval no one '
+  + 'can give here and did not run, so do not run it again. Finish with the JSON you were asked for.';
+// (2026-10-06) Grok's --sandbox is Landlock/Seatbelt only (no Windows), and a plan-mode Grok with its
+// terminal removed still ran a writing command through a deferred tool. So a verification seat's
+// worktree is snapshotted before the call; anything the reviewer changed is put back and the review
+// is not trusted. Foreman's own bookkeeping (git-excluded in code jobs) is never a reviewer write.
+export const GROK_WRITE_GUARD_IGNORE = [
+  '.foreman/', '.foreman-job/', '.anchor/', '.ecgberht/', 'foreman-checkpoint.json',
+  '_foreman-status.log', 'foreman.config.json',
+];
+
+function ignoredByGuard(p) {
+  return GROK_WRITE_GUARD_IGNORE.some((x) => (x.endsWith('/') ? p.startsWith(x) : p === x));
+}
+
+function git(dir, args, gitImpl) {
+  const r = gitImpl(['-C', dir, ...args]);
+  return r && r.status === 0 ? r.stdout : null;
+}
+
+function defaultGitImpl(args) {
+  return spawnSync('git', args, { encoding: 'buffer', windowsHide: true, timeout: 120000, maxBuffer: 256 * 1024 * 1024 });
+}
+
+/** The worktree's dirty files (tracked changes + untracked) with their bytes; null when not a git tree. */
+export function worktreeSnapshot(dir, gitImpl = defaultGitImpl) {
+  const out = git(dir, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], gitImpl);
+  if (out == null) return null;
+  const entries = Buffer.from(out).toString('utf8').split('\0').filter(Boolean);
+  const snap = new Map();
+  for (let i = 0; i < entries.length; i++) {
+    const xy = entries[i].slice(0, 2);
+    const p = entries[i].slice(3);
+    if (xy[0] === 'R' || xy[0] === 'C') i++;      // a rename/copy entry is followed by its source path
+    if (ignoredByGuard(p)) continue;
+    let bytes = null;
+    try { bytes = fs.readFileSync(path.join(dir, p)); } catch { bytes = null; }
+    snap.set(p, bytes);
+  }
+  return snap;
+}
+
+/** Put back every path a read-only call changed between two snapshots; returns the paths restored. */
+export function restoreWorktree(dir, before, after, gitImpl = defaultGitImpl) {
+  const restored = [];
+  const same = (a, b) => (a == null && b == null) || (a != null && b != null && Buffer.compare(a, b) === 0);
+  for (const p of new Set([...before.keys(), ...after.keys()])) {
+    const had = before.has(p);
+    if (had && after.has(p) && same(before.get(p), after.get(p))) continue;
+    const full = path.join(dir, p);
+    try {
+      if (had) {      // dirty before: back to its exact bytes (or gone again, if it was deleted)
+        const b = before.get(p);
+        if (b == null) fs.rmSync(full, { force: true });
+        else { fs.mkdirSync(path.dirname(full), { recursive: true }); fs.writeFileSync(full, b); }
+      } else if (git(dir, ['cat-file', '-e', `HEAD:${p}`], gitImpl) != null) {
+        git(dir, ['checkout', 'HEAD', '--', p], gitImpl);      // clean before: back to HEAD
+      } else {
+        fs.rmSync(full, { force: true });                   // a new file the reviewer made
+      }
+      restored.push(p);
+    } catch { /* reported by the caller as still changed */ }
+  }
+  return restored;
+}
 
 /** True only for ids the Grok CLI will accept — reject stale Gemini/Claude setx pins. */
 export function isPlausibleGrokModelId(m) {
@@ -141,6 +213,7 @@ export function defaultRunGrokCli(fullPrompt, label, {
   spawnSyncImpl,
   platform = process.platform,
   killImpl,
+  gitImpl = defaultGitImpl,
 } = {}) {
   if (env.CRUCIBLE_AGENT_LIVE !== '1') {
     throw new HaltError(
@@ -176,13 +249,48 @@ export function defaultRunGrokCli(fullPrompt, label, {
   if (useFile) {
     tmpPath = path.join(os.tmpdir(), `grok-cli-prompt-${process.pid}-${Date.now()}.txt`);
     fs.writeFileSync(tmpPath, fullPrompt, 'utf8');
-    args.push('--prompt-file', tmpPath);
-  } else {
-    args.push('-p', fullPrompt);
   }
-  return processRunner({
+  const verification = isVerificationRole({ role, label });
+  const guard = verification && env.GROK_CLI_WRITE_GUARD !== '0' ? worktreeSnapshot(target, gitImpl) : null;
+  const resumesAllowed = Number.isFinite(Number(env.GROK_CLI_PERMISSION_RESUMES))
+    && env.GROK_CLI_PERMISSION_RESUMES !== undefined && env.GROK_CLI_PERMISSION_RESUMES !== ''
+    ? Math.max(0, Number(env.GROK_CLI_PERMISSION_RESUMES)) : DEFAULT_GROK_CLI_PERMISSION_RESUMES;
+  const first = useFile ? ['--prompt-file', tmpPath] : ['-p', fullPrompt];
+  return (async () => {
+    let out;
+    try {
+      out = await runGrokOnce([...args, ...first]);
+    } finally {
+      if (tmpPath) {
+        try { fs.unlinkSync(tmpPath); } catch { /* best effort */ }
+      }
+    }
+    let resumes = 0;
+    while (out.rec.turn_cancelled && out.rec.session_id && resumes < resumesAllowed && !signal?.aborted) {
+      resumes++;
+      log(`${label}: grok turn cancelled by an unanswerable tool ask; resuming session ${out.rec.session_id} (${resumes}/${resumesAllowed})`);
+      out = await runGrokOnce([...args, '--resume', out.rec.session_id, '-p', GROK_RESUME_AFTER_REFUSAL]);
+    }
+    out.rec.permission_resumes = resumes;
+    if (guard) {
+      const after = worktreeSnapshot(target, gitImpl);
+      const restored = after ? restoreWorktree(target, guard, after, gitImpl) : [];
+      if (restored.length) {
+        log(`!! ${label}: the read-only grok seat changed ${restored.length} file(s); put back: ${restored.slice(0, 10).join(', ')}`);
+        Object.assign(out.rec, {
+          ok: false, status: 'wrote_files', reviewer_wrote: restored,
+          error: `read-only grok seat changed files (put back): ${restored.slice(0, 10).join(', ')}`,
+          model_family: null, family_attested: false, model_attested: false, degraded: true,
+        });
+      }
+    }
+    return out;
+  })();
+
+  function runGrokOnce(callArgs) {
+    return processRunner({
     command: cmdName,
-    args,
+    args: callArgs,
     options: {
       cwd: target,
       env: { ...policyEnvironment(env), NO_COLOR: '1', CI: '1' },
@@ -198,9 +306,6 @@ export function defaultRunGrokCli(fullPrompt, label, {
     platform,
     ...(killImpl ? { killImpl } : {}),
   }).then((result) => {
-    if (tmpPath) {
-      try { fs.unlinkSync(tmpPath); } catch { /* best effort */ }
-    }
     const parsed = parseGrokJsonOutput(result.stdout, { requested: mdl });
     const outcome = classifySubscriptionOutcome({family: 'grok', ...result});
     const text = parsed ? parsed.text : String(result.stdout || '').trim();
@@ -247,6 +352,7 @@ export function defaultRunGrokCli(fullPrompt, label, {
     if (!ok) log(`!! ${label}: grok-cli ${status}. stderr=${result.stderr.slice(0, 300)}`);
     return { text, rec };
   });
+  }
 }
 
 /**

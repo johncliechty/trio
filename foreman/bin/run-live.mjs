@@ -288,10 +288,24 @@ async function agent(prompt, opts = {}) {
   const role = String(opts.role || label).split(/[:#.\s]/)[0].toLowerCase();
   const roleDriver = process.env[`TRIO_DRIVER_${role.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`];
   if (roleDriver && roleDriver !== 'claude') {
-    return runAgent({
+    const out = await runAgent({
       prompt, schema: opts.schema, label, role, driver: roleDriver,
       freshContext: true, target: PROJECT, log: (s) => emit(s),
     });
+    // 2026-10-05: an authoring seat that answers BLOCKED (as the prompt tells it to) is a stop,
+    // never "complete" - a ChatGPT execute said "BLOCKED: no tool can read files" four times
+    // while the run logged "agent execute complete" and burned its fix budget.
+    const said = typeof out === 'string' ? out : String(out?.text ?? '');
+    if (!opts.schema && /^\s*\**BLOCKED\b/m.test(said)) {
+      const lastWords = seatLastWords(said);
+      emit(`   !! ${label} (${roleDriver}) answered BLOCKED - typed failure, never "complete" - said: ${lastWords}`);
+      return {
+        agent_failed: true, exit_class: 'SEAT_BLOCKED', label, tools: null, duration_ms: null,
+        last_words: lastWords, usage_limit: isUsageLimitText(lastWords),
+        detail: `agent ${label} (${roleDriver}) answered BLOCKED; it said: ${lastWords}`,
+      };
+    }
+    return out;
   }
   const schemaSuffix = opts.schema
     ? `\n\nRespond with ONLY a single raw JSON object (no markdown fences, no prose) ` +

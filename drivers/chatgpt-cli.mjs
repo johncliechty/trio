@@ -301,7 +301,10 @@ export function buildCodexExecArgs({
     throw new TypeError(`unsupported Codex sandbox "${sandbox}" (expected read-only|workspace-write|danger-full-access)`);
   }
   const args = [
-    'exec', '--skip-git-repo-check', '--ephemeral', '--ignore-user-config',
+    // No --ephemeral (2026-10-05, proven live): it stores no rollout, so every Codex sub-agent
+    // spawn failed ("collab spawn failed ... no rollout found for thread") - every ultra seat lost
+    // its sub-agents. A plain `exec` is still a fresh thread each call.
+    'exec', '--skip-git-repo-check', '--ignore-user-config',
     '--strict-config', '--color', 'never',
     '--json', '--sandbox', sandbox,
     '-c', 'approval_policy="never"',
@@ -454,6 +457,15 @@ export function defaultRunCodexCli(fullPrompt, label, {
     platform,
     ...(killImpl ? { killImpl } : {}),
   }).then((result) => {
+    if (env.TRIO_CODEX_TRACE_DIR) {   // opt-in diagnosis (2026-10-05): what each Codex seat was given and did
+      try {
+        fs.mkdirSync(env.TRIO_CODEX_TRACE_DIR, { recursive: true });
+        fs.writeFileSync(path.join(env.TRIO_CODEX_TRACE_DIR,
+          `${Date.now()}-${String(label).replace(/[^A-Za-z0-9._-]+/g, '_')}.json`),
+          JSON.stringify({ label, cwd: target || null, sandbox: box, args, code: result.code,
+            terminal: result.terminal, stderr: result.stderr, stdout: result.stdout, prompt: fullPrompt }, null, 1));
+      } catch { /* tracing never breaks a seat */ }
+    }
     const parsed = parseCodexJsonl(result.stdout);
     const outcome = classifySubscriptionOutcome({family: 'chatgpt', ...result});
     const detail = `${result.stderr}\n${result.stdout}`.trim();

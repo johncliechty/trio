@@ -71,9 +71,10 @@ test('Codex argv is ephemeral, config-isolated, prompt-on-stdin, read-only, JSON
     model: 'gpt-5.6-sol', reasoningEffort: 'ultra', sandbox: 'read-only', target: 'C:\\work',
   });
   assert.deepEqual(args.slice(0, 2), ['exec', '--skip-git-repo-check']);
-  for (const required of ['--ephemeral', '--ignore-user-config', '--strict-config', '--json']) {
+  for (const required of ['--ignore-user-config', '--strict-config', '--json']) {
     assert.ok(args.includes(required), `missing ${required}`);
   }
+  assert.ok(!args.includes('--ephemeral'), 'ephemeral stores no rollout and breaks every sub-agent spawn (2026-10-05)');
   assert.deepEqual(args.slice(-1), ['-'], 'prompt must ride stdin, never argv');
   assert.equal(args[args.indexOf('--sandbox') + 1], 'read-only');
   assert.equal(args[args.indexOf('--model') + 1], 'gpt-5.6-sol');

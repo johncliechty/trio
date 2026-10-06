@@ -126,11 +126,16 @@ export function extractWaveSection(planText, waveN) {
   return body.length > max ? `${body.slice(0, max)}\n\n…[wave section truncated; read plan file for remainder]` : body;
 }
 
-function authoringToolRule(env = process.env) {
+function authoringToolRule(env = process.env, role = 'EXECUTE') {
   // The opt-in is set only by a ConPTY launcher on a Codex host (journal 0116).
   // Neither enabling terminal file tools nor YOLO implies the other setting.
-  if (env.FOREMAN_CODEX_CONPTY === '1' && env.CODING_FAMILY === 'chatgpt') {
-    return `Use dedicated file tools where available. On this explicitly ConPTY-hosted Codex run, ` +
+  // 2026-10-05: a seat routed to the headless chatgpt-cli driver is ALSO a Codex host - Codex
+  // has no file tool but its terminal, and the driver runs it in an OS-enforced workspace-write
+  // sandbox. Under the plain ban every ChatGPT execute/fix answered "BLOCKED: no tool can read
+  // files without terminal commands" and Foreman logged "complete" (proven by a Codex trace).
+  const headlessCodex = env[`TRIO_DRIVER_${role}`] === 'chatgpt-cli';
+  if ((env.FOREMAN_CODEX_CONPTY === '1' && env.CODING_FAMILY === 'chatgpt') || headlessCodex) {
+    return `Use dedicated file tools where available. On this Codex run, ` +
       `when dedicated file tools are absent, you may use batched terminal commands only to read/search ` +
       `files and create/edit/delete files within the authorized project workspace. Use apply_patch for edits ` +
       `when available. Do NOT run git commands, tests, installs, servers, or other process workloads yourself. ` +
@@ -233,7 +238,7 @@ function fixPrompt(ctx, gate, findings) {
     `Close these findings without weakening tests: ${JSON.stringify(findings.map((f) => f.id))}.`,
     `The orchestrator gate is at ${gate.artifact_path}. Make the minimal change that`,
     `turns the gate GREEN; the orchestrator — not you — re-runs the gate to verify.`,
-    authoringToolRule(),
+    authoringToolRule(process.env, 'FIX'),
     `TESTS ARE FROZEN. Do not modify test files to force a pass. You may NEVER use pytest.skip, @pytest.mark.skip, or pytest.importorskip on failing tests. Solve the root cause in the product code.`,
     lookinAppendix({ heartbeatPath: seatHeartbeatPath(ctx) }),
   ].join(' ');

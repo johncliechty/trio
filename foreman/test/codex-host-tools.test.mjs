@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { _internals as prompts } from '../bin/wave-workflow.js';
 
 function withHost(env, fn) {
-  const keys = ['FOREMAN_CODEX_CONPTY', 'CODING_FAMILY'];
+  const keys = ['FOREMAN_CODEX_CONPTY', 'CODING_FAMILY', 'TRIO_DRIVER_EXECUTE', 'TRIO_DRIVER_FIX'];
   const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   try {
     for (const key of keys) {
@@ -51,6 +51,22 @@ test('explicit ConPTY Codex authoring can read files while git, tests and proces
     }
     assert.match(prompts.executePrompt(ctx),/do not weaken or delete tests/);
     assert.match(prompts.fixPrompt(ctx,gate,[]),/TESTS ARE FROZEN/);
+  });
+});
+
+test('a seat routed to the headless chatgpt-cli driver is a Codex host: it may read/edit by terminal, never git/tests (2026-10-05)', () => {
+  withHost({TRIO_DRIVER_EXECUTE:'chatgpt-cli',TRIO_DRIVER_FIX:'chatgpt-cli'}, () => {
+    for (const prompt of [prompts.executePrompt(ctx),prompts.fixPrompt(ctx,gate,[])]) {
+      assert.match(prompt,/may use batched terminal commands only to read\/search/);
+      assert.match(prompt,/Do NOT run git commands, tests, installs, servers/);
+    }
+  });
+  withHost({TRIO_DRIVER_EXECUTE:'claude',TRIO_DRIVER_FIX:'claude',CODING_FAMILY:'chatgpt'}, () => {
+    assert.match(prompts.executePrompt(ctx),/Do NOT run any git commands, terminal commands, or tests yourself/);
+  });
+  withHost({TRIO_DRIVER_EXECUTE:'chatgpt-cli',TRIO_DRIVER_FIX:'claude'}, () => {
+    assert.match(prompts.executePrompt(ctx),/may use batched terminal/);
+    assert.match(prompts.fixPrompt(ctx,gate,[]),/Do NOT run any git commands, terminal commands/);
   });
 });
 

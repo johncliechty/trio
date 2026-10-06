@@ -742,7 +742,7 @@ test('ordinary imported runAgent author and reviewer keep fresh ephemeral exec t
   assert.equal(calls.length, 2);
   for (const call of calls) {
     assert.equal(call.args[0], 'exec');
-    assert.ok(call.args.includes('--ephemeral'));
+    assert.ok(!call.args.includes('resume'), 'a fresh exec thread per call (no --ephemeral: it breaks sub-agents, 2026-10-05)');
     assert.ok(!call.args.includes('app-server'));
     assert.equal(call.options.shell, false);
     assert.equal(call.options.windowsHide, true);

@@ -31,7 +31,8 @@ After CONVERGED, once per wave: the catcher runs the RC battery (ELEGANCE.md Par
 2. **The step is unsupervised and unlabeled.** execute/review/fix run under `superviseSeat` with a seat heartbeat and silence windows; `elegance()` calls `agent()` directly. The only visible line is `waiting on agent:elegance Nm` — John asked twice whether the job was stuck. Nothing says catcher vs adversary, or which family.
 3. **It is mis-aimed for a landing.** The brief says "landing only, no new design or feature work"; every element is pre-approved work with a user-ratified plan. RC-1 ("independent need") is satisfied by construction; a CUT here would remove approved work the user already ruled on. The pass cannot add value proportional to its cost on this job class. (Same holds for single-wave code jobs generally — journal 0110's owed fast path.)
 4. **Resume interplay (new today).** The 2026-10-06 Grok driver fix resumes a cancelled/limit-hit turn up to 2 times. An elegance adversary on Grok can therefore now run up to ~3 × the driver timeout before the step gives up. Correct for a review (a lost review is worse), but it widens finding 1.
-5. **Adjacent defect found while studying this job (Anchor, not Foreman): code jobs land `foreman.config.json`.** `steward_cockpit/code_jobs.py` `_start_foreman` overwrites the repository's TRACKED root `foreman.config.json` with the job's `.foreman-job/` doc pointers; `_exclude_local` adds it to `info/exclude`, which does not apply to tracked files. `_finish` runs `git add -A`, so the overwrite is committed and landed. No Foreman code job had landed before today, so it never showed; this job will be the first. Anchor and Skill Foundry both track the file.
+5. **The adversary call cannot change a zero-cut outcome.** The catcher returned `27 element(s) → keep 25 · hold 2 · cut 0` at 18:30:22. `runRabbitCatcherAdversary` can only restore a CUT to HOLD or demote a KEEP to HOLD — it can never create a CUT, so with zero cuts nothing it says can trigger a fix iteration or change GO; at most it adds HOLD lines to the execution log. It still ran 8+ minutes. Cheapest fix: skip the adversary when the catcher cuts nothing (say it aloud).
+6. **Adjacent defect found while studying this job (Anchor, not Foreman): code jobs land `foreman.config.json`.** `steward_cockpit/code_jobs.py` `_start_foreman` overwrites the repository's TRACKED root `foreman.config.json` with the job's `.foreman-job/` doc pointers; `_exclude_local` adds it to `info/exclude`, which does not apply to tracked files. `_finish` runs `git add -A`, so the overwrite is committed and landed. No Foreman code job had landed before today, so it never showed; this job will be the first. Anchor and Skill Foundry both track the file.
 
 ## Recommendations (John's decisions; nothing changed in Foreman by this entry)
 
@@ -40,6 +41,10 @@ After CONVERGED, once per wave: the catcher runs the RC battery (ELEGANCE.md Par
 - **R3 — supervise and label it**: run catcher/adversary under `superviseSeat`; `waiting-on` reads `elegance:catcher (chatgpt)` / `elegance:adversary (grok)`.
 - **R4 — tell the seats to judge, not re-review**: the reviewers' findings and the gate are inputs; no repository re-investigation unless an element's need is unclear.
 - **R5 (Anchor) — code jobs must not land their temporary `foreman.config.json`**: write the job config outside the tracked path (Foreman takes a config path), or restore the file before `_finish` commits. Until fixed: after this job lands, restore Anchor's `foreman.config.json` from the prior commit.
+
+## Outcome
+
+The adversary ended at ~18:39 (about 9 minutes, no change possible as finding 5 says); `=== DONE === waves=1:GO` at 18:39:13. Anchor's finish re-ran the check and landed 27 files at 18:41 (`becc567`, snapshot `refs/anchor-snapshots/20261006-184049-c0be07`). Total run 39 minutes, of which ~19 were the elegance step. Finding 6 materialised as predicted: `foreman.config.json` landed; restored by `e35f598`.
 
 ## Still owed
 

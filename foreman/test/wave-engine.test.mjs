@@ -518,6 +518,35 @@ test('R2-3 unit — runGate green predicate: structured pass ⇒ green; vacuous 
 });
 
 // ---------------------------------------------------------------------------
+// Spaced-pytest repair (2026-10-06): widening the pytest event shape to node
+// ids WITH spaces must leave the Node/TAP gate semantics byte-identical, and
+// must not let a TAP description that QUOTES a pytest event misclassify a run.
+// ---------------------------------------------------------------------------
+
+test('SPACED-PYTEST REGRESSION: Node/TAP counting and classification untouched by the widened pytest event shape', () => {
+  const tap = [
+    'TAP version 13',
+    'ok 1 - adds two numbers',
+    // a TAP point whose DESCRIPTION quotes a spaced pytest event: ONE TAP pass,
+    // never a pytest event on top, and never a pytest classification
+    'ok 2 - parses maps and pages/x.py::test_y PASSED output',
+    'ok 3 - later # SKIP not yet',
+    'not ok 4 - multiplies',
+    '# tests 4', '# pass 2', '# fail 1', '# skipped 1',
+  ].join('\n');
+  assert.deepEqual(_internals.countTestEvents(tap), { pass: 2, fail: 1 },
+    'SKIP-directive point excluded; the quoting description counts once');
+  assert.equal(_internals.parseCount(tap, 'pass'), 2, 'Node/TAP `# pass N` parsing unchanged');
+  assert.equal(_internals.hasRealTestEvents(tap), true);
+  assert.equal(_internals.looksLikePytest(tap), false,
+    'a TAP stream quoting `path::name PASSED` mid-description is NOT a pytest run');
+  // and a pure spaced-path pytest stream is recognized without TAP interference
+  const py = 'maps and pages/x.py::test_y PASSED [100%]\n==== 1 passed in 0.01s ====';
+  assert.equal(_internals.looksLikePytest(py), true);
+  assert.deepEqual(_internals.countTestEvents(py), { pass: 1, fail: 0 });
+});
+
+// ---------------------------------------------------------------------------
 // P1 2026-07-25 (0078 T1): a timed-out gate is TIMEOUT_INCOMPLETE — never a fake
 // "0 pass 0 fail" RED for the fix loop to chase, and never vacuous.
 // ---------------------------------------------------------------------------

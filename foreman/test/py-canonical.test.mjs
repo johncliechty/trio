@@ -210,6 +210,153 @@ test('Phase 3d unit — looksLikePytest detects pytest output but NOT node TAP/s
   assert.equal(_internals.looksLikePytest('ℹ tests 3\nℹ pass 3\n✔ add'), false);
 });
 
+// --- SPACED-NODE-ID repair (2026-10-06): real pytest events with spaces --------
+// Live defect: code jobs 20261006-200539-2de1c2 and 20261006-203327-a3cc8a
+// produced orchestrator-owned gate receipts with exit 0, 54 distinct PASSED
+// lines and a `54 passed in 12.10s` banner, yet HALTed as VACUOUS: the old
+// `\S+::\S+` event shape rejected every node id containing a space (real
+// Windows/POSIX paths and parameter IDs do). These regressions pin the repaired
+// shape: spaced node ids are genuine events, while node-id-before-status
+// structure, summary-section exclusion and forged-summary rejection all hold.
+
+// The exact per-test lines captured from the halted receipts' stdout.
+const CAPTURED_SPACED_EVENTS = [
+  'Foundry page and knowledge maps\\researchprime\\test_maps.py::test_complete_bundle PASSED [  1%]',
+  'Foundry page and knowledge maps\\researchprime\\test_maps.py::test_missing_or_unsafe_resource_targets_fail[resource] PASSED [  3%]',
+  'Foundry page and knowledge maps\\researchprime\\test_maps.py::test_browser_proof_bound_to_final_bytes PASSED [100%]',
+];
+
+test('SPACED REGRESSION: the exact captured receipt lines are genuine per-test events (honest 3-count banner)', () => {
+  // 3 sample lines carry an honestly count-matched `3 passed` banner — the
+  // receipt's real 54-count banner belongs only to a 54-event fixture (next).
+  const out = CAPTURED_SPACED_EVENTS.join('\n') +
+    '\n==================== 3 passed in 0.12s ====================\n';
+  assert.equal(_internals.looksLikePytest(out), true);
+  assert.equal(_internals.hasRealTestEvents(out), true,
+    'spaced Windows-path PASSED lines are real events, not a forged summary');
+  assert.deepEqual(_internals.countTestEvents(out), { pass: 3, fail: 0 });
+  assert.equal(_internals.parsePytestCount(out, 'pass'), 3);
+  assert.equal(_internals.parsePytestCount(out, 'fail'), 0);
+});
+
+test('SPACED REGRESSION: a count-matched 54-event spaced fixture under the receipt\'s real banner counts 54 passes', () => {
+  // Honestly bounded reconstruction of the halted receipt: 54 DISTINCT spaced
+  // per-test PASSED lines (the 3 captured ones among them) + its exact banner.
+  const middle = [];
+  for (let i = 1; i <= 51; i++) {
+    middle.push('Foundry page and knowledge maps\\researchprime\\test_maps.py::' +
+      `test_case_${i} PASSED [ ${String(Math.min(99, 3 + i)).padStart(2)}%]`);
+  }
+  const lines = [CAPTURED_SPACED_EVENTS[0], CAPTURED_SPACED_EVENTS[1], ...middle, CAPTURED_SPACED_EVENTS[2]];
+  assert.equal(lines.length, 54, 'fixture honesty: exactly 54 event lines under the 54-count banner');
+  const out = lines.join('\n') + '\n==================== 54 passed in 12.10s ====================\n';
+  assert.deepEqual(_internals.countTestEvents(out), { pass: 54, fail: 0 });
+  assert.equal(_internals.hasRealTestEvents(out), true);
+  assert.equal(_internals.parsePytestCount(out, 'pass'), 54);
+  assert.equal(_internals.parsePytestCount(out, 'tests'), 54);
+});
+
+test('SPACED REGRESSION: POSIX paths + spaced parameter IDs, mixed results — events count once, summary section never', () => {
+  const out = [
+    'maps and pages/researchprime/test_maps.py::test_alpha PASSED [ 16%]',
+    'maps and pages/researchprime/test_maps.py::test_params[two words] PASSED [ 33%]',
+    'maps and pages/researchprime/test_maps.py::test_params[spaced id 2] FAILED [ 50%]',
+    'maps and pages/researchprime/test_maps.py::test_err[a b] ERROR [ 66%]',
+    'maps and pages/researchprime/test_maps.py::test_skip SKIPPED (not ready yet) [ 83%]',
+    'maps and pages/researchprime/test_maps.py::test_xf XFAIL (known gap) [ 91%]',
+    'maps and pages/researchprime/test_maps.py::test_xp XPASS [100%]',
+    '=========================== short test summary info ===========================',
+    'FAILED maps and pages/researchprime/test_maps.py::test_params[spaced id 2] - assert 1 == 2',
+    'ERROR maps and pages/researchprime/test_maps.py::test_err[a b]',
+    '= 1 failed, 2 passed, 1 skipped, 1 xfailed, 1 xpassed, 1 error in 0.21s =',
+  ].join('\n');
+  const ev = _internals.countTestEvents(out);
+  assert.equal(ev.pass, 2, 'spaced param-id PASSED events count; SKIPPED/XFAIL/XPASS stay excluded');
+  assert.equal(ev.fail, 2, 'FAILED+ERROR events count ONCE — the spaced summary-section lines are not re-counted');
+  assert.equal(_internals.parsePytestCount(out, 'fail'), 2, 'summary agrees: failed(1)+error(1)');
+});
+
+test('SPACED REGRESSION negative: summary-only and summary-section-only streams still carry ZERO events', () => {
+  // the banner alone — the forged-receipt shape — must never read as events
+  const bannerOnly = '==================== 54 passed in 12.10s ====================\n';
+  assert.equal(_internals.hasRealTestEvents(bannerOnly), false);
+  assert.deepEqual(_internals.countTestEvents(bannerOnly), { pass: 0, fail: 0 });
+  // summary-SECTION lines (status FIRST, spaced node ids) are not events either
+  const sectionOnly = [
+    '=========================== short test summary info ===========================',
+    'FAILED Foundry page and knowledge maps\\researchprime\\test_maps.py::test_a - boom',
+    'ERROR Foundry page and knowledge maps\\researchprime\\test_maps.py::test_b',
+    'PASSED Foundry page and knowledge maps\\researchprime\\test_maps.py::test_c',
+    '==================== 1 failed, 1 error in 0.10s ====================',
+  ].join('\n');
+  assert.equal(_internals.hasRealTestEvents(sectionOnly), false,
+    'status-first lines are the summary section, never per-test events');
+  assert.deepEqual(_internals.countTestEvents(sectionOnly), { pass: 0, fail: 0 });
+  // prose/tracebacks that merely QUOTE a spaced event mid-line are not events
+  assert.equal(_internals.hasRealTestEvents(
+    "E       assert 'maps dir\\\\t.py::test_x PASSED [100%]' in captured"), false);
+});
+
+test('SPACED REGRESSION: an exit-0 echo of the receipt banner ALONE is still refused (no real events)', async () => {
+  const dir = tmpProjectNoTests();
+  try {
+    const g = await runGate({
+      projectDir: dir, foremanDir: path.join(dir, '.foreman'), wave: { n: 1 }, iteration: 0,
+      testCommand: 'cmd /c "echo ==== 54 passed in 12.10s ====& exit 0"',
+    });
+    assert.equal(g.green, false, 'a banner with no per-test events must never go GREEN');
+    assert.match(g.vacuous_reason || '', /no real per-test events/);
+  } finally { cleanup(dir); }
+});
+
+// A fresh REAL pytest project under a directory WITH SPACES at every level —
+// the exact on-disk shape that produced the halted receipts.
+function tmpSpacedPyProject({ broken = false } = {}) {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'foreman py spaced '));
+  const sub = path.join(base, 'maps and pages');
+  fs.mkdirSync(sub, { recursive: true });
+  fs.writeFileSync(path.join(sub, 'test_spaced_maps.py'), [
+    'import pytest',
+    '',
+    "@pytest.mark.parametrize('word', ['alpha beta', 'gamma delta'])",
+    'def test_param_with_spaces(word):',
+    "    assert ' ' in word",
+    '',
+    'def test_plain():',
+    '    assert 2 + 2 == 4',
+    broken ? '\ndef test_broken():\n    assert 2 + 2 == 5' : '',
+    '',
+  ].join('\n'));
+  return base;
+}
+
+test('SPACED LIVE: runGate accepts a REAL pytest suite in a spaced directory — GREEN, never vacuous (the live defect)', async () => {
+  const dir = tmpSpacedPyProject();
+  try {
+    const g = await runGate({ projectDir: dir, foremanDir: path.join(dir, '.foreman'),
+      wave: { n: 1 }, iteration: 0, testCommand: PYTEST });
+    assert.equal(g.exit_code, 0, 'the real pytest run passed');
+    assert.equal(g.vacuous_reason, null,
+      'spaced per-test events are REAL events — no "no real per-test events" refusal');
+    assert.equal(g.green, true);
+    assert.equal(g.tap.pass, 3);
+    assert.equal(g.tap.fail, 0);
+  } finally { cleanup(dir); }
+});
+
+test('SPACED LIVE: runGate still rejects a REAL failure in the spaced directory — RED on the fix-loop path', async () => {
+  const dir = tmpSpacedPyProject({ broken: true });
+  try {
+    const g = await runGate({ projectDir: dir, foremanDir: path.join(dir, '.foreman'),
+      wave: { n: 1 }, iteration: 0, testCommand: PYTEST });
+    assert.equal(g.green, false, 'a genuine failure in a spaced dir is refused');
+    assert.equal(g.exit_code, 1);
+    assert.equal(g.vacuous_reason, null, 'a genuine RED keeps the fix-loop path — never vacuous');
+    assert.equal(g.tap.pass, 3);
+    assert.equal(g.tap.fail, 1);
+  } finally { cleanup(dir); }
+});
+
 // --- T3 (2026-07-11): trust the parsed summary; normalize pytest gates to -v ---
 // Live misroute (Anchor-zombie 2026-06-28): a genuine RED under `pytest -q`
 // (74 tests, 40 pass, 34 fail, exit 1) emitted NO per-test events, so the

@@ -1,0 +1,9 @@
+# 0136 — pytest events with spaced node ids were refused as "no real per-test events"
+
+- **id:** 0136
+- **skill:** foreman
+- **situation:** Code jobs 20261006-200539-2de1c2 and 20261006-203327-a3cc8a HALTed as VACUOUS although their orchestrator-owned wave-1-gate.json receipts held exit 0, 54 distinct `PASSED` lines and a `54 passed in 12.10s` banner (preserved by Ecgberht, owning campaign journal/0019 + 0020). A `--rootdir` adjustment changed rootdir, not the spaced printed paths.
+- **context:** `bin/wave-engine.mjs` — `looksLikePytest`, `hasRealTestEvents`, `countTestEvents` all used a `\S+::\S+` node-id shape, so any real Windows/POSIX path or parameter ID containing a space (e.g. `Foundry page and knowledge maps\researchprime\test_maps.py::…`) read as zero per-test events; the R2-3 guard then refused the honest GREEN.
+- **observation:** Repaired with ONE shared event-line pattern (`PYTEST_EVENT_SRC`): line must not BEGIN with a status word (summary-section exclusion), a `::` node id must precede the status, and only `(reason)` + `[ NN%]` may follow it — so spaced node ids count while banners, summary-section lines and prose that quotes an event still never do. Regressions added to `test/py-canonical.test.mjs` (exact captured receipt lines; honest count-matched 54-event fixture; POSIX + spaced-param mixed results; summary-only/section-only negatives; live runGate GREEN and RED in a real spaced-directory pytest project) and `test/wave-engine.test.mjs` (Node/TAP semantics byte-identical; TAP description quoting a pytest event no longer even misclassifies the stream).
+- **outcome:** worked (gate `node --test foreman/test/py-canonical.test.mjs foreman/test/wave-engine.test.mjs` is run by the orchestrator of job 20261006-204900-5e699a; a prior attempt 20261006-204750-915071 died pre-code on a dirty-sibling guard — guard retained, no override)
+- **provenance:** genuine-execution

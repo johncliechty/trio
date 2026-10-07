@@ -769,6 +769,24 @@ function parseCount(text, word) {
 }
 
 /**
+ * A genuine `pytest -v` per-test event line (2026-10-06 repair). The node id MAY
+ * contain spaces — real Windows/POSIX paths (`Foundry page and knowledge
+ * maps\…\test_maps.py`) and parameter IDs (`[two words]`) do — so the old
+ * `\S+::\S+` shape read honest 54-passed receipts as "no real per-test events"
+ * and HALTed them vacuous. The node-id-BEFORE-status structure is still
+ * required, in three parts:
+ *   • the line must NOT begin with a status word — that keeps the short-test-
+ *     summary section (`FAILED path::name - msg`, status FIRST) out;
+ *   • a node id (`::`) must precede the status word;
+ *   • after the status only an optional `(reason)` (SKIPPED/XFAIL/XPASS) and
+ *     the optional progress `[ NN%]` may follow — so prose or a traceback that
+ *     merely QUOTES `path::name PASSED …` mid-line still never counts.
+ */
+const PYTEST_EVENT_SRC = String.raw`^[ \t]*(?!(?:PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)\b)\S.*::.*?[ \t]+(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)\b(?:[ \t]*\(.*\))?(?:[ \t]*\[\s*\d+%\])?[ \t]*\r?$`;
+const PYTEST_EVENT_RE = new RegExp(PYTEST_EVENT_SRC);          // one split-out line
+const PYTEST_EVENT_RE_M = new RegExp(PYTEST_EVENT_SRC, 'm');   // whole-text probe
+
+/**
  * Output-shape detection for pytest (Phase 3d). True iff the captured output is
  * a pytest run: a per-test event line (`path::name PASSED`), a `N passed/…`
  * summary token, a `N error(s) in T s` collection-error summary, the `no tests
@@ -777,7 +795,7 @@ function parseCount(text, word) {
  * so this never misclassifies a JS gate (the JS path stays byte-for-byte intact).
  */
 function looksLikePytest(text) {
-  return /^\s*\S+::\S+\s+(?:PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)\b/m.test(text) ||
+  return PYTEST_EVENT_RE_M.test(text) ||
     /\b\d+\s+(?:passed|failed|xfailed|xpassed|deselected)\b/.test(text) ||
     /\b\d+\s+errors?\s+in\s+[\d.]+s/.test(text) ||
     /\bno tests ran\b/.test(text) ||
@@ -832,10 +850,11 @@ function parsePytestCount(text, word) {
 function hasRealTestEvents(text) {
   return /^\s*(?:ok|not ok)\s+\d+\b/m.test(text) || /^\s*[✔✖✓✗]/m.test(text) ||
     // pytest -v per-test events: `path::test_name PASSED|FAILED|ERROR|SKIPPED|
-    // XFAIL|XPASS [ NN%]`. The node-id (`::`) PRECEDES the status word, which is
-    // what distinguishes a real event from the trailing summary-section lines
-    // (`FAILED path::name - msg`) where the status comes FIRST.
-    /^\s*\S+::\S+\s+(?:PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)\b/m.test(text);
+    // XFAIL|XPASS [ NN%]`, spaces allowed in the node id. The node-id (`::`)
+    // PRECEDES the status word, which is what distinguishes a real event from
+    // the trailing summary-section lines (`FAILED path::name - msg`) where the
+    // status comes FIRST (see PYTEST_EVENT_SRC).
+    PYTEST_EVENT_RE_M.test(text);
 }
 
 /**
@@ -857,13 +876,14 @@ function countTestEvents(text) {
       pass++;
       continue;
     }
-    // pytest -v per-test event: `path::test_name STATUS [ NN%]`. Matching the
-    // node-id (`::`) BEFORE the status excludes the summary-section lines
-    // (`FAILED path::name`, `ERROR path`) — counting those would double-count a
-    // single failure. PASSED is the only real pass; FAILED/ERROR are failures;
-    // SKIPPED/XFAIL/XPASS are neither (a skip/xfail is not a real pass, and a
-    // default-mode xpass is not a failure — it does not change pytest's exit 0).
-    const py = line.match(/^\s*\S+::\S+\s+(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS)\b/);
+    // pytest -v per-test event: `path::test_name STATUS [ NN%]`, spaces allowed
+    // in the node id (PYTEST_EVENT_SRC). Matching the node-id (`::`) BEFORE the
+    // status excludes the summary-section lines (`FAILED path::name`, `ERROR
+    // path`) — counting those would double-count a single failure. PASSED is
+    // the only real pass; FAILED/ERROR are failures; SKIPPED/XFAIL/XPASS are
+    // neither (a skip/xfail is not a real pass, and a default-mode xpass is not
+    // a failure — it does not change pytest's exit 0).
+    const py = line.match(PYTEST_EVENT_RE);
     if (py) {
       if (py[1] === 'PASSED') pass++;
       else if (py[1] === 'FAILED' || py[1] === 'ERROR') fail++;

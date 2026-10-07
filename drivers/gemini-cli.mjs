@@ -67,7 +67,7 @@ import { extractJson } from './claude.mjs';
 import { isVerificationRole, normalizeRole } from './roles.mjs';
 import { runCliSchemaAttempts } from './cli-schema.mjs';
 import { runCloseBoundProcess } from './subscription-process.mjs';
-import { resolveModelPolicy, policyEnvironment } from './model-policy.mjs';
+import { resolveModelPolicy, policyEnvironment, modelLaunchArgs } from './model-policy.mjs';
 
 // agy on-disk layout (validated on this host). The conversation transcript lives under
 // the brain dir keyed by conversation id; the served-model attestation lives in cli.log.
@@ -540,13 +540,13 @@ export function defaultRunGeminiCli(fullPrompt, label, {
     );
   }
 
-  // A dated label is not capability discovery. Until the subscription dispatch
-  // contract proves current models and maximum effort, fail before any spawn.
+  // 2026-10-07 (agy 1.3.x): the model comes from capability discovery (`agy models`) and agy names the effort
+  // inside the id (gemini-3.8-flash-high). The turn streams JSON on stdout: no transcript polling, no cli.log
+  // attestation - agy's own init event records the model it ran.
   const selection = policyResolver('gemini', { env });
-  const mdl = selection.model;
+  const mdl = modelLaunchArgs(selection)[1];
   const readonly = isReadonlyRole({ role, label });
-  // W0: prompt via ARGV `-p` with the STEER prefix (mirrors agy-dispatch.mjs); the reply
-  // is read from transcript.jsonl below, not stdout.
+  // The STEER still keeps agy off its shell tool (each shell call is a console window on an interactive desktop).
   const prompt = STEER + String(fullPrompt ?? '');
   const childEnv = Object.assign({}, policyEnvironment(env), { NO_COLOR: '1', FORCE_COLOR: '0', CI: '1' });
   if (signal?.aborted) {
@@ -556,26 +556,13 @@ export function defaultRunGeminiCli(fullPrompt, label, {
       family_attested: false, model_attested: false, degraded: true, cost_usd: null,
     } });
   }
-  const logDir = mkdtempSync(path.join(tmpdir(), 'agy-gemini-cli-'));
-  const logPath = path.join(logDir, 'agy.log');
-  const startMs = Date.now();
-  const cliLogBefore = cliLogSize();
-  let promptFile = null;
-  if (Buffer.byteLength(prompt) > OVERSIZE_PROMPT_ARGV_BYTES) {
-    promptFile = path.join(logDir, 'prompt.md');
-    writeFileSync(promptFile, prompt, 'utf8');
-    log(`${label}: prompt delivered via file (${Buffer.byteLength(prompt)} bytes)`);
-  }
-  const args = buildGeminiCliArgs({
-    prompt, promptFile, logPath, model: mdl, target, readonly, timeoutMs,
-  });
-  const cmdName = platform === 'win32' ? 'agy.exe' : 'agy';
   return processRunner({
-    command: cmdName,
-    args,
+    command: agyCommand(platform, env),
+    args: buildAgyStreamArgs({ model: mdl, readonly }),
+    input: agyStreamInput(prompt),
     options: {
       cwd: target, env: childEnv, shell: false, windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     },
     signal,
     timeoutMs,
@@ -585,46 +572,94 @@ export function defaultRunGeminiCli(fullPrompt, label, {
     ...(spawnSyncImpl ? { spawnSyncImpl } : {}),
     platform,
     ...(killImpl ? { killImpl } : {}),
-  }).then(async (result) => {
-    if (result.terminal !== 'closed' || result.code !== 0) {
-      const status = result.terminal === 'closed' ? 'cli_error' : result.terminal;
-      if (result.stderr) log(`!! ${label}: agy ${status}. stderr=${result.stderr.slice(0, 300)}`);
+  }).then((result) => {
+    const parsed = parseAgyStream(result.stdout);
+    if (result.terminal !== 'closed' || result.code !== 0 || parsed.status !== 'SUCCESS') {
+      const status = result.terminal !== 'closed' ? result.terminal : 'cli_error';
+      const error = parsed.error || result.error || String(result.stderr || '').slice(0, 500);
+      log(`!! ${label}: agy ${status}${parsed.status ? ` (${parsed.status})` : ''}. ${String(error).slice(0, 300)}`);
       return { text: '', rec: {
         label, cli_status: result.code, ok: false, status,
-        error: result.error || result.stderr.slice(0, 500),
+        error,
         requested_model: mdl, model_served: null, model_family: null,
         family_attested: false, model_attested: false, degraded: true,
         cost_usd: null, timed_out: status === 'timeout', aborted: status === 'aborted',
-        kill_status: result.kill_status,
+        kill_status: result.kill_status, conversation_id: parsed.conversation_id,
       } };
     }
-    const reply = await readAgyReply(logPath, startMs);
-    const graceMs = Number(env.AGY_ATTEST_GRACE_MS) > 0
-      ? Number(env.AGY_ATTEST_GRACE_MS)
-      : 2000;
-    let cliWindow = null;
-    for (let i = 0; i < 40; i++) {
-      cliWindow = cliLogTailSince(cliLogBefore);
-      if (shouldStopAttestationPoll({
-        cliWindow, requested: mdl, elapsedMs: i * 250, graceMs,
-      })) break;
-      await sleep(250);
-    }
-    const attestation = servedModelFromCliLog(cliWindow, { requested: mdl });
-    const { text, rec } = parseGeminiCliFrames(reply.text, {
+    const { text, rec } = parseGeminiCliFrames(parsed.text, {
       label,
-      cli_status: result.code,
+      cli_status: 0,
       requested_model: mdl,
-      served_model: attestation.served,
-      substituted: attestation.substituted,
+      served_model: parsed.model,
+      substituted: Boolean(parsed.model) && !modelsEqual(parsed.model, mdl),
     });
-    rec.conversation_id = reply.id;
+    rec.conversation_id = parsed.conversation_id;
     rec.kill_status = result.kill_status;
+    if (parsed.usage) {
+      rec.input_tokens = parsed.usage.input_tokens ?? null;
+      rec.output_tokens = (parsed.usage.output_tokens ?? 0) + (parsed.usage.thinking_tokens ?? 0);
+      rec.total_tokens = parsed.usage.total_tokens ?? null;
+    }
+    if (parsed.duration_seconds != null) rec.duration_ms = Math.round(parsed.duration_seconds * 1000);
+    rec.tools = parsed.tools;
+    if (rec.ok) rec.model_source = 'cli-recorded';
     if (!rec.ok) {
-      log(`!! ${label}: status=${rec.status} (requested="${mdl}" served="${attestation.served ?? 'unattested'}").`);
+      log(`!! ${label}: status=${rec.status} (requested="${mdl}" served="${parsed.model ?? 'unattested'}").`);
     }
     return { text, rec };
   });
+}
+
+/** agy 1.3.x headless argv: the prompt arrives as one NDJSON message on stdin (`-p=` selects print mode). */
+export function buildAgyStreamArgs({ model, readonly = false } = {}) {
+  const args = ['--input-format', 'stream-json', '--output-format', 'stream-json', '--model', model];
+  // plan mode reads and answers but does not edit; an edit seat runs in agy's print-mode default, which proceeds.
+  if (readonly) args.push('--mode', 'plan');
+  args.push('-p=');
+  return args;
+}
+
+export function agyStreamInput(prompt) {
+  return JSON.stringify({ event: 'user', message: { role: 'user', content: String(prompt ?? '') } }) + '\n';
+}
+
+export function agyCommand(platform = process.platform, env = process.env) {
+  if (platform !== 'win32') return 'agy';
+  const local = env.LOCALAPPDATA ? path.join(env.LOCALAPPDATA, 'agy', 'bin', 'agy.exe') : null;
+  return local && existsSync(local) ? local : 'agy.exe';
+}
+
+/** agy stream-json stdout -> { status, text, model, conversation_id, usage, error, tools, duration_seconds }. */
+export function parseAgyStream(stdout) {
+  const out = { status: null, text: '', model: null, conversation_id: null, usage: null, error: '', tools: 0,
+    duration_seconds: null };
+  let streamed = '';
+  const toolSteps = new Set();
+  for (const line of String(stdout ?? '').split('\n')) {
+    const raw = line.trim();
+    if (!raw) continue;
+    let event;
+    try { event = JSON.parse(raw); } catch { continue; }
+    if (event.event === 'init') {
+      out.conversation_id = event.conversation_id ?? out.conversation_id;
+      if (typeof event.init?.model === 'string') out.model = event.init.model;
+    } else if (event.event === 'step_update') {
+      const step = event.step_update || {};
+      if (step.step_type === 'agent_response' && typeof step.text_delta === 'string') streamed += step.text_delta;
+      if (step.step_type === 'tool' && Number.isInteger(step.step_index)) toolSteps.add(step.step_index);
+    } else if (event.event === 'result' && event.result) {
+      out.status = event.result.status ?? null;
+      out.conversation_id = event.result.conversation_id ?? out.conversation_id;
+      out.usage = event.result.usage ?? null;
+      out.error = event.result.error ?? '';
+      out.duration_seconds = event.result.duration_seconds ?? null;
+      out.text = typeof event.result.response === 'string' && event.result.response ? event.result.response : streamed;
+    }
+  }
+  if (!out.text) out.text = streamed;
+  out.tools = toolSteps.size;
+  return out;
 }
 
 /**

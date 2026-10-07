@@ -145,6 +145,28 @@ function effortValues(values, family) {
   }))];
 }
 
+const AGY_EFFORT_SUFFIX = /^(gemini-[A-Za-z0-9.-]+?)-(minimal|low|medium|high|xhigh|max)$/;
+
+/** `agy models` text -> [{ model: base, efforts }] in the CLI's order (the effort is the id suffix). */
+export function parseAgyModels(text) {
+  const order = [];
+  const efforts = new Map();
+  for (const line of String(text ?? '').split(/\r?\n/)) {
+    const id = line.split('\t')[0].trim();
+    if (!id.startsWith('gemini-')) continue;
+    const m = AGY_EFFORT_SUFFIX.exec(id);
+    const base = m ? m[1] : id;
+    if (!efforts.has(base)) { order.push(base); efforts.set(base, []); }
+    if (m && !efforts.get(base).includes(m[2])) efforts.get(base).push(m[2]);
+  }
+  return order.map(model => ({ model, efforts: efforts.get(model).length ? efforts.get(model) : ['medium'] }));
+}
+
+/** The id agy accepts for a Gemini base model at an effort. */
+export function agyModelId(model, effort) {
+  return effort && !AGY_EFFORT_SUFFIX.test(model) ? `${model}-${effort}` : model;
+}
+
 export function highestEffort(values, family = null) {
   const supported = effortValues(values, family);
   return EFFORTS.filter(value => supported.includes(value)).at(-1);
@@ -198,8 +220,12 @@ function normalizedRows(family, entries) {
 /** Retains capability fields only, never prompts, API keys, headers or config. */
 export function normalizeCatalog(family, raw) {
   familyName(family);
-  if (family === 'gemini') {
-    fail(family, 'The agy subscription adapter has no verified latest/highest capability contract.', 'capability_unsupported');
+  if (family === 'gemini' && raw?.schema_version !== 1) {
+    // agy 1.3.x (2026-10-07): `agy models` lists "<id> TAB <name>" rows newest first; only gemini-* rows are the
+    // Gemini family, and the effort is the id's suffix (gemini-3.8-flash-high).
+    if (typeof raw !== 'string') fail(family, 'The agy model catalog is unavailable.', 'capability_probe_failed');
+    return { schema_version: 1, family, models: normalizedRows(family, parseAgyModels(raw)),
+      selection_evidence: 'provider_catalog_order' };
   }
   let entries;
   let evidence;
@@ -302,10 +328,11 @@ function pathValue(env) {
 }
 
 function executableFor(family, env) {
-  const base = { chatgpt: 'codex', grok: 'grok', claude: 'claude' }[family];
+  const base = { chatgpt: 'codex', grok: 'grok', claude: 'claude', gemini: 'agy' }[family];
   if (!base) return null;
   const name = process.platform === 'win32' ? `${base}.exe` : base;
-  for (const directory of pathValue(env).split(path.delimiter).filter(Boolean)) {
+  const extra = family === 'gemini' && env.LOCALAPPDATA ? [path.join(env.LOCALAPPDATA, 'agy', 'bin')] : [];
+  for (const directory of [...pathValue(env).split(path.delimiter).filter(Boolean), ...extra]) {
     const candidate = path.join(directory.replace(/^"|"$/g, ''), name);
     try {
       if (fs.statSync(candidate).isFile()) return fs.realpathSync(candidate);
@@ -332,8 +359,8 @@ function semver(value) {
 
 export function discoverModelCapabilities(family, { env = process.env, executable = executableFor(family, env) } = {}) {
   familyName(family);
-  if (family === 'gemini') return normalizeCatalog(family, null);
   if (!executable) fail(family, 'A native subscription CLI is not available on PATH.', 'cli_unavailable');
+  if (family === 'gemini') return normalizeCatalog(family, probe(family, executable, ['models'], env));
   if (family === 'chatgpt') {
     let raw;
     try { raw = JSON.parse(probe(family, executable, ['debug', 'models'], env)); }
@@ -439,5 +466,6 @@ export function modelLaunchArgs(selection) {
   ];
   if (family === 'grok') return ['--model', model, '--reasoning-effort', effort];
   if (family === 'claude') return ['--model', model, '--effort', effort];
-  fail(family, 'The agy subscription adapter has no verified latest/highest launch contract.', 'capability_unsupported');
+  if (family === 'gemini') return ['--model', agyModelId(model, effort)];
+  fail(family, 'No verified latest/highest launch contract for this family.', 'capability_unsupported');
 }

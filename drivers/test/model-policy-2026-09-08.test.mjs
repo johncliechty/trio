@@ -191,7 +191,20 @@ test('unknown efforts, missing effort metadata, and unavailable agy capability f
   assert.throws(() => highestEffort(['high', 'future-effort']), /unknown reasoning effort/);
   assert.throws(() => selectModel('chatgpt', codex('synthetic-model', [])), /did not advertise/);
   assert.throws(() => normalizeCatalog('claude', '--effort <level> (low, future)\n'), /unknown reasoning effort/);
-  assert.throws(() => normalizeCatalog('gemini', {}), error => error.code === 'capability_unsupported');
+  // 2026-10-07: agy 1.3.x has a verified catalog (`agy models`); a missing one still fails explicitly.
+  assert.throws(() => normalizeCatalog('gemini', {}), error => error.code === 'capability_probe_failed');
+});
+
+test('agy 1.3 catalog: gemini rows only, newest first, highest effort launched as the suffixed id', () => {
+  const raw = 'Fetching available models...\ngemini-3.8-flash-high\tGemini 3.8 Flash (High)\n'
+    + 'gemini-3.8-flash-low\tGemini 3.8 Flash (Low)\ngemini-3.1-pro-high\tGemini 3.1 Pro (High)\n'
+    + 'claude-opus-5-5-high\tClaude Opus 5.5 (High)\n';
+  const catalog = normalizeCatalog('gemini', raw);
+  assert.deepEqual(catalog.models.map(row => row.model), ['gemini-3.8-flash', 'gemini-3.1-pro']);
+  const chosen = selectModel('gemini', catalog);
+  assert.deepEqual([chosen.model, chosen.effort], ['gemini-3.8-flash', 'high']);
+  assert.deepEqual(modelLaunchArgs({ family: 'gemini', model: chosen.model, effort: chosen.effort }),
+    ['--model', 'gemini-3.8-flash-high']);
 });
 
 test('model identifiers cannot inject args, TOML, or terminal control characters', () => {

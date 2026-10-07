@@ -35,6 +35,8 @@ const SPAWN_RE = new RegExp([
   /spawn\(\s*['"](?:claude|gemini)['"]/.source,
   /command:\s*[^,\n]*['"](?:claude|gemini|agy)(?:\.exe)?['"]/.source,
   /cmdName\s*=\s*[^;\n]*['"](?:claude|gemini|agy)(?:\.exe)?['"]/.source,
+  // 2026-10-07: the gemini-cli driver resolves agy's path through agyCommand() (agy 1.3 streamed transport).
+  /command:\s*agyCommand\(/.source,
 ].join('|'));
 // The file produces an SR-5 stamp — directly (attestStamp/model_attested) or via the
 // Wave-7 telemetry builder (makeTelemetryRecord folds the SR-5 stamp in).

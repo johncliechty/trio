@@ -195,3 +195,13 @@ test('final review r2: a test the slim reviewer names as unnecessary may be remo
   assert.equal(r.status, 'GO', r.haltReason);
   assert.match(fixMessages[0], /removing this test file is allowed/);
 });
+
+test('final review r3: the live fix prompt carries the removal and names the one test it may delete', () => {
+  const gate = { artifact_path: 'g.json' };
+  const ctx = { wave: { n: 1 }, iteration: 1, projectDir: '.', foremanDir: '.foreman' };
+  const p = _internals.fixPrompt(ctx, gate, [{ id: 'rabbit-hole:x', file: 'test/extra.test.mjs', message: '[taxonomy:rabbit-hole] a test beyond any acceptance item (removing this test file is allowed); keep the gate green' }]);
+  assert.match(p, /REMOVE, as the reviewer found: test\/extra\.test\.mjs/);
+  assert.match(p, /ONE EXCEPTION: you MAY delete exactly these test files[^.]*test\/extra\.test\.mjs/);
+  const plain = _internals.fixPrompt(ctx, gate, [{ id: 'src/a.js:1+assertion-failed' }]);
+  assert.doesNotMatch(plain, /ONE EXCEPTION/);
+});

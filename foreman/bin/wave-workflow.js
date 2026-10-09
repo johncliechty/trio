@@ -245,13 +245,20 @@ function eleganceInReview() {
 }
 
 function fixPrompt(ctx, gate, findings) {
+  // final review r3 (slim plan S4): a removal the reviewer asked for (id rabbit-hole:...) reaches the fixer in its
+  // own words, and a test file it names as removable is the ONE exception to the frozen-tests rule
+  const removals = (findings || []).filter((f) => String(f.id || '').startsWith('rabbit-hole:'));
+  const removableTests = removals.filter((f) => /removing this test file is allowed/.test(String(f.message || '')))
+    .map((f) => String(f.file || '').replace(/\\/g, '/')).filter(Boolean);
   return [
     `You are the FIX agent for Foreman wave ${ctx.wave.n}, fix iteration ${ctx.iteration}.`,
     `Close these findings without weakening tests: ${JSON.stringify(findings.map((f) => f.id))}.`,
+    ...(removals.length ? [`REMOVE, as the reviewer found: ${removals.map((f) => `${f.file || '?'} — ${f.message || ''}`).join(' | ')}.`] : []),
     `The orchestrator gate is at ${gate.artifact_path}. Make the minimal change that`,
     `turns the gate GREEN; the orchestrator — not you — re-runs the gate to verify.`,
     authoringToolRule(process.env, 'FIX'),
     `TESTS ARE FROZEN. Do not modify test files to force a pass. You may NEVER use pytest.skip, @pytest.mark.skip, or pytest.importorskip on failing tests. Solve the root cause in the product code.`,
+    ...(removableTests.length ? [`ONE EXCEPTION: you MAY delete exactly these test files, which the reviewer found unnecessary: ${removableTests.join(', ')}. Touch no other test.`] : []),
     lookinAppendix({ heartbeatPath: seatHeartbeatPath(ctx) }),
   ].join(' ');
 }

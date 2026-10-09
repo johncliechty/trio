@@ -110,6 +110,22 @@ test('review r1: pytest node ids keep their spaces, so two parametrized failures
     ['tests/t.py::test_case[input A]', 'tests/t.py::test_case[input B]']);
 });
 
+test('review r2: a " - " inside the [params] stays part of the node id', () => {
+  assert.deepEqual(failingTests({ stdout: 'FAILED t.py::case[input - A] - assert 0\nFAILED t.py::case[input - B]\n' }),
+    ['t.py::case[input - A]', 't.py::case[input - B]']);
+});
+
+test('review r2: slim with no reviewer scheduled never reaches GO', async () => {
+  const dir = freshCopy();
+  const { docs, testCmd, wave } = contractOf(dir);
+  const r = await withProfile('slim', () => runWave({
+    projectDir: dir, testCommand: testCmd.command, wave: { ...wave, n: 1 }, totalWaves: 1,
+    planPath: docs.plan, driver: makeScriptedDriver({ onExecute: async () => repairAtExecute(dir) }), reviewerCount: 0, fixIterCap: 2,
+  }));
+  assert.equal(r.status, 'HALT');
+  assert.match(r.haltReason, /\[taxonomy:review-unavailable\]/);
+});
+
 test('review r1: slim never passes a wave whose one reviewer did not complete', async () => {
   const dir = freshCopy();
   const { docs, testCmd, wave } = contractOf(dir);

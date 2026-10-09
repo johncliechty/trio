@@ -109,10 +109,22 @@ export function failingTests(gate) {
     let m;
     if ((m = /^\s*not ok \d+ - (.+?)\s*(#.*)?$/.exec(line))) out.add(m[1]);
     else if ((m = /^\s*✖ (.+?)(?: \(\d+(?:\.\d+)?m?s\))?\s*$/.exec(line)) && !/^failing tests:?$/i.test(m[1])) out.add(m[1]);
-    // a pytest node id keeps its spaces (test_case[input A]) up to the " - reason" separator (review r1)
-    else if ((m = /^(?:FAILED|ERROR) (.+?::.+?|\S+\.py)(?: - .*)?\s*$/.exec(line))) out.add(m[1]);
+    // a pytest node id keeps everything inside its [params] - spaces and " - " too (review r1/r2) - up to the first
+    // " - reason" separator OUTSIDE the brackets
+    else if ((m = /^(?:FAILED|ERROR) (.+)$/.exec(line)) && /::|\.py\b/.test(m[1])) out.add(pytestNodeId(m[1]));
   }
   return [...out].sort();
+}
+
+function pytestNodeId(s) {
+  let depth = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === '[') depth++;
+    else if (c === ']') depth = Math.max(0, depth - 1);
+    else if (depth === 0 && s.startsWith(' - ', i)) return s.slice(0, i).trim();
+  }
+  return s.trim();
 }
 
 export function sameSet(a, b) {
@@ -1759,6 +1771,14 @@ export async function runWave(o) {
         log(`review: ${transportFailed.length} transport-failed reviewer(s) dropped — ${transportFailed.map((rv) => rv.note).join(' · ')}`);
         reviews = reviews.filter((rv) => !(rv && rv.transport_failed));
       }
+    }
+
+    // S4 review r2: slim's GO needs ONE COMPLETED review, however it came to have none (zero scheduled included)
+    if (slim && lastGate && lastGate.green && !skipReview && !reviewEvidence.completed_reviewers.length) {
+      const reason = `[taxonomy:review-unavailable] HALT: no review completed for this slim wave — a slim wave never passes unreviewed`;
+      steps.push(`✗ ${reason}`);
+      return finishHalt({ reason, recommend:
+        `[taxonomy:review-unavailable] run slim with one reviewer of the other family, then re-invoke wave ${wave.n}` });
     }
 
     // Ambiguity gate (§4.7): any reviewer answering "no" is a HALT. UNCHANGED —

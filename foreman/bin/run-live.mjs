@@ -31,6 +31,7 @@ const PROJECT = path.resolve(argv.find((a) => !a.startsWith('--')) || process.cw
 const PROFILE = String(flag('--profile', process.env.FOREMAN_PROFILE || 'standard')).toLowerCase();
 process.env.FOREMAN_PROFILE = PROFILE;   // review r1: the resolved profile, always (an explicit standard beats an inherited slim)
 let REVIEWERS = Number(flag('--reviewers', PROFILE === 'slim' ? '1' : '2'));
+if (PROFILE === 'slim') REVIEWERS = 1;   // review r2: slim is exactly one reviewer - never zero, never a panel
 const CAP = Number(flag('--cap', PROFILE === 'slim' ? '2' : '3'));
 const MAX_WAVES = flag('--max-waves', null);
 const MAX_WALL_MIN = flag('--max-wallclock-min', null);

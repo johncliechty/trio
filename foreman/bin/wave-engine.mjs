@@ -109,7 +109,8 @@ export function failingTests(gate) {
     let m;
     if ((m = /^\s*not ok \d+ - (.+?)\s*(#.*)?$/.exec(line))) out.add(m[1]);
     else if ((m = /^\s*✖ (.+?)(?: \(\d+(?:\.\d+)?m?s\))?\s*$/.exec(line)) && !/^failing tests:?$/i.test(m[1])) out.add(m[1]);
-    else if ((m = /^(?:FAILED|ERROR) (\S+::\S+|\S+\.py)/.exec(line))) out.add(m[1]);
+    // a pytest node id keeps its spaces (test_case[input A]) up to the " - reason" separator (review r1)
+    else if ((m = /^(?:FAILED|ERROR) (.+?::.+?|\S+\.py)(?: - .*)?\s*$/.exec(line))) out.add(m[1]);
   }
   return [...out].sort();
 }
@@ -1541,10 +1542,12 @@ export async function runWave(o) {
       `tests ${lastGate.tap.tests} pass ${lastGate.tap.pass} fail ${lastGate.tap.fail}`);
 
     // ----- S4: the same tests failing after a fix = no progress (a28de8: one test failed all 4 gates) -----
+    // review r1: only CONSECUTIVE gates are compared - a green, vacuous or unnameable gate in between resets the baseline
+    if (lastGate.green || lastGate.vacuous_reason) prevFailing = null;
     if (!lastGate.green && !lastGate.vacuous_reason) {
       const failing = failingTests(lastGate);
-      const stopOnNoProgress = slim ? process.env.FOREMAN_NO_PROGRESS_STOP !== '0' : process.env.FOREMAN_NO_PROGRESS_STOP === '1';
-      if (stopOnNoProgress && iteration > 0 && failing.length && prevFailing && sameSet(failing, prevFailing)) {
+      const stopOnNoProgress = slim || process.env.FOREMAN_NO_PROGRESS_STOP === '1';
+      if (stopOnNoProgress && iteration > 0 && failing.length && prevFailing && prevFailing.length && sameSet(failing, prevFailing)) {
         const reason = `[taxonomy:no-progress] HALT: fix iteration ${iteration} left the very same ${failing.length} test(s) failing ` +
           `(${failing.slice(0, 5).join(', ')}${failing.length > 5 ? ', …' : ''}) — another fix would spend the cap on the same failure`;
         steps.push(`✗ ${reason}`);
@@ -1552,7 +1555,7 @@ export async function runWave(o) {
           `[taxonomy:no-progress] read the failing test(s) and the gate artifact (${lastGate.artifact_path}); the fix seat could not move them. ` +
           `Correct the plan or the test's premise, then re-invoke wave ${wave.n}.` });
       }
-      prevFailing = failing.length ? failing : prevFailing;
+      prevFailing = failing;      // an unnameable failure ([]) is no baseline: the next gate is not compared to it
     }
 
     // ----- §6 vacuous-GREEN HALT (R2-3) -----
@@ -1646,8 +1649,8 @@ export async function runWave(o) {
     // that needed fix iterations, or FOREMAN_FULL_REVIEW=1 (restores always-full).
     // S4: the terminal-wave panel is for multi-wave projects (a one-wave job always got it - W6 found 14 of 15 such
     // reviews had no agreed blocker); the slim profile never fans out.
-    const fullPanel = process.env.FOREMAN_FULL_REVIEW === '1' || (!slim && (
-      (wave?.n != null && totalWaves != null && totalWaves > 1 && wave.n === totalWaves) || iteration > 0));
+    const fullPanel = !slim && (process.env.FOREMAN_FULL_REVIEW === '1' ||
+      (wave?.n != null && totalWaves != null && totalWaves > 1 && wave.n === totalWaves) || iteration > 0);
     const effectiveReviewers = fullPanel ? reviewerCount : Math.min(reviewerCount, 1);
 
     const skipReview = !lastGate.green && process.env.FOREMAN_REVIEW_ON_RED !== '1' && iteration < fixIterCap;
@@ -1727,6 +1730,14 @@ export async function runWave(o) {
     const transportFailed = reviews.filter((rv) => rv && rv.transport_failed);
     if (transportFailed.length) {
       if (transportFailed.length === reviews.length && reviews.length > 0) {
+        if (slim && lastGate && lastGate.green) {
+          // S4 review r1: the slim profile's ONE review is its adversarial and elegance check together - a wave with
+          // no completed review never reaches GO there (standard keeps its degraded-GO policy)
+          const reason = `[taxonomy:review-unavailable] HALT: the slim profile's one reviewer did not complete (${transportFailed.map((rv) => rv.note).filter(Boolean).join(' · ') || 'no answer'}) — a slim wave never passes unreviewed`;
+          steps.push(`✗ ${reason}`);
+          return finishHalt({ reason, recommend:
+            `[taxonomy:review-unavailable] check the reviewer seat (the other family), then re-invoke wave ${wave.n}` });
+        }
         if (lastGate && lastGate.green) {
           steps.push(
             `▸ review degraded: ALL ${reviews.length} reviewer(s) transport-failed; ` +

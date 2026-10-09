@@ -29,7 +29,7 @@ const PROJECT = path.resolve(argv.find((a) => !a.startsWith('--')) || process.cw
 // S4 (2026-10-10, John's Q3): `--profile slim` = one reviewer of the other family with the elegance check folded in,
 // fix cap 2, a stop on no progress. Explicit --reviewers / --cap still win. The engine reads FOREMAN_PROFILE.
 const PROFILE = String(flag('--profile', process.env.FOREMAN_PROFILE || 'standard')).toLowerCase();
-if (PROFILE === 'slim') process.env.FOREMAN_PROFILE = 'slim';
+process.env.FOREMAN_PROFILE = PROFILE;   // review r1: the resolved profile, always (an explicit standard beats an inherited slim)
 let REVIEWERS = Number(flag('--reviewers', PROFILE === 'slim' ? '1' : '2'));
 const CAP = Number(flag('--cap', PROFILE === 'slim' ? '2' : '3'));
 const MAX_WAVES = flag('--max-waves', null);
@@ -71,14 +71,15 @@ const RUN_T0 = Date.now();
 // own reason, its taxonomy and the wall clock of each phase.
 let RUN_RECORDED = false;
 let PROJECT_RECORD_OK = false;         // true once THIS run holds the lock (review r1: never before)
+let PHASE_T0 = Infinity;               // review r2: phases count only from this run's lock - an unowned run has none
 
 function runPhases() {
   try {
     const lines = fs.readFileSync(path.join(PROJECT, '.foreman', 'phase-timings.jsonl'), 'utf8').split('\n');
     const recs = [];
     for (const l of lines) { if (l.trim()) { try { recs.push(JSON.parse(l)); } catch { /* torn line */ } } }
-    return phaseWalls(recs, RUN_T0);
-  } catch { return phaseWalls([], RUN_T0); }
+    return phaseWalls(recs, PHASE_T0);
+  } catch { return phaseWalls([], PHASE_T0); }
 }
 
 function writeJsonAtomic(p, obj) {
@@ -527,12 +528,14 @@ try {
   });
   emit(`lock: acquired ${LOCK_FILE} (pid ${process.pid})`);
   PROJECT_RECORD_OK = true;    // from here the project's run-record.json is this run's to write
+  PHASE_T0 = Date.now();       // and the phase timings written from now on are this run's own
 } catch (e) {
   emit(`!! could not acquire run lock: ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
-  // review r1: contention (a live owner, or a lost race) leaves the owner's record alone; any other failure is a
-  // filesystem fault with its own words and taxonomy, and no other run is known to own the record
+  // review r1/r2: a run that does not hold the lock never writes the project's shared record - an unreadable lock may
+  // still have a live owner. Contention and a filesystem fault are told apart in the words and the taxonomy; both
+  // keep the journal capture and RUN_JSON.
   const contention = /holds the lock|lost a race/i.test(String(e.reason || e.message || ''));
-  PROJECT_RECORD_OK = !contention;
+  PROJECT_RECORD_OK = false;
   stopEarly('lock', 'REFUSED', contention
     ? `[taxonomy:run-locked] another run holds ${LOCK_FILE}: ${e.detail || e.reason || e.message}`
     : `[taxonomy:lock-error] the run lock ${LOCK_FILE} could not be created: ${e.code ? e.code + ' ' : ''}${e.message || e}`);

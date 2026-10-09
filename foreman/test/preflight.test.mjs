@@ -51,6 +51,11 @@ test('review r1: inputs inside the project, relative and UNC inputs are checked 
   assert.deepEqual(r.missingInputs, ['C:\\work\\app\\data.csv']);
 });
 
+test('review r2: a relative quoted input keeps an apostrophe inside it', () => {
+  assert.deepEqual(inputPaths("- `data/O'Brien.csv`\n", 'C:\\work\\app').map((p) => p.toLowerCase()),
+    ["c:\\work\\app\\data\\o'brien.csv"]);
+});
+
 test('only the Inputs section is an input contract', () => {
   const t = '# Plan\nWrite C:\\dev\\out\\new.pdf\n## Inputs\n- "C:\\dev\\inputs\\data.csv"\n- C:\\dev\\inputs\\gone.csv\n## Waves\nC:\\dev\\x.md\n';
   assert.deepEqual(planPathTokens(inputsSection(t)), ['C:\\dev\\inputs\\data.csv', 'C:\\dev\\inputs\\gone.csv']);

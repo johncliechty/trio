@@ -105,6 +105,29 @@ test('standard: a one-wave job is reviewed by one seat; elegance still runs', as
   assert.equal(n.elegance, 1);
 });
 
+test('review r1: pytest node ids keep their spaces, so two parametrized failures stay two', () => {
+  assert.deepEqual(failingTests({ stdout: 'FAILED tests/t.py::test_case[input A] - assert 1 == 2\nFAILED tests/t.py::test_case[input B]\n' }),
+    ['tests/t.py::test_case[input A]', 'tests/t.py::test_case[input B]']);
+});
+
+test('review r1: slim never passes a wave whose one reviewer did not complete', async () => {
+  const dir = freshCopy();
+  const { docs, testCmd, wave } = contractOf(dir);
+  const base = makeScriptedDriver({ onExecute: async () => repairAtExecute(dir) });
+  const driver = { ...base, async review() { return { transport_failed: true, note: 'seat unreachable', findings: [] }; } };
+  const r = await withProfile('slim', () => runWave({
+    projectDir: dir, testCommand: testCmd.command, wave: { ...wave, n: 1 }, totalWaves: 1,
+    planPath: docs.plan, driver, reviewerCount: 1, fixIterCap: 2,
+  }));
+  assert.equal(r.status, 'HALT');
+  assert.match(r.haltReason, /\[taxonomy:review-unavailable\]/);
+});
+
+test('review r1: run-live passes the resolved profile on, whatever was inherited', () => {
+  const src = fs.readFileSync(path.join(import.meta.dirname, '..', 'bin', 'run-live.mjs'), 'utf8');
+  assert.match(src, /process\.env\.FOREMAN_PROFILE = PROFILE;/);
+});
+
 test('the slim reviewer is asked the three elegance questions; the standard one is not', () => {
   const gate = { artifact_path: 'g.json', exit_code: 0, tap: { pass: 1, tests: 1 } };
   const base = { wave: { n: 1 }, reviewerIndex: 0, changed: ['src/a.js'], projectDir: '.', foremanDir: '.foreman' };

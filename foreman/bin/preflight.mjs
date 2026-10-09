@@ -43,8 +43,9 @@ export function inputPaths(section, projReal) {
   for (const line of String(section || '').split(/\r?\n/)) {
     const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
     if (!item) continue;
-    const q = /^["'`]([^"'`]+)["'`]/.exec(item[1].trim());
-    const tok = q ? q[1] : item[1].trim().split(/\s+/)[0];
+    // each quote closes with its OWN delimiter: `data/O'Brien.csv` stays whole (review r1)
+    const q = /^(?:"([^"\r\n]+)"|'([^'\r\n]+)'|`([^`\r\n]+)`)/.exec(item[1].trim());
+    const tok = q ? (q[1] ?? q[2] ?? q[3]) : item[1].trim().split(/\s+/)[0];
     if (!tok || new RegExp('^' + ABS).test(tok) || /^[a-z]+:\/\//i.test(tok)) continue;
     // only an unmistakable path: quoted, or holding a separator ("v1.2" or "e.g." in prose is never an input)
     if (q || /[\\/]/.test(tok)) out.push(path.resolve(projReal, tok));

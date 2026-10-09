@@ -548,29 +548,30 @@ try {
     }
     return null;
   };
-  const candidates = new Set();
-  const unresolved = [];
-  const addCandidate = (m) => {
-    const cleaned = m.replace(/[),.;:\]]+$/, '');
-    try {
-      const st = fs.statSync(cleaned);
-      const root = gitRootOf(st.isDirectory() ? cleaned : path.dirname(cleaned));
-      if (root) candidates.add(root);
-    } catch { unresolved.push(cleaned); }
+  // S2 (2026-10-10): the plan's paths (quoted spans may hold spaces - the 2026-08-25 fail-open fix is kept) are
+  // scoped by bin/preflight.mjs: a repo that CONTAINS the project, the project's own repository, the engine's
+  // home and the user's own containers are never "dirty siblings"; a missing path listed under Inputs stops here.
+  const { siblingPlan } = await import(new URL('./preflight.mjs', import.meta.url));
+  const commonDirOf = (repo) => {
+    const r = spawnSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd: repo, encoding: 'utf8', timeout: 20000 });
+    if (r.status !== 0) return null;
+    try { return fs.realpathSync(r.stdout.trim()); } catch { return r.stdout.trim() || null; }
   };
-  // Pass 1 (2026-08-25 review fix — the guard was FAIL-OPEN on spacey paths): quoted or
-  // backticked spans may contain spaces ("C:\dev\Skill Foundry\..."); the unquoted pass
-  // truncates at the first space, which both MISSES a spacey sibling entirely and can
-  // FALSE-match an existing shorter prefix. Quoted spans are scanned first, spaces allowed.
-  for (const m of planText.match(/["'`][A-Za-z]:[\\/][^"'`\r\n]+["'`]/g) ?? []) addCandidate(m.slice(1, -1));
-  // Pass 2: unquoted prose paths (no spaces — the honest limit of unquoted matching).
-  for (const m of planText.match(/[A-Za-z]:[\\/](?:[^\s"'`|<>:*?\r\n]+[\\/])*[^\s"'`|<>:*?\r\n]+/g) ?? []) addCandidate(m);
+  const plan = siblingPlan({
+    planText, projReal, engineHome, home: process.env.USERPROFILE || process.env.HOME || null,
+    exists: (p) => { try { return fs.statSync(p).isDirectory() ? 'dir' : 'file'; } catch { return null; } },
+    gitRootOf, commonDirOf,
+  });
+  const { unresolved, checked } = plan;
   if (unresolved.length) {
     emit(`sibling-repos: ${unresolved.length} plan path token(s) did not resolve on disk (first: ${unresolved[0].slice(0, 80)}) — note: unquoted paths cannot carry spaces; QUOTE spacey repo paths in the plan to have them guarded`);
   }
-  candidates.delete(projReal);
-  if (engineHome) candidates.delete(engineHome);
-  const checked = [...candidates];
+  for (const x of plan.excluded) emit(`sibling-repos: not checked ${x.repo} — ${x.why}`);
+  if (plan.missingInputs.length) {
+    const msg = `[taxonomy:input-unreachable] HALT before start: ${plan.missingInputs.length} path(s) the plan lists under Inputs do not exist — ${plan.missingInputs.join(' · ')}. Create or correct them; an input the run cannot read would only stop a wave later.`;
+    emit(msg);
+    stopEarly('pre-flight', 'HALT', msg);
+  }
   if (checked.length) emit(`sibling-repos: checked ${checked.length} plan-named repo(s): ${checked.join(' · ')}`);
   const dirty = [];
   for (const repo of checked) {

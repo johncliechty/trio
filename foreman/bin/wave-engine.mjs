@@ -82,7 +82,22 @@ export async function withAgentHeartbeat(log, label, fn, intervalMs = 60_000, o 
     if (waitPath) {
       try { fs.rmSync(waitPath, { force: true }); } catch { /* */ }
     }
+    if (o.timingsDir) recordPhase(o.timingsDir, label, o.wave, Date.now() - t0);
   }
+}
+
+/**
+ * S1 (2026-10-10, slim plan): one wall-clock record per PHASE (execute, review, fix, elegance, gate, land) in
+ * <foremanDir>/phase-timings.jsonl as {kind:'phase', phase, wave, duration_ms, ts}. The per-call records beside it
+ * stay as they were; phase-report sums the two kinds separately, so nothing is counted twice. Never throws.
+ */
+export function recordPhase(foremanDir, label, wave, ms) {
+  const phase = String(label || '').replace(/[-:#.]\d+$/, '').toLowerCase() || 'unknown';
+  try {
+    fs.mkdirSync(foremanDir, { recursive: true });
+    fs.appendFileSync(path.join(foremanDir, 'phase-timings.jsonl'),
+      JSON.stringify({ kind: 'phase', phase, wave: wave ?? null, duration_ms: Math.max(0, Math.round(ms)), ts: Date.now() }) + '\n');
+  } catch { /* timing is never worth a failed wave */ }
 }
 
 /**
@@ -1275,7 +1290,7 @@ export async function runWave(o) {
   const log = o.log || (() => {});
   const waitPath = path.join(foremanDir, 'waiting-on.json');
   const steps = []; // dashboard step lines
-  const agentWait = (label, fn) => withAgentHeartbeat(log, label, fn, 60_000, { waitPath });
+  const agentWait = (label, fn) => withAgentHeartbeat(log, label, fn, 60_000, { waitPath, timingsDir: foremanDir, wave: wave.n });
 
   // Plan text for execute contract injection (0076 package 1). Best-effort read.
   let planText = '';
@@ -2044,6 +2059,7 @@ export async function runWave(o) {
     // idempotent so a re-run makes no duplicate). git===null => unchanged (no
     // commit, last_commit stays null).
     let lastCommit;          // undefined => leave newCheckpoint's null (no git)
+    const landT0 = Date.now();
     if (git) {
       // Fix B (2026-06-04): RE-MEASURE the changed set AT COMMIT TIME rather than
       // reusing the snapshot taken before the reviewers ran. A reviewer mutating
@@ -2083,6 +2099,7 @@ export async function runWave(o) {
         : `wave ${wave.n} converged GREEN; auto-advance to wave ${wave.n + 1}`,
     });
     writeCheckpointAtomic(checkpointPath, cp);
+    recordPhase(foremanDir, 'land', wave.n, Date.now() - landT0);
     const dash = dashboard();
     log(dash);
     return { status: 'GO', verdict: 'GO', iterations: iteration, gate: lastGate,

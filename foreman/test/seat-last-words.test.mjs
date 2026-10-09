@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { seatLastWords, isUsageLimitText } from '../bin/run-live.mjs';
+// from seat-words.mjs, never run-live.mjs: importing run-live runs a live run against the cwd (S1, 2026-10-10)
+import { seatLastWords, isUsageLimitText } from '../bin/seat-words.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 

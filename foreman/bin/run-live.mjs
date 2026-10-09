@@ -78,18 +78,9 @@ const CLAUDE_ARGS = ['-p', ' ', '--output-format', 'stream-json', '--verbose',
 import { importFoundryTriage } from '../../drivers/foundry-triage-resolve.mjs';
 const { inheritReviewerCount } = await importFoundryTriage('foreman-wire.mjs');
 
-/** A dead seat's last words: the result text of an error envelope, one line, clipped. */
-export function seatLastWords(text, max = 240) {
-  const t = String(text || '').replace(/\s+/g, ' ').trim();
-  if (!t) return '';
-  return t.length <= max ? t : t.slice(0, max - 1).replace(/\s+\S*$/, '') + '…';
-}
-
-/** True when a CLI/model message says a session / usage / rate limit was hit. */
-export const USAGE_LIMIT_RE = /usage limit|rate.?limit|limit reached|hit your limit|reached your limit|out of (?:extra )?usage|quota|resets? (?:at|in) |too many requests|\b429\b|resource exhausted|overloaded/i;
-export function isUsageLimitText(text) {
-  return USAGE_LIMIT_RE.test(String(text || ''));
-}
+// The pure seat helpers live in seat-words.mjs (S1, 2026-10-10): importing THIS file runs a live run.
+import { seatLastWords, USAGE_LIMIT_RE, isUsageLimitText } from './seat-words.mjs';
+export { seatLastWords, USAGE_LIMIT_RE, isUsageLimitText };
 
 // Declarative per-role model routing from the project's foreman.config.json "models"
 // block, e.g. {"models":{"execute":"claude:claude-fable-5","fix":"claude:claude-fable-5",
@@ -168,6 +159,98 @@ function emit(line) {
 }
 
 const calls = [];
+const RUN_T0 = Date.now();
+
+// ---- S1 (2026-10-10, slim plan): ONE honest run record on EVERY exit ----
+// Before, only a run that reached the end printed RUN_JSON and wrote its capture; the pre-flight HALTs (dirty
+// sibling, lock, clear-halt, attest) and crashes exited 3/1 with no record at all ("did not finish, exit 3" in the
+// historical table, two of them untraceable). Now each exit writes <project>/.foreman/run-record.json (except a
+// refused lock - that file belongs to the run holding it), the journal capture, and RUN_JSON, all with the stop's
+// own reason, its taxonomy and the wall clock of each phase.
+let RUN_RECORDED = false;
+let PROJECT_RECORD_OK = true;          // false while another run holds the lock
+const { phaseWalls } = await import(new URL('./phase-report.mjs', import.meta.url));
+
+function runPhases() {
+  try {
+    const lines = fs.readFileSync(path.join(PROJECT, '.foreman', 'phase-timings.jsonl'), 'utf8').split('\n');
+    const recs = [];
+    for (const l of lines) { if (l.trim()) { try { recs.push(JSON.parse(l)); } catch { /* torn line */ } } }
+    return phaseWalls(recs, RUN_T0);
+  } catch { return phaseWalls([], RUN_T0); }
+}
+
+function writeJsonAtomic(p, obj) {
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const tmp = `${p}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n', 'utf8');
+  fs.renameSync(tmp, p);
+}
+
+/** Write the run record, the journal capture and RUN_JSON. Synchronous (safe in an 'exit' handler); never throws. */
+function finishRun({ stage, status, haltReason = null, recommend = null, exitCode = 0, result = null, threw = null }) {
+  if (RUN_RECORDED) return;
+  RUN_RECORDED = true;
+  try {
+    const tot = calls.reduce((a, c) => ({
+      out: a.out + (c.output_tokens || 0), cost: a.cost + (c.cost_usd || 0),
+      ms: a.ms + (c.duration_ms || 0), denials: a.denials + (c.permission_denials || 0),
+    }), { out: 0, cost: 0, ms: 0, denials: 0 });
+    const reason = haltReason ?? result?.haltReason ?? (threw ? `${threw.name}: ${threw.message}${threw.reason ? ' — ' + threw.reason : ''}` : null);
+    const tax = /\[taxonomy:([a-z0-9-]+)\]/i.exec(String(reason || ''));
+    const waves = (result?.waveResults || []).map((w) => ({ wave: w.wave, title: w.title, status: w.status, green: w.green, tap: w.tap, iterations: w.iterations, halt: w.haltReason || null }));
+    const record = {
+      schema: 'foreman-run-record/v1', skill: 'foreman', tier: process.env.TRIO_TIER || 'standard',
+      started: new Date(RUN_T0).toISOString(), ended: new Date().toISOString(),
+      duration_s: Math.round((Date.now() - RUN_T0) / 1000),
+      input: PROJECT, stage, status, exit_code: exitCode,
+      halt_reason: reason, taxonomy: tax ? tax[1].toLowerCase() : null,
+      recommend: recommend ?? result?.recommend ?? null,
+      params: { reviewers: REVIEWERS, fixIterCap: CAP, maxWaves: MAX_WAVES, git: USE_GIT, resume: RESUME, clearHalt: CLEAR_HALT },
+      stoppedAt: result?.stoppedAt ?? null, totalWaves: result?.totalWaves ?? null, waves,
+      agent_calls: calls.length, totals: tot, phases: runPhases(), threw,
+    };
+    if (PROJECT_RECORD_OK) {
+      try { writeJsonAtomic(path.join(PROJECT, '.foreman', 'run-record.json'), record); } catch { /* best-effort */ }
+    }
+    // Run capture for training (Skill Foundry AGENTS.md "Run capture") — best-effort, the old fields kept
+    try {
+      const skillDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+      const runsDir = process.env.FOREMAN_RUNS_DIR || path.join(skillDir, 'journal', 'runs');   // tests redirect it
+      fs.mkdirSync(runsDir, { recursive: true });
+      fs.writeFileSync(path.join(runsDir, `${record.started.replace(/[:.]/g, '-')}-${Math.abs(Date.now() % 100000)}.json`),
+        JSON.stringify({
+          ...record, output: STATUS_FILE,
+          result: `${status}: ${waves.map((w) => `${w.wave}:${w.status}`).join(',') || 'none'}` + (reason ? ` — ${String(reason).slice(0, 200)}` : ''),
+          cross_model: ['REVIEW', 'SHARK', 'REVIEWER', 'DEBATE'].some((r) => String(process.env[`TRIO_DRIVER_${r}`] || '').startsWith('gemini')),
+          models: null, journal_ref: null,
+        }, null, 2) + '\n');
+    } catch { /* capture is best-effort by design */ }
+    if (reason) emit(`HALT/STOP reason: ${reason}`);
+    if (record.recommend) emit(`recommended next: ${record.recommend}`);
+    const phaseLine = Object.entries(record.phases.ms).filter(([, v]) => v).map(([k, v]) => `${k} ${Math.round(v / 1000)}s`).join(' · ');
+    if (phaseLine) emit(`phases: ${phaseLine}`);
+    console.log('RUN_JSON_START');
+    console.log(JSON.stringify({
+      threw, status: result?.status ?? status, stoppedAt: record.stoppedAt, totalWaves: record.totalWaves,
+      haltReason: reason, recommend: record.recommend, taxonomy: record.taxonomy, stage, exit_code: exitCode,
+      waveResults: waves, agent_calls: calls.length, totals: tot, phases: record.phases,
+    }, null, 2));
+    console.log('RUN_JSON_END');
+  } catch { /* the record is never worth a crash */ }
+}
+
+/** An early stop: say it, record it, exit with its code. */
+function stopEarly(stage, status, reason, exitCode = 3) {
+  finishRun({ stage, status, haltReason: reason, exitCode });
+  process.exit(exitCode);
+}
+
+// The backstop: an exit nobody recorded (a crash, a signal, an unforeseen process.exit) still leaves a record.
+process.on('exit', (code) => {
+  if (!RUN_RECORDED) finishRun({ stage: 'exit', status: 'EXITED', exitCode: code,
+    haltReason: `[taxonomy:dead-process] the run exited (code ${code}) before it recorded a result — see .foreman/last-crash.json and ${STATUS_FILE}` });
+});
 
 // Wave 7 kill-on-exit: every spawned sub-agent is tracked here; an orchestrator
 // teardown (clean exit OR SIGINT/SIGTERM) SIGKILLs any still-live child, so no
@@ -392,6 +475,7 @@ try { fs.mkdirSync(path.dirname(LOCK_FILE), { recursive: true }); } catch { /* d
 
 // --doctor: prove gate collects >0 tests then exit (0082 P2.13)
 if (argv.includes('--doctor')) {
+  RUN_RECORDED = true;   // a doctor check is not a run: no run record
   try {
     const { resolveContract } = await import(new URL('./project-engine.mjs', import.meta.url));
     const { doctorTestCommand } = await import(new URL('./foreman-lib.mjs', import.meta.url));
@@ -432,7 +516,8 @@ try {
   emit(`lock: acquired ${LOCK_FILE} (pid ${process.pid})`);
 } catch (e) {
   emit(`!! could not acquire run lock: ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
-  process.exit(3);
+  PROJECT_RECORD_OK = false;   // the project's run-record.json belongs to the run that holds the lock
+  stopEarly('lock', 'REFUSED', `[taxonomy:run-locked] another run holds ${LOCK_FILE}: ${e.reason || e.message}`);
 }
 process.on('exit', () => { try { lock.release(); } catch { /* best-effort */ } });
 
@@ -501,8 +586,9 @@ try {
     if (process.env.FOREMAN_ALLOW_DIRTY_SIBLINGS === '1') {
       emit(`!! sibling-repo DIRTY at start (FOREMAN_ALLOW_DIRTY_SIBLINGS=1 — proceeding with eyes open): ${dirty.join('; ')}`);
     } else {
-      emit(`[taxonomy:dirty-sibling] HALT before start: plan-named repo(s) not clean — ${dirty.join('; ')}. Commit or stash them, or set FOREMAN_ALLOW_DIRTY_SIBLINGS=1 to proceed with the state recorded. Checked: ${checked.join(' · ')}`);
-      process.exit(3);
+      const msg = `[taxonomy:dirty-sibling] HALT before start: plan-named repo(s) not clean — ${dirty.join('; ')}. Commit or stash them, or set FOREMAN_ALLOW_DIRTY_SIBLINGS=1 to proceed with the state recorded. Checked: ${checked.join(' · ')}`;
+      emit(msg);
+      stopEarly('pre-flight', 'HALT', msg);
     }
   }
 } catch (e) {
@@ -519,7 +605,7 @@ const budgetConfig = (MAX_WAVES != null || MAX_WALL_MIN != null) ? {
 // ~10 min (armed AT LAUNCH), so a long run can never silently go dark because a
 // supervising session forgot. Shell-free: reads only the checkpoint + in-process
 // telemetry. The supervising session relays these to chat per the global rule.
-const RUN_T0 = Date.now();
+// (RUN_T0 is set with `calls`, above: the run record measures from the very start.)
 function emitStatusTable(tag = '') {
   let cp = null;
   try { cp = JSON.parse(fs.readFileSync(path.join(PROJECT, 'foreman-checkpoint.json'), 'utf8')); } catch { /* pre-checkpoint */ }
@@ -579,13 +665,14 @@ if (argv.includes('--attest-wave-proven')) {
     const r = await attestWaveProven(cpPath, { projectDir: PROJECT, testCommand, log: (s) => emit(s) });
     if (!r.attested) {
       emit(`!! attest refused: ${r.reason}`);
-      process.exit(3);
+      stopEarly('attest', 'REFUSED', `attest refused: ${r.reason}`);
     }
     emit(`attested: wave ${r.wave} GO (${r.attestPath})${r.terminal ? ' — project DONE' : ' — run --resume to continue'}`);
+    finishRun({ stage: 'attest', status: 'ATTESTED', exitCode: 0 });
     process.exit(0);
   } catch (e) {
     emit(`!! attest failed: ${e.reason || e.message}`);
-    process.exit(3);
+    stopEarly('attest', 'REFUSED', `attest failed: ${e.reason || e.message}`);
   }
 }
 
@@ -598,11 +685,11 @@ if (RESUME && CLEAR_HALT) {
       const r = clearHaltedCheckpoint(cpPath, { log: (s) => emit(s), force: CLEAR_HALT_FORCE });
       if (r && r.refused) {
         emit(`!! --clear-halt refused: ${r.reason || 'policy'} — ${r.clearedHalt ? 'see checkpoint pending_action' : ''}`);
-        process.exit(3);
+        stopEarly('clear-halt', 'REFUSED', `--clear-halt refused: ${r.reason || 'policy'}`);
       }
     } catch (e) {
       emit(`!! --clear-halt failed: ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
-      process.exit(3);
+      stopEarly('clear-halt', 'REFUSED', `--clear-halt failed: ${e.reason || e.message}`);
     }
   }
 }
@@ -640,39 +727,7 @@ emit(`=== DONE === status=${result?.status ?? (threw ? 'THREW' : 'n/a')} · ` +
   `stoppedAt=${result?.stoppedAt ?? '-'} · agent_calls=${calls.length} · denials=${tot.denials} · ` +
   `est_cost=$${tot.cost.toFixed(4)} (subscription equiv) · out_tokens=${tot.out}`);
 
-// ---- Run capture for training (Skill Foundry AGENTS.md "Run capture") — best-effort ----
-try {
-  const skillDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const runsDir = path.join(skillDir, 'journal', 'runs');
-  fs.mkdirSync(runsDir, { recursive: true });
-  const startedIso = new Date(RUN_T0).toISOString();
-  fs.writeFileSync(path.join(runsDir, `${startedIso.replace(/[:.]/g, '-')}-${Math.abs(Date.now() % 100000)}.json`),
-    JSON.stringify({
-      skill: 'foreman',
-      tier: process.env.TRIO_TIER || 'standard',
-      started: startedIso, ended: new Date().toISOString(),
-      input: PROJECT,
-      params: { reviewers: REVIEWERS, fixIterCap: CAP, maxWaves: MAX_WAVES, git: USE_GIT, resume: RESUME, clearHalt: CLEAR_HALT },
-      output: STATUS_FILE,
-      result: `${result?.status ?? (threw ? 'THREW' : 'n/a')}: ` +
-        `${(result?.waveResults || []).map((w) => `${w.wave}:${w.status}`).join(',') || 'none'}` +
-        (result?.haltReason ? ` — ${String(result.haltReason).slice(0, 200)}` : ''),
-      cross_model: ['REVIEW', 'SHARK', 'REVIEWER', 'DEBATE'].some((r) => String(process.env[`TRIO_DRIVER_${r}`] || '').startsWith('gemini')),
-      models: null,
-      duration_s: Math.round((Date.now() - RUN_T0) / 1000),
-      journal_ref: null,
-    }, null, 2) + '\n');
-} catch { /* capture is best-effort by design */ }
-if (result?.haltReason) emit(`HALT/STOP reason: ${result.haltReason}`);
-if (result?.recommend) emit(`recommended next: ${result.recommend}`);
-
-console.log('RUN_JSON_START');
-console.log(JSON.stringify({
-  threw, status: result?.status ?? null, stoppedAt: result?.stoppedAt ?? null,
-  totalWaves: result?.totalWaves ?? null, haltReason: result?.haltReason ?? null,
-  recommend: result?.recommend ?? null,
-  waveResults: (result?.waveResults || []).map((w) => ({ wave: w.wave, title: w.title, status: w.status, green: w.green, tap: w.tap, iterations: w.iterations, halt: w.haltReason || null })),
-  agent_calls: calls.length, totals: tot,
-}, null, 2));
-console.log('RUN_JSON_END');
+// The record, the journal capture and RUN_JSON (S1: the same writer every early stop uses). The exit code is
+// unchanged (0 for a run that returned, even halted; callers read RUN_JSON's status).
+finishRun({ stage: 'run', status: result?.status ?? (threw ? 'THREW' : 'n/a'), result, threw, exitCode: 0 });
 

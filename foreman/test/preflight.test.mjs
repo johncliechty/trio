@@ -1,4 +1,4 @@
-// S2 of the slim plan (2026-10-10): the dirty-sibling check guards the repos a plan really names, and a missing
+﻿// S2 of the slim plan (2026-10-10): the dirty-sibling check guards the repos a plan really names, and a missing
 // listed input stops the run before it starts. Pure: the filesystem and git are injected.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { planPathTokens, inputsSection, siblingPlan } from '../bin/preflight.mjs';
+import { planPathTokens, inputsSection, inputPaths, siblingPlan } from '../bin/preflight.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -34,6 +34,21 @@ const world = {
 test('quoted paths with spaces and bare paths are both found, once each', () => {
   const t = 'Read "C:\\dev\\Skill Foundry\\a b.md" and C:\\dev\\other\\y.py, then C:\\dev\\other\\y.py again.';
   assert.deepEqual(planPathTokens(t), ['C:\\dev\\Skill Foundry\\a b.md', 'C:\\dev\\other\\y.py']);
+});
+
+test('review r1: quoted contents are kept exactly; a bare path is never swallowed by a longer quoted one', () => {
+  const t = 'In "C:\\data\\results (final)" and `C:\\data\\O\'Brien.csv`; also "C:/repos/barcelona/input.md" and C:/repos/bar.';
+  assert.deepEqual(planPathTokens(t), ['C:\\data\\results (final)', "C:\\data\\O'Brien.csv", 'C:/repos/barcelona/input.md', 'C:/repos/bar']);
+  assert.deepEqual(planPathTokens('see \\\\server\\share\\in.csv now'), ['\\\\server\\share\\in.csv']);
+});
+
+test('review r1: inputs inside the project, relative and UNC inputs are checked too; prose is not an input', () => {
+  const proj = 'C:\\work\\app';
+  const section = '- "C:\\work\\app\\data.csv"\n- `data/rel.csv`\n- \\\\nas\\share\\x.csv\n- see v1.2 notes\n- e.g. anything\n';
+  assert.deepEqual(inputPaths(section, proj).map((p) => p.toLowerCase()).sort(),
+    ['c:\\work\\app\\data.csv', 'c:\\work\\app\\data\\rel.csv', '\\\\nas\\share\\x.csv'].sort());
+  const r = siblingPlan({ planText: '## Inputs\n- "C:\\work\\app\\data.csv"\n', projReal: proj, exists: () => null, gitRootOf: () => null });
+  assert.deepEqual(r.missingInputs, ['C:\\work\\app\\data.csv']);
 });
 
 test('only the Inputs section is an input contract', () => {

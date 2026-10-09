@@ -96,15 +96,16 @@ export function aggregate(records) {
 
 function blank() { return { ms: 0, tokens: 0, calls: 0 }; }
 
-/** Every phase's own wall clock incl. elegance and land (S1, 2026-10-10): the engine's {kind:'phase'} records plus
- * the gate's {kind:'gate'} records, optionally only those at or after `sinceTs` (one run). Pure. */
+/** Every phase's own wall clock incl. elegance and land (S1, 2026-10-10): the engine's {kind:'phase'} records (the
+ * gate's own {kind:'gate'} record times the same run the 'gate' phase record does, so it is not added again),
+ * optionally only those at or after `sinceTs` (one run). Pure. */
 export const WALL_PHASES = ['execute', 'gate', 'review', 'fix', 'elegance', 'land'];
 export function phaseWalls(records, sinceTs = 0) {
   const out = Object.fromEntries(WALL_PHASES.map((p) => [p, 0]));
   for (const r of records || []) {
-    if (!r || (r.kind !== 'phase' && r.kind !== 'gate')) continue;
+    if (!r || r.kind !== 'phase') continue;
     if (sinceTs && Number(r.ts) < sinceTs) continue;
-    const p = r.kind === 'gate' ? 'gate' : String(r.phase || '');
+    const p = String(r.phase || '');
     out[p] = (out[p] || 0) + (Number(r.duration_ms) || 0);
   }
   const total = Object.values(out).reduce((a, b) => a + b, 0);

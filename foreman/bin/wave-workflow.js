@@ -228,8 +228,20 @@ function reviewPrompt(ctx, gate) {
     `API not behaving as assumed) — distinct from mere ambiguity — you MAY attach a`,
     `plan_amendment {proposed_diff, rationale}; the orchestrator will HALT for human`,
     `approval and will NEVER apply it autonomously.`,
+    ...(ctx.eleganceInReview ? eleganceInReview() : []),
     lookinAppendix({ heartbeatPath: seatHeartbeatPath(ctx) }),
   ].join(' ');
+}
+
+/** S4 (2026-10-10, John's Q3: "a very simple elegance check"): the slim profile's one reviewer also answers three
+ * questions, so no separate elegance phase runs. A cut is a MAJOR finding like any other (rule "elegance"). */
+function eleganceInReview() {
+  return [
+    `ELEGANCE (three questions, answer within your findings): (1) Is anything in this diff not needed by the wave's`,
+    `stated deliverable? (2) Is anything built that an existing function, file or library already does? (3) Is a`,
+    `test asserting more than the plan's acceptance needs? Report each real case as a MAJOR finding with`,
+    `rule: "elegance", naming what to remove and the plan line it fails; report nothing for taste.`,
+  ];
 }
 
 function fixPrompt(ctx, gate, findings) {

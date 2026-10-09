@@ -14,25 +14,40 @@
 
 import path from 'node:path';
 
-const QUOTED = /["'`]([A-Za-z]:[\\/][^"'`\r\n]+)["'`]/g;
-const BARE = /[A-Za-z]:[\\/](?:[^\s"'`|<>:*?\r\n]+[\\/])*[^\s"'`|<>:*?\r\n]+/g;
+// An absolute path: a drive (C:\ or C:/) or a UNC share (\\server\share). Quoted spans are matched by their OWN
+// delimiter, so "C:\data\O'Brien.csv" and `C:\data\results (final)` keep every character (review r1).
+const ABS = String.raw`(?:[A-Za-z]:[\\/]|\\\\[^\\/\s"'` + '`' + String.raw`]+[\\/])`;
+const QUOTED = new RegExp(String.raw`"(${ABS}[^"\r\n]*)"|'(${ABS}[^'\r\n]*)'|` + '`' + `(${ABS}[^` + '`' + String.raw`\r\n]*)` + '`', 'g');
+const BARE = new RegExp(String.raw`${ABS}(?:[^\s"'` + '`' + String.raw`|<>*?\r\n]+)`, 'g');
 
-/** Absolute Windows paths named in a text: quoted spans first (they may hold spaces), then bare tokens. */
+/** Absolute paths named in a text: quoted spans exactly as written (they may hold spaces), then bare tokens found
+ * OUTSIDE the quoted spans, with trailing prose punctuation trimmed. */
 export function planPathTokens(text) {
   const out = [];
   const seen = new Set();
-  const add = (m) => {
-    const cleaned = m.replace(/[),.;:\]]+$/, '');
-    const k = cleaned.toLowerCase();
-    if (!seen.has(k)) { seen.add(k); out.push(cleaned); }
+  const add = (p) => {
+    const k = p.toLowerCase();
+    if (p && !seen.has(k)) { seen.add(k); out.push(p); }
   };
-  for (const m of String(text || '').matchAll(QUOTED)) add(m[1]);
-  const quoted = out.map((q) => q.toLowerCase());
-  for (const m of String(text || '').match(BARE) ?? []) {
-    // a bare token that is the head of a quoted path cut at its first space ("C:\dev\Skill") is not a path
-    const k = m.replace(/[),.;:\]]+$/, '').toLowerCase();
-    if (quoted.some((q) => q !== k && q.startsWith(k))) continue;
-    add(m);
+  const src = String(text || '');
+  for (const m of src.matchAll(QUOTED)) add(m[1] ?? m[2] ?? m[3]);
+  const rest = src.replace(QUOTED, (m) => ' '.repeat(m.length));     // a quoted span is never re-read as bare
+  for (const m of rest.match(BARE) ?? []) add(m.replace(/[),.;:\]]+$/, ''));
+  return out;
+}
+
+/** The paths an Inputs section lists: absolute ones as written, and a list item's relative path (`data/x.csv`,
+ * "./in/y.json") resolved against the project. */
+export function inputPaths(section, projReal) {
+  const out = planPathTokens(section);
+  for (const line of String(section || '').split(/\r?\n/)) {
+    const item = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/.exec(line);
+    if (!item) continue;
+    const q = /^["'`]([^"'`]+)["'`]/.exec(item[1].trim());
+    const tok = q ? q[1] : item[1].trim().split(/\s+/)[0];
+    if (!tok || new RegExp('^' + ABS).test(tok) || /^[a-z]+:\/\//i.test(tok)) continue;
+    // only an unmistakable path: quoted, or holding a separator ("v1.2" or "e.g." in prose is never an input)
+    if (q || /[\\/]/.test(tok)) out.push(path.resolve(projReal, tok));
   }
   return out;
 }
@@ -95,7 +110,7 @@ export function siblingPlan({ planText, projReal, engineHome = null, home = null
     if (why) excluded.push({ repo: root, why });
     else checked.push(root);
   }
-  const inputs = planPathTokens(inputsSection(planText));
-  const missingInputs = inputs.filter((p) => !exists(p) && !isWithin(p, projReal));
+  // review r1: a missing input INSIDE the project is missing too - no exemption
+  const missingInputs = inputPaths(inputsSection(planText), projReal).filter((p) => !exists(p));
   return { checked, excluded, unresolved, missingInputs };
 }

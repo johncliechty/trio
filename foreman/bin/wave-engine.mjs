@@ -71,6 +71,8 @@ export async function withAgentHeartbeat(log, label, fn, intervalMs = 60_000, o 
     }
   };
   stampWait(0);
+  const openId = o.timingsDir ? Symbol(label) : null;
+  if (openId) OPEN_PHASES.set(openId, { dir: o.timingsDir, label, wave: o.wave, t0 });
   const tick = setInterval(() => {
     stampWait(Math.max(0, Math.round((Date.now() - t0) / 60000)));
   }, intervalMs);
@@ -82,8 +84,38 @@ export async function withAgentHeartbeat(log, label, fn, intervalMs = 60_000, o 
     if (waitPath) {
       try { fs.rmSync(waitPath, { force: true }); } catch { /* */ }
     }
-    if (o.timingsDir) recordPhase(o.timingsDir, label, o.wave, Date.now() - t0);
+    if (openId && OPEN_PHASES.delete(openId)) recordPhase(o.timingsDir, label, o.wave, Date.now() - t0);
   }
+}
+
+// S1 review r1: phases still running when the process exits (a signal, a crash) - an exit runs no `finally` of a
+// pending await - are timed up to now by flushOpenPhases(), which the run record calls synchronously, once.
+const OPEN_PHASES = new Map();
+export function flushOpenPhases() {
+  for (const [id, p] of OPEN_PHASES) {
+    OPEN_PHASES.delete(id);
+    recordPhase(p.dir, p.label, p.wave, Date.now() - p.t0);
+  }
+}
+
+/**
+ * S4 (2026-10-10): the failing tests a gate artifact names - TAP `not ok N - name`, node's spec `✖ name`, pytest
+ * `FAILED path::name` / `ERROR path::name`. Sorted, unique; [] when none can be named (then no no-progress stop).
+ */
+export function failingTests(gate) {
+  const text = `${gate?.stdout || ''}\n${gate?.stderr || ''}`;
+  const out = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    let m;
+    if ((m = /^\s*not ok \d+ - (.+?)\s*(#.*)?$/.exec(line))) out.add(m[1]);
+    else if ((m = /^\s*✖ (.+?)(?: \(\d+(?:\.\d+)?m?s\))?\s*$/.exec(line)) && !/^failing tests:?$/i.test(m[1])) out.add(m[1]);
+    else if ((m = /^(?:FAILED|ERROR) (\S+::\S+|\S+\.py)/.exec(line))) out.add(m[1]);
+  }
+  return [...out].sort();
+}
+
+export function sameSet(a, b) {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 /**
@@ -1291,11 +1323,18 @@ export async function runWave(o) {
   const waitPath = path.join(foremanDir, 'waiting-on.json');
   const steps = []; // dashboard step lines
   const agentWait = (label, fn) => withAgentHeartbeat(log, label, fn, 60_000, { waitPath, timingsDir: foremanDir, wave: wave.n });
+  // S4 (2026-10-10, John's Q3): the SLIM profile - one judging reviewer of the other family with a simple elegance
+  // check folded into its review (no separate elegance phase), the fix cap set by run-live (2), and a fix that leaves
+  // the very same tests failing stops the wave ([taxonomy:no-progress]) instead of spending the cap (standard: opt in
+  // with FOREMAN_NO_PROGRESS_STOP=1). Standard keeps one new rule: a one-wave job is not given the terminal-wave panel.
+  const profile = String(o.profile || process.env.FOREMAN_PROFILE || 'standard').toLowerCase();
+  const slim = profile === 'slim';
+  let prevFailing = null;
 
   // Plan text for execute contract injection (0076 package 1). Best-effort read.
   let planText = '';
   try { planText = fs.readFileSync(planPath, 'utf8'); } catch { /* missing plan is a higher-level HALT */ }
-  const ctx = { projectDir, wave, foremanDir, testCommand, log, planPath, planText };
+  const ctx = { projectDir, wave, foremanDir, testCommand, log, planPath, planText, eleganceInReview: slim };
 
   // §5 anti-test-weakening: snapshot inventory + file hashes BEFORE any change.
   // P2 2026-07-25 (0035 monorepo half): when the plan declares a wave-scoped gate,
@@ -1501,6 +1540,21 @@ export async function runWave(o) {
     log(`gate (iter ${iteration}): exit ${lastGate.exit_code} · ` +
       `tests ${lastGate.tap.tests} pass ${lastGate.tap.pass} fail ${lastGate.tap.fail}`);
 
+    // ----- S4: the same tests failing after a fix = no progress (a28de8: one test failed all 4 gates) -----
+    if (!lastGate.green && !lastGate.vacuous_reason) {
+      const failing = failingTests(lastGate);
+      const stopOnNoProgress = slim ? process.env.FOREMAN_NO_PROGRESS_STOP !== '0' : process.env.FOREMAN_NO_PROGRESS_STOP === '1';
+      if (stopOnNoProgress && iteration > 0 && failing.length && prevFailing && sameSet(failing, prevFailing)) {
+        const reason = `[taxonomy:no-progress] HALT: fix iteration ${iteration} left the very same ${failing.length} test(s) failing ` +
+          `(${failing.slice(0, 5).join(', ')}${failing.length > 5 ? ', …' : ''}) — another fix would spend the cap on the same failure`;
+        steps.push(`✗ ${reason}`);
+        return finishHalt({ stash: true, reason, recommend:
+          `[taxonomy:no-progress] read the failing test(s) and the gate artifact (${lastGate.artifact_path}); the fix seat could not move them. ` +
+          `Correct the plan or the test's premise, then re-invoke wave ${wave.n}.` });
+      }
+      prevFailing = failing.length ? failing : prevFailing;
+    }
+
     // ----- §6 vacuous-GREEN HALT (R2-3) -----
     // A gate that exited 0 without demonstrating real passing tests proves no
     // ground truth (§4.4/§5). Refuse it outright (exit 3) — never a silent RED
@@ -1590,8 +1644,10 @@ export async function runWave(o) {
     // ordinary clean wave the second reviewer bought ~2-5 min + 1 call for near-zero
     // verdict changes. Full panel where stakes are real: the TERMINAL wave, any wave
     // that needed fix iterations, or FOREMAN_FULL_REVIEW=1 (restores always-full).
-    const fullPanel = process.env.FOREMAN_FULL_REVIEW === '1' ||
-      (wave?.n != null && totalWaves != null && wave.n === totalWaves) || iteration > 0;
+    // S4: the terminal-wave panel is for multi-wave projects (a one-wave job always got it - W6 found 14 of 15 such
+    // reviews had no agreed blocker); the slim profile never fans out.
+    const fullPanel = process.env.FOREMAN_FULL_REVIEW === '1' || (!slim && (
+      (wave?.n != null && totalWaves != null && totalWaves > 1 && wave.n === totalWaves) || iteration > 0));
     const effectiveReviewers = fullPanel ? reviewerCount : Math.min(reviewerCount, 1);
 
     const skipReview = !lastGate.green && process.env.FOREMAN_REVIEW_ON_RED !== '1' && iteration < fixIterCap;
@@ -1910,6 +1966,7 @@ export async function runWave(o) {
       // reviewers converged: a CUT confirmed by the second seat is a fix-loop item — the element
       // is removed and the wave re-proves GREEN before GO; HOLDs become one line in the
       // execution log. One pass per wave, never twice; a driver without the seat is unchanged.
+      if (slim && !eleganceDone) { eleganceDone = true; steps.push('▸ elegance: folded into the review (slim profile)'); }
       if (typeof driver.elegance === 'function' && !eleganceDone) {
         eleganceDone = true;
         let ep = null;
@@ -2060,6 +2117,8 @@ export async function runWave(o) {
     // commit, last_commit stays null).
     let lastCommit;          // undefined => leave newCheckpoint's null (no git)
     const landT0 = Date.now();
+    let cp;
+    try {                    // S1 review r1: the land phase is timed on every path out of it, a failed one too
     if (git) {
       // Fix B (2026-06-04): RE-MEASURE the changed set AT COMMIT TIME rather than
       // reusing the snapshot taken before the reviewers ran. A reviewer mutating
@@ -2089,7 +2148,7 @@ export async function runWave(o) {
           `(if a reviewer mutated the tree, run reviewers read-only).` });
       }
     }
-    const cp = buildCheckpoint({
+    cp = buildCheckpoint({
       planPath, totalWaves, wave, iteration, verdict: 'GO',
       findings: findings.filter((f) => f.status === 'open'),
       status, reviewerCount, lastCommit,
@@ -2099,7 +2158,9 @@ export async function runWave(o) {
         : `wave ${wave.n} converged GREEN; auto-advance to wave ${wave.n + 1}`,
     });
     writeCheckpointAtomic(checkpointPath, cp);
-    recordPhase(foremanDir, 'land', wave.n, Date.now() - landT0);
+    } finally {
+      recordPhase(foremanDir, 'land', wave.n, Date.now() - landT0);
+    }
     const dash = dashboard();
     log(dash);
     return { status: 'GO', verdict: 'GO', iterations: iteration, gate: lastGate,

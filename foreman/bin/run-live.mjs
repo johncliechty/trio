@@ -20,12 +20,18 @@ import { classifyExit, makeTelemetryRecord } from './transport.mjs';
 import { spawnGuarded, makeChildRegistry, acquireLock } from './proc-guard.mjs';
 import { resolveClaudeModel } from '../../drivers/claude.mjs';
 import { installProcessLifetimeGuards } from '../../drivers/process-lifetime.mjs';
+import { phaseWalls } from './phase-report.mjs';
+import { flushOpenPhases } from './wave-engine.mjs';
 
 const argv = process.argv.slice(2);
 function flag(name, def) { const i = argv.indexOf(name); return i >= 0 && i + 1 < argv.length ? argv[i + 1] : def; }
 const PROJECT = path.resolve(argv.find((a) => !a.startsWith('--')) || process.cwd());
-let REVIEWERS = Number(flag('--reviewers', '2'));
-const CAP = Number(flag('--cap', '3'));
+// S4 (2026-10-10, John's Q3): `--profile slim` = one reviewer of the other family with the elegance check folded in,
+// fix cap 2, a stop on no progress. Explicit --reviewers / --cap still win. The engine reads FOREMAN_PROFILE.
+const PROFILE = String(flag('--profile', process.env.FOREMAN_PROFILE || 'standard')).toLowerCase();
+if (PROFILE === 'slim') process.env.FOREMAN_PROFILE = 'slim';
+let REVIEWERS = Number(flag('--reviewers', PROFILE === 'slim' ? '1' : '2'));
+const CAP = Number(flag('--cap', PROFILE === 'slim' ? '2' : '3'));
 const MAX_WAVES = flag('--max-waves', null);
 const MAX_WALL_MIN = flag('--max-wallclock-min', null);
 const USE_GIT = argv.includes('--git');
@@ -51,6 +57,105 @@ if (CALL_TIMEOUT_MS === null) {
   console.log('!! per-call timeout DISABLED (--call-timeout-min 0) — NO dead-process backstop this run; a hung agent will hang the wave (explicit operator choice, named here)');
 }
 const LOCK_FILE = flag('--lock', path.join(PROJECT, '.foreman', 'run.lock'));
+
+// S1 review r1: the record machinery is set up FIRST, before any startup import or guard that can fail, so even
+// an exit during startup leaves a journal capture and RUN_JSON.
+const calls = [];
+const RUN_T0 = Date.now();
+
+// ---- S1 (2026-10-10, slim plan): ONE honest run record on EVERY exit ----
+// Before, only a run that reached the end printed RUN_JSON and wrote its capture; the pre-flight HALTs (dirty
+// sibling, lock, clear-halt, attest) and crashes exited 3/1 with no record at all ("did not finish, exit 3" in the
+// historical table, two of them untraceable). Now each exit writes <project>/.foreman/run-record.json (except a
+// refused lock - that file belongs to the run holding it), the journal capture, and RUN_JSON, all with the stop's
+// own reason, its taxonomy and the wall clock of each phase.
+let RUN_RECORDED = false;
+let PROJECT_RECORD_OK = false;         // true once THIS run holds the lock (review r1: never before)
+
+function runPhases() {
+  try {
+    const lines = fs.readFileSync(path.join(PROJECT, '.foreman', 'phase-timings.jsonl'), 'utf8').split('\n');
+    const recs = [];
+    for (const l of lines) { if (l.trim()) { try { recs.push(JSON.parse(l)); } catch { /* torn line */ } } }
+    return phaseWalls(recs, RUN_T0);
+  } catch { return phaseWalls([], RUN_T0); }
+}
+
+function writeJsonAtomic(p, obj) {
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const tmp = `${p}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n', 'utf8');
+  fs.renameSync(tmp, p);
+}
+
+/** Write the run record, the journal capture and RUN_JSON. Synchronous (safe in an 'exit' handler); never throws. */
+function finishRun({ stage, status, haltReason = null, recommend = null, exitCode = 0, result = null, threw = null }) {
+  if (RUN_RECORDED) return;
+  RUN_RECORDED = true;
+  try {
+    const tot = calls.reduce((a, c) => ({
+      out: a.out + (c.output_tokens || 0), cost: a.cost + (c.cost_usd || 0),
+      ms: a.ms + (c.duration_ms || 0), denials: a.denials + (c.permission_denials || 0),
+    }), { out: 0, cost: 0, ms: 0, denials: 0 });
+    const reason = haltReason ?? result?.haltReason ?? (threw ? `${threw.name}: ${threw.message}${threw.reason ? ' — ' + threw.reason : ''}` : null);
+    const tag = /\[taxonomy:([a-z0-9-]+)\]/i.exec(String(reason || ''));
+    // review r1: an untagged stop still gets a class - its stage and status - never null
+    const fine = ['go', 'done', 'attested', 'running', 'n/a'].includes(String(status).toLowerCase()) && !reason;
+    const tax = tag ? [null, tag[1]] : (fine ? null : [null, `${stage}-${String(status || 'unknown').toLowerCase()}`]);
+    try { flushOpenPhases(); } catch { /* a phase still open at exit is timed up to now */ }
+    const waves = (result?.waveResults || []).map((w) => ({ wave: w.wave, title: w.title, status: w.status, green: w.green, tap: w.tap, iterations: w.iterations, halt: w.haltReason || null }));
+    const record = {
+      schema: 'foreman-run-record/v1', skill: 'foreman', tier: process.env.TRIO_TIER || 'standard',
+      started: new Date(RUN_T0).toISOString(), ended: new Date().toISOString(),
+      duration_s: Math.round((Date.now() - RUN_T0) / 1000),
+      input: PROJECT, stage, status, exit_code: exitCode,
+      halt_reason: reason, taxonomy: tax ? tax[1].toLowerCase() : null,
+      recommend: recommend ?? result?.recommend ?? null,
+      params: { reviewers: REVIEWERS, fixIterCap: CAP, maxWaves: MAX_WAVES, git: USE_GIT, resume: RESUME, clearHalt: CLEAR_HALT },
+      stoppedAt: result?.stoppedAt ?? null, totalWaves: result?.totalWaves ?? null, waves,
+      agent_calls: calls.length, totals: tot, phases: runPhases(), threw,
+    };
+    if (PROJECT_RECORD_OK) {
+      try { writeJsonAtomic(path.join(PROJECT, '.foreman', 'run-record.json'), record); } catch { /* best-effort */ }
+    }
+    // Run capture for training (Skill Foundry AGENTS.md "Run capture") — best-effort, the old fields kept
+    try {
+      const skillDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+      const runsDir = process.env.FOREMAN_RUNS_DIR || path.join(skillDir, 'journal', 'runs');   // tests redirect it
+      fs.mkdirSync(runsDir, { recursive: true });
+      fs.writeFileSync(path.join(runsDir, `${record.started.replace(/[:.]/g, '-')}-${Math.abs(Date.now() % 100000)}.json`),
+        JSON.stringify({
+          ...record, output: STATUS_FILE,
+          result: `${status}: ${waves.map((w) => `${w.wave}:${w.status}`).join(',') || 'none'}` + (reason ? ` — ${String(reason).slice(0, 200)}` : ''),
+          cross_model: ['REVIEW', 'SHARK', 'REVIEWER', 'DEBATE'].some((r) => String(process.env[`TRIO_DRIVER_${r}`] || '').startsWith('gemini')),
+          models: null, journal_ref: null,
+        }, null, 2) + '\n');
+    } catch { /* capture is best-effort by design */ }
+    if (reason) emit(`HALT/STOP reason: ${reason}`);
+    if (record.recommend) emit(`recommended next: ${record.recommend}`);
+    const phaseLine = Object.entries(record.phases.ms).filter(([, v]) => v).map(([k, v]) => `${k} ${Math.round(v / 1000)}s`).join(' · ');
+    if (phaseLine) emit(`phases: ${phaseLine}`);
+    console.log('RUN_JSON_START');
+    console.log(JSON.stringify({
+      threw, status: result?.status ?? status, stoppedAt: record.stoppedAt, totalWaves: record.totalWaves,
+      haltReason: reason, recommend: record.recommend, taxonomy: record.taxonomy, stage, exit_code: exitCode,
+      waveResults: waves, agent_calls: calls.length, totals: tot, phases: record.phases,
+    }, null, 2));
+    console.log('RUN_JSON_END');
+  } catch { /* the record is never worth a crash */ }
+}
+
+/** An early stop: say it, record it, exit with its code. */
+function stopEarly(stage, status, reason, exitCode = 3) {
+  finishRun({ stage, status, haltReason: reason, exitCode });
+  process.exit(exitCode);
+}
+
+// The backstop: an exit nobody recorded (a crash, a signal, an unforeseen process.exit) still leaves a record.
+process.on('exit', (code) => {
+  if (!RUN_RECORDED) finishRun({ stage: 'exit', status: 'EXITED', exitCode: code,
+    haltReason: `[taxonomy:dead-process] the run exited (code ${code}) before it recorded a result — see .foreman/last-crash.json and ${STATUS_FILE}` });
+});
 
 // F-H sleep fix (0072): fail-loud guards + heartbeat so mid-wave deaths leave forensics
 // (uncaughtException / unhandledRejection previously could exit with empty stderr).
@@ -93,7 +198,7 @@ try {
 
   // Inherit process depth → reviewer fan-out from Stage-0 handoff (triage / triage_track).
   // Explicit --reviewers always wins; else inheritReviewerCount (LITE→1, FULL→2, never 0).
-  if (!argv.includes('--reviewers')) {
+  if (!argv.includes('--reviewers') && PROFILE !== 'slim') {   // slim keeps its one reviewer whatever the band says
     const inherited = inheritReviewerCount(cfg, { defaultCount: REVIEWERS });
     REVIEWERS = Math.max(1, Number(inherited.reviewers) || 1);
     if (inherited.depth) {
@@ -158,99 +263,6 @@ function emit(line) {
   try { fs.appendFileSync(STATUS_FILE, out); } catch { /* never crash on logging */ }
 }
 
-const calls = [];
-const RUN_T0 = Date.now();
-
-// ---- S1 (2026-10-10, slim plan): ONE honest run record on EVERY exit ----
-// Before, only a run that reached the end printed RUN_JSON and wrote its capture; the pre-flight HALTs (dirty
-// sibling, lock, clear-halt, attest) and crashes exited 3/1 with no record at all ("did not finish, exit 3" in the
-// historical table, two of them untraceable). Now each exit writes <project>/.foreman/run-record.json (except a
-// refused lock - that file belongs to the run holding it), the journal capture, and RUN_JSON, all with the stop's
-// own reason, its taxonomy and the wall clock of each phase.
-let RUN_RECORDED = false;
-let PROJECT_RECORD_OK = true;          // false while another run holds the lock
-const { phaseWalls } = await import(new URL('./phase-report.mjs', import.meta.url));
-
-function runPhases() {
-  try {
-    const lines = fs.readFileSync(path.join(PROJECT, '.foreman', 'phase-timings.jsonl'), 'utf8').split('\n');
-    const recs = [];
-    for (const l of lines) { if (l.trim()) { try { recs.push(JSON.parse(l)); } catch { /* torn line */ } } }
-    return phaseWalls(recs, RUN_T0);
-  } catch { return phaseWalls([], RUN_T0); }
-}
-
-function writeJsonAtomic(p, obj) {
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n', 'utf8');
-  fs.renameSync(tmp, p);
-}
-
-/** Write the run record, the journal capture and RUN_JSON. Synchronous (safe in an 'exit' handler); never throws. */
-function finishRun({ stage, status, haltReason = null, recommend = null, exitCode = 0, result = null, threw = null }) {
-  if (RUN_RECORDED) return;
-  RUN_RECORDED = true;
-  try {
-    const tot = calls.reduce((a, c) => ({
-      out: a.out + (c.output_tokens || 0), cost: a.cost + (c.cost_usd || 0),
-      ms: a.ms + (c.duration_ms || 0), denials: a.denials + (c.permission_denials || 0),
-    }), { out: 0, cost: 0, ms: 0, denials: 0 });
-    const reason = haltReason ?? result?.haltReason ?? (threw ? `${threw.name}: ${threw.message}${threw.reason ? ' — ' + threw.reason : ''}` : null);
-    const tax = /\[taxonomy:([a-z0-9-]+)\]/i.exec(String(reason || ''));
-    const waves = (result?.waveResults || []).map((w) => ({ wave: w.wave, title: w.title, status: w.status, green: w.green, tap: w.tap, iterations: w.iterations, halt: w.haltReason || null }));
-    const record = {
-      schema: 'foreman-run-record/v1', skill: 'foreman', tier: process.env.TRIO_TIER || 'standard',
-      started: new Date(RUN_T0).toISOString(), ended: new Date().toISOString(),
-      duration_s: Math.round((Date.now() - RUN_T0) / 1000),
-      input: PROJECT, stage, status, exit_code: exitCode,
-      halt_reason: reason, taxonomy: tax ? tax[1].toLowerCase() : null,
-      recommend: recommend ?? result?.recommend ?? null,
-      params: { reviewers: REVIEWERS, fixIterCap: CAP, maxWaves: MAX_WAVES, git: USE_GIT, resume: RESUME, clearHalt: CLEAR_HALT },
-      stoppedAt: result?.stoppedAt ?? null, totalWaves: result?.totalWaves ?? null, waves,
-      agent_calls: calls.length, totals: tot, phases: runPhases(), threw,
-    };
-    if (PROJECT_RECORD_OK) {
-      try { writeJsonAtomic(path.join(PROJECT, '.foreman', 'run-record.json'), record); } catch { /* best-effort */ }
-    }
-    // Run capture for training (Skill Foundry AGENTS.md "Run capture") — best-effort, the old fields kept
-    try {
-      const skillDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-      const runsDir = process.env.FOREMAN_RUNS_DIR || path.join(skillDir, 'journal', 'runs');   // tests redirect it
-      fs.mkdirSync(runsDir, { recursive: true });
-      fs.writeFileSync(path.join(runsDir, `${record.started.replace(/[:.]/g, '-')}-${Math.abs(Date.now() % 100000)}.json`),
-        JSON.stringify({
-          ...record, output: STATUS_FILE,
-          result: `${status}: ${waves.map((w) => `${w.wave}:${w.status}`).join(',') || 'none'}` + (reason ? ` — ${String(reason).slice(0, 200)}` : ''),
-          cross_model: ['REVIEW', 'SHARK', 'REVIEWER', 'DEBATE'].some((r) => String(process.env[`TRIO_DRIVER_${r}`] || '').startsWith('gemini')),
-          models: null, journal_ref: null,
-        }, null, 2) + '\n');
-    } catch { /* capture is best-effort by design */ }
-    if (reason) emit(`HALT/STOP reason: ${reason}`);
-    if (record.recommend) emit(`recommended next: ${record.recommend}`);
-    const phaseLine = Object.entries(record.phases.ms).filter(([, v]) => v).map(([k, v]) => `${k} ${Math.round(v / 1000)}s`).join(' · ');
-    if (phaseLine) emit(`phases: ${phaseLine}`);
-    console.log('RUN_JSON_START');
-    console.log(JSON.stringify({
-      threw, status: result?.status ?? status, stoppedAt: record.stoppedAt, totalWaves: record.totalWaves,
-      haltReason: reason, recommend: record.recommend, taxonomy: record.taxonomy, stage, exit_code: exitCode,
-      waveResults: waves, agent_calls: calls.length, totals: tot, phases: record.phases,
-    }, null, 2));
-    console.log('RUN_JSON_END');
-  } catch { /* the record is never worth a crash */ }
-}
-
-/** An early stop: say it, record it, exit with its code. */
-function stopEarly(stage, status, reason, exitCode = 3) {
-  finishRun({ stage, status, haltReason: reason, exitCode });
-  process.exit(exitCode);
-}
-
-// The backstop: an exit nobody recorded (a crash, a signal, an unforeseen process.exit) still leaves a record.
-process.on('exit', (code) => {
-  if (!RUN_RECORDED) finishRun({ stage: 'exit', status: 'EXITED', exitCode: code,
-    haltReason: `[taxonomy:dead-process] the run exited (code ${code}) before it recorded a result — see .foreman/last-crash.json and ${STATUS_FILE}` });
-});
 
 // Wave 7 kill-on-exit: every spawned sub-agent is tracked here; an orchestrator
 // teardown (clean exit OR SIGINT/SIGTERM) SIGKILLs any still-live child, so no
@@ -514,10 +526,16 @@ try {
     },
   });
   emit(`lock: acquired ${LOCK_FILE} (pid ${process.pid})`);
+  PROJECT_RECORD_OK = true;    // from here the project's run-record.json is this run's to write
 } catch (e) {
   emit(`!! could not acquire run lock: ${e.reason || e.message}${e.detail ? ' — ' + e.detail : ''}`);
-  PROJECT_RECORD_OK = false;   // the project's run-record.json belongs to the run that holds the lock
-  stopEarly('lock', 'REFUSED', `[taxonomy:run-locked] another run holds ${LOCK_FILE}: ${e.reason || e.message}`);
+  // review r1: contention (a live owner, or a lost race) leaves the owner's record alone; any other failure is a
+  // filesystem fault with its own words and taxonomy, and no other run is known to own the record
+  const contention = /holds the lock|lost a race/i.test(String(e.reason || e.message || ''));
+  PROJECT_RECORD_OK = !contention;
+  stopEarly('lock', 'REFUSED', contention
+    ? `[taxonomy:run-locked] another run holds ${LOCK_FILE}: ${e.detail || e.reason || e.message}`
+    : `[taxonomy:lock-error] the run lock ${LOCK_FILE} could not be created: ${e.code ? e.code + ' ' : ''}${e.message || e}`);
 }
 process.on('exit', () => { try { lock.release(); } catch { /* best-effort */ } });
 

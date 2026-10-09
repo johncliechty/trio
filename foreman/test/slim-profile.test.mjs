@@ -172,3 +172,26 @@ test('final review: a slim elegance finding takes one fix iteration, then the wa
   assert.equal(r.status, 'GO', r.haltReason);
   assert.equal(fixes, 1, 'the elegance finding was acted on once');
 });
+
+test('final review r2: a test the slim reviewer names as unnecessary may be removed without an immutability halt', async () => {
+  const dir = freshCopy();
+  const { docs, testCmd, wave } = contractOf(dir);
+  const extra = path.join(dir, 'test', 'extra.test.mjs');
+  let reviews = 0, fixMessages = [];
+  const base = makeScriptedDriver({ onExecute: async () => { repairAtExecute(dir); fs.writeFileSync(extra, "import test from 'node:test';\ntest('redundant', () => {});\n"); } });
+  const driver = {
+    ...base,
+    async review(ctx, gate) {
+      reviews++;
+      const r = await base.review(ctx, gate);
+      return reviews === 1 ? { ...r, findings: [{ severity: 'MAJOR', file: 'test/extra.test.mjs', line: 1, rule: 'elegance', message: 'a test beyond any acceptance item' }] } : r;
+    },
+    async fix(ctx, gate, f) { fixMessages = f.map((x) => x.message); fs.rmSync(extra, { force: true }); return { note: 'removed the redundant test' }; },
+  };
+  const r = await withProfile('slim', () => runWave({
+    projectDir: dir, testCommand: testCmd.command, wave: { ...wave, n: 1 }, totalWaves: 1,
+    planPath: docs.plan, driver, reviewerCount: 1, fixIterCap: 2,
+  }));
+  assert.equal(r.status, 'GO', r.haltReason);
+  assert.match(fixMessages[0], /removing this test file is allowed/);
+});

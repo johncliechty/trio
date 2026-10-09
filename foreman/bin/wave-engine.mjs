@@ -2004,9 +2004,16 @@ export async function runWave(o) {
         // elegance phase's confirmed CUTs did; the wave then re-proves GREEN. Tests stay frozen (no release here).
         const eleg = (findings || []).filter((f) => f && f.status === 'open' && /^elegance$/i.test(String(f.rule || '')));
         if (eleg.length && iteration < fixIterCap) {
+          // final review r2: exactly the test files the reviewer names for removal are released from the frozen
+          // baseline, as a confirmed CUT is in the standard elegance phase; every other test stays frozen
+          for (const f of eleg) {
+            const rel = String(f.file || '').replace(/\\/g, '/').replace(/^\.\//, '');
+            if (rel && rel in testBaseline) { delete testBaseline[rel]; log(`elegance (folded): ${rel} released from the test-immutability baseline (reviewer-named)`); }
+          }
           iteration++;
           const cutFindings = eleg.map((f) => ({ ...f, id: `rabbit-hole:${f.id || f.file || 'elegance'}`, agreement: 2,
-            message: `[taxonomy:rabbit-hole] ${f.message || f.title || 'remove what the plan does not need'}; keep the gate green` }));
+            message: `[taxonomy:rabbit-hole] ${f.message || f.title || 'remove what the plan does not need'}` +
+              `${isTestFile(String(f.file || '').replace(/\\/g, '/')) ? ' (removing this test file is allowed)' : ''}; keep the gate green` }));
           const efix = await agentWait(`fix-${iteration}`, () => driver.fix({ ...ctx, iteration }, lastGate, cutFindings));
           if (efix?.agent_failed) {
             const reason = `[taxonomy:agent-died] HALT: the elegance fix agent died (${efix.agent_failed.detail}) — iteration ${iteration} applied nothing`;

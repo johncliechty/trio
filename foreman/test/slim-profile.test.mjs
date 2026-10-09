@@ -150,3 +150,25 @@ test('the slim reviewer is asked the three elegance questions; the standard one 
   assert.match(_internals.reviewPrompt({ ...base, eleganceInReview: true }, gate), /ELEGANCE \(three questions/);
   assert.doesNotMatch(_internals.reviewPrompt(base, gate), /ELEGANCE \(three questions/);
 });
+
+test('final review: a slim elegance finding takes one fix iteration, then the wave re-proves GREEN', async () => {
+  const dir = freshCopy();
+  const { docs, testCmd, wave } = contractOf(dir);
+  let reviews = 0, fixes = 0;
+  const base = makeScriptedDriver({ onExecute: async () => repairAtExecute(dir) });
+  const driver = {
+    ...base,
+    async review(ctx, gate) {
+      reviews++;
+      const r = await base.review(ctx, gate);
+      return reviews === 1 ? { ...r, findings: [{ severity: 'MAJOR', file: 'src/calc.js', line: 1, rule: 'elegance', message: 'remove the unused helper' }] } : r;
+    },
+    async fix(ctx, gate, f) { fixes++; return base.fix(ctx, gate, f); },
+  };
+  const r = await withProfile('slim', () => runWave({
+    projectDir: dir, testCommand: testCmd.command, wave: { ...wave, n: 1 }, totalWaves: 1,
+    planPath: docs.plan, driver, reviewerCount: 1, fixIterCap: 2,
+  }));
+  assert.equal(r.status, 'GO', r.haltReason);
+  assert.equal(fixes, 1, 'the elegance finding was acted on once');
+});

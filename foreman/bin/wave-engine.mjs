@@ -1997,7 +1997,28 @@ export async function runWave(o) {
       // reviewers converged: a CUT confirmed by the second seat is a fix-loop item — the element
       // is removed and the wave re-proves GREEN before GO; HOLDs become one line in the
       // execution log. One pass per wave, never twice; a driver without the seat is unchanged.
-      if (slim && !eleganceDone) { eleganceDone = true; steps.push('▸ elegance: folded into the review (slim profile)'); }
+      if (slim && !eleganceDone) {
+        eleganceDone = true;
+        // final review 10-10: the folded elegance check has TEETH - the one reviewer's rule:"elegance" findings
+        // (MAJOR, no failing repro needed: they name what to remove) take one fix iteration, as the separate
+        // elegance phase's confirmed CUTs did; the wave then re-proves GREEN. Tests stay frozen (no release here).
+        const eleg = (findings || []).filter((f) => f && f.status === 'open' && /^elegance$/i.test(String(f.rule || '')));
+        if (eleg.length && iteration < fixIterCap) {
+          iteration++;
+          const cutFindings = eleg.map((f) => ({ ...f, id: `rabbit-hole:${f.id || f.file || 'elegance'}`, agreement: 2,
+            message: `[taxonomy:rabbit-hole] ${f.message || f.title || 'remove what the plan does not need'}; keep the gate green` }));
+          const efix = await agentWait(`fix-${iteration}`, () => driver.fix({ ...ctx, iteration }, lastGate, cutFindings));
+          if (efix?.agent_failed) {
+            const reason = `[taxonomy:agent-died] HALT: the elegance fix agent died (${efix.agent_failed.detail}) — iteration ${iteration} applied nothing`;
+            steps.push(`✗ ${reason}`);
+            return finishHalt({ reason, recommend: `[taxonomy:agent-died] check the fix seat, then re-invoke wave ${wave.n}` });
+          }
+          steps.push(`▸ elegance (folded) fix iter ${iteration}: ${efix?.note || 'applied'} (${eleg.length} finding(s))`);
+          log(`elegance (folded) fix iter ${iteration}: re-proving GREEN`);
+          continue;
+        }
+        steps.push(`▸ elegance: folded into the review (slim profile)${eleg.length ? ` · ${eleg.length} finding(s) left for the record (fix cap reached)` : ' · nothing to remove'}`);
+      }
       if (typeof driver.elegance === 'function' && !eleganceDone) {
         eleganceDone = true;
         let ep = null;

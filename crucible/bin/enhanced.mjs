@@ -297,6 +297,9 @@ export async function resolveGeminiModel({ role = 'judge', env = process.env } =
  * @param {number}   [o.geminiCap]                  override the env-resolved cap
  * @param {string}   [o.target]                     cwd / edit scope threaded to the backend
  * @param {Function} [o.log]
+ * @param {boolean}  [o.requireCrossFamily=false]   S6: run the hard routing guard even under honest single-family
+ *                                                  prefs - a caller that REQUIRES an independent review (slim
+ *                                                  --require-independent) is refused instead of served self-review
  * @returns {Promise<{agent:Function, tracker:object, routes:object, families:object, drafterFamily:string}>}
  */
 export async function buildLiveCrucibleAgent({
@@ -307,6 +310,7 @@ export async function buildLiveCrucibleAgent({
   geminiCap,
   target,
   log,
+  requireCrossFamily = false,
 } = {}) {
   const { makeRoleRoutedAgent, buildRoutesFromFamilies } = await import('../../drivers/index.mjs');
   const built = buildRoutesFromFamilies({
@@ -322,7 +326,7 @@ export async function buildLiveCrucibleAgent({
   // family on every seat and stamp cross_model:false via loadModelFamilies.
   // Explicit caller-supplied routes still go through the hard guard.
   const singleFamilyPrefs = !routes && built.families.coding === built.families.review;
-  if (!singleFamilyPrefs) {
+  if (!singleFamilyPrefs || requireCrossFamily) {
     assertCrossFamilyRouting({ routes: resolvedRoutes, drafterFamily: resolvedDrafter });
   }
   const cap = Number.isInteger(geminiCap) ? Math.min(geminiCap, MAX_GEMINI_CAP) : resolveGeminiCap(env);

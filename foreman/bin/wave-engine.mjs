@@ -38,7 +38,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
 
-import { HaltError, newCheckpoint, writeCheckpointAtomic, renderDashboard, parseWaves, discoverTestCommand, locateDocs } from './foreman-lib.mjs';
+import { HaltError, newCheckpoint, writeCheckpointAtomic, renderDashboard, parseWaves, discoverTestCommand, locateDocs, isNonCodeWave, parseWaveOracles } from './foreman-lib.mjs';
 import { checkDeltaCoverage, tokensFor as deltaTokensFor } from './delta-coverage-gate.mjs';
 
 // ---------------------------------------------------------------------------
@@ -246,6 +246,24 @@ export function isProvenDeliverablePath(rel) {
   return true;
 }
 
+/**
+ * S3 (2026-10-10; final review 10-10, finding 1): among a wave's measured changes, the paths with EXECUTABLE meaning -
+ * source, tests, manifests, scripts, CI workflows and tool configuration. A wave labelled non-code that changed any of
+ * these keeps the ordinary code gates; the label alone never selects the outputs gate. Engine noise and `.foreman/`
+ * are set aside exactly as vacuousExecute does.
+ */
+const CODE_FILE_RE = /\.(mjs|cjs|js|jsx|ts|tsx|py|pyi|rb|go|rs|java|kt|cs|c|cc|cpp|h|hpp|swift|php|pl|lua|sql|vue|svelte)$/i;
+const CONFIG_WORKFLOW_RE = /(^|\/)(package(-lock)?\.json|pyproject\.toml|setup\.(py|cfg)|requirements[^/]*\.txt|pipfile(\.lock)?|poetry\.lock|tsconfig[^/]*\.json|jsconfig\.json|foreman\.config\.json|\.?eslintrc[^/]*|\.?babelrc[^/]*|makefile|dockerfile|docker-compose[^/]*\.ya?ml|\.github\/workflows\/[^/]+\.ya?ml|\.gitlab-ci\.yml|[^/]+\.(ps1|psm1|sh|bat|cmd|toml|ini|cfg))$/i;
+export function executableChanges(changed) {
+  const out = [];
+  for (const raw of changed || []) {
+    const rel = String(raw).replace(/\\/g, '/').replace(/\s*\(deleted\)\s*$/, '');
+    if (!rel || rel.startsWith('.foreman/') || rel.includes('/.foreman/') || isRuntimeNoisePath(rel)) continue;
+    if (isTestFile(rel) || CODE_FILE_RE.test(rel) || CONFIG_WORKFLOW_RE.test(rel)) out.push(rel);
+  }
+  return out;
+}
+
 /** Recursively list project files, skipping noise + the foreman state dir. */
 function listFiles(root, foremanDir) {
   const out = [];
@@ -282,6 +300,37 @@ function snapshotHashes(root, foremanDir) {
     snap[path.relative(root, abs).split(path.sep).join('/')] = hashFile(abs);
   }
   return snap;
+}
+
+/** S3: one normalization for a declared output path - the snapshot, the gate and the review name the same file. */
+function normalizeOutputRel(raw) {
+  return String(raw ?? '').trim().replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+}
+
+/**
+ * S3: rel -> sha256 of the file now, or null when absent / not a file. Taken for a non-code wave's declared outputs
+ * BEFORE execute, so "created or changed by this wave" is measured on the outputs themselves - the generic hash diff
+ * skips docs/ and other ignored folders, where such outputs commonly live.
+ */
+function snapshotPaths(root, rels) {
+  const snap = {};
+  for (const raw of rels || []) {
+    const rel = normalizeOutputRel(raw);
+    if (!rel) continue;
+    try {
+      const abs = path.resolve(root, rel);
+      const st = fs.statSync(abs);
+      snap[rel] = st.isFile() ? hashFile(abs) : null;
+    } catch { snap[rel] = null; }
+  }
+  return snap;
+}
+
+/** The declared outputs whose content differs from the wave-start snapshot (created, or changed) and exist now. */
+function changedOutputsSince(root, before) {
+  if (!before) return [];
+  const now = snapshotPaths(root, Object.keys(before));
+  return Object.keys(before).filter((rel) => now[rel] !== null && now[rel] !== before[rel]);
 }
 
 /** relpaths whose content differs from (or did not exist in) the start snapshot. */
@@ -344,13 +393,22 @@ export function missingWaveDeliverables(projectDir, planText, waveN) {
  * optional add/create/implement/write/deliver/provide or "replace ... with",
  * optional required/new, then "Test file <one literal path>". Bare paths never count.
  */
+/** The lines of a plan section outside ``` / ~~~ fences (fenced examples are not declarations). */
+function unfencedLines(text) {
+  const out = [];
+  let fenced = false;
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    if (/^\s*(```|~~~)/.test(raw)) { fenced = !fenced; continue; }
+    if (!fenced) out.push(raw);
+  }
+  return out;
+}
+
 export function requiredWaveTestPaths(planText, waveN) {
   const section = waveSectionOf(planText, waveN);
   const declarations = [];
-  let fenced = false;
-  for (const raw of section.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(raw)) { fenced = !fenced; continue; }
-    if (fenced) continue;
+  const lines = unfencedLines(section);
+  for (const raw of lines) {
     const line = raw.replace(/\*\*/g, '').trim();
     if (!line || /^#{1,6}\s/.test(line)) continue;
     const label = line.match(/^(?:[-*]\s*)?Deliverables?\s*:\s*(.*)$/i);
@@ -362,9 +420,39 @@ export function requiredWaveTestPaths(planText, waveN) {
       if (explicit) declarations.push(explicit[1]);
     }
   }
+  // S5 (2026-10-10, slim plan; final review 10-10 finding 2): an acceptance item's `(oracle: test/x.test.mjs)` names a
+  // REQUIRED test, in the one grammar the plan carries (foreman-lib parseWaveOracles) - the required-test guard
+  // enforces it before any coverage can be advisory.
+  for (const o of parseWaveOracles(lines.join('\n'))) declarations.push(o.oracle);
   return namedWavePaths(`## Wave ${waveN}\n${declarations.join('\n')}`, waveN)
     .filter((rel) => !rel.split('/').includes('..')
       && /\.(?:mjs|cjs|js|ts|tsx|py)$/.test(rel) && isTestFile(rel));
+}
+
+/**
+ * S5: the test-to-oracle trace of a wave - small by design, read from the plan's own `(oracle: ...)` items and the
+ * wave's changed files: which acceptance items name a test, whether each named test exists, and which changed test
+ * files answer to no oracle (the slim reviewer's elegance question 3; standard records it). No registry: the plan is.
+ */
+export function traceOracles(planText, waveN, changed = [], projectDir = null) {
+  const section = unfencedLines(waveSectionOf(planText, waveN)).join('\n');
+  const isTest = (rel) => /\.(?:mjs|cjs|js|ts|tsx|py)$/.test(rel) && isTestFile(rel) && !rel.split('/').includes('..');
+  const oracles = parseWaveOracles(section).map((o) => {
+    const tests = namedWavePaths(`## Wave ${waveN}\n${o.oracle}`, waveN).filter(isTest);
+    const present = projectDir
+      ? tests.every((t) => { try { return fs.statSync(path.join(projectDir, t)).isFile(); } catch { return false; } })
+      : null;
+    return { item: o.item, oracle: o.oracle, tests, present };
+  });
+  const changedTests = (changed || []).map((f) => String(f).replace(/\\/g, '/'))
+    .filter((f) => !f.endsWith(' (deleted)') && isTestFile(f));
+  const named = new Set(oracles.flatMap((o) => o.tests));
+  return {
+    required: requiredWaveTestPaths(planText, waveN),
+    oracles,
+    changed_tests: changedTests,
+    tests_beyond_oracles: changedTests.filter((t) => !named.has(t)),
+  };
 }
 
 export function missingRequiredWaveTests(projectDir, planText, waveN) {
@@ -1162,6 +1250,65 @@ export async function runGate({ projectDir, testCommand, foremanDir, wave, itera
   return artifact;
 }
 
+/**
+ * S3 (2026-10-10, slim plan; final review 10-10 findings 1 and 4): the gate of a NON-CODE wave (kind docs, landing,
+ * verification, render or data) is its declared outputs. Each must be a FILE inside the project, non-empty, and
+ * created or changed BY THIS WAVE - in the measured changed set, or different from the wave-start snapshot of the
+ * outputs themselves (`before`). A guide that already existed proves nothing about the wave; `.`, `..`, a folder or a
+ * path outside the project is never an output. The orchestrator writes the artifact exactly as for a test gate (tap
+ * counts the outputs), so the dashboard, the judge and the review read it the same way.
+ */
+export function outputsGate({ projectDir, foremanDir, wave, iteration, changed = [], before = null, artifact = 'gate' }) {
+  const t0 = Date.now();
+  const root = path.resolve(projectDir);
+  const changedSet = new Set((changed || []).map((f) => normalizeOutputRel(f)));
+  const rows = [];
+  for (const raw of wave?.outputs || []) {
+    const rel = normalizeOutputRel(raw);
+    let state;
+    if (!rel || rel === '.' || rel === '..') state = 'not a file path';
+    else if (path.isAbsolute(rel) || /^[A-Za-z]:/.test(rel) || rel.split('/').includes('..')) state = 'outside the project';
+    else {
+      const abs = path.resolve(root, rel);
+      if (!abs.startsWith(root + path.sep)) state = 'outside the project';
+      else {
+        let st = null;
+        try { st = fs.statSync(abs); } catch { st = null; }
+        if (!st) state = 'missing';
+        else if (st.isDirectory()) state = 'a folder, not a file';
+        else if (!st.isFile()) state = 'not a file path';
+        else if (st.size === 0) state = 'empty file';
+        else {
+          const producedNow = before && Object.prototype.hasOwnProperty.call(before, rel) ? hashFile(abs) !== before[rel] : false;
+          state = changedSet.has(rel) || producedNow ? 'present' : 'unchanged this wave';
+        }
+      }
+    }
+    rows.push({ output: rel || String(raw), state });
+  }
+  const pass = rows.filter((r) => r.state === 'present').length;
+  const green = rows.length > 0 && pass === rows.length;
+  const stdout = rows.map((r, i) => `${r.state === 'present' ? 'ok' : 'not ok'} ${i + 1} - ${r.output}${r.state === 'present' ? '' : ' # ' + r.state}`).join('\n') + '\n';
+  const gateMs = Date.now() - t0;
+  const result = {
+    written_by: 'orchestrator', wave: wave?.n ?? null, iteration,
+    command: `declared outputs (${wave?.waveKind || 'non-code'} wave: each a non-empty file inside the project, created or changed by this wave)`,
+    cwd: projectDir, exit_code: green ? 0 : 1, green, gate_class: green ? 'GREEN' : 'RED', timed_out: false,
+    timeout_ms: null, progress_pct: null, gate_ms: gateMs, vacuous_reason: null,
+    tap: { tests: rows.length, pass, fail: rows.length - pass, skipped: 0, todo: 0 }, outputs: rows, stdout, stderr: '',
+  };
+  fs.mkdirSync(foremanDir, { recursive: true });
+  const file = path.join(foremanDir, `wave-${wave?.n ?? 0}-${artifact}.json`);
+  fs.writeFileSync(file, JSON.stringify(result, null, 2) + '\n');
+  result.artifact_path = file;
+  try {
+    fs.appendFileSync(path.join(foremanDir, 'phase-timings.jsonl'),
+      JSON.stringify({ kind: 'gate', label: `${artifact}:w${wave?.n ?? 0}.${iteration}`, phase: 'gate', wave: wave?.n ?? null,
+        iteration, duration_ms: gateMs, output_tokens: 0, exit_code: result.exit_code, green, ts: Date.now() }) + '\n');
+  } catch { /* never crash the gate on logging */ }
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Finding identity + judge (§5). Findings carry a stable id (`file:line+rule`).
 // A BLOCKER/MAJOR requires >=2 independent reviewers to agree. The judge reads
@@ -1343,6 +1490,13 @@ export async function runWave(o) {
   const profile = String(o.profile || process.env.FOREMAN_PROFILE || 'standard').toLowerCase();
   const slim = profile === 'slim';
   let prevFailing = null;
+  // S3 (2026-10-10, slim plan; final review 10-10 finding 1): a wave that DECLARES itself non-code (`kind:` docs |
+  // landing | verification | render | data, plus `outputs:`) is proven by its declared outputs - but the label alone
+  // never chooses the gate: the measured changes decide, every iteration (below). A declared non-code wave that
+  // changed executable files keeps the ordinary code gates.
+  const declaredNonCode = isNonCodeWave(wave);
+  let nonCode = declaredNonCode;
+  let codeBearing = [];
 
   // Plan text for execute contract injection (0076 package 1). Best-effort read.
   let planText = '';
@@ -1359,6 +1513,8 @@ export async function runWave(o) {
   };
   const invBefore = inventory(projectDir, foremanDir, invScopeFor(resolveWaveGateCommand(wave, testCommand)));
   const hashStart = snapshotHashes(projectDir, foremanDir);
+  // S3: the declared outputs' own wave-start snapshot - "created or changed by this wave" is measured on them
+  const outputsStart = declaredNonCode ? snapshotPaths(projectDir, wave.outputs) : null;
 
   // Intra-wave resume (Phase 3b): seed the fix-iteration counter from the
   // checkpoint so a wave stopped mid-fix-loop re-enters with its REMAINING fix
@@ -1386,8 +1542,10 @@ export async function runWave(o) {
   const priorLedger = readWaveProvenLedger(foremanDir, wave.n);
   const hasProvenSources = !!(priorLedger && Array.isArray(priorLedger.changed)
     && priorLedger.changed.some((f) => isProvenDeliverablePath(String(f))));
-  const skipExecute = resumeStep === 'review'
-    || (resumeStep === 'gate' && hasProvenSources);
+  // S3: a declared non-code wave always re-executes on resume - its outputs must be produced in the invocation that
+  // gates them (there is no proven ledger of code to re-prove; with git, changedVsHead still sees earlier work).
+  const skipExecute = !declaredNonCode && (resumeStep === 'review'
+    || (resumeStep === 'gate' && hasProvenSources));
   // Declared BEFORE the execute step: the 0102 agent-died halt calls finishHalt,
   // which closes over iteration/findings/lastGate — post-execute declarations TDZ.
   let iteration = seededIteration;
@@ -1488,6 +1646,25 @@ export async function runWave(o) {
     const changedPre = git ? git.changedVsHead() : changedSince(projectDir, foremanDir, hashStart);
     lastChanged = changedPre;
 
+    // ----- S3: the measured changes, not the label, decide whether the outputs gate applies -----
+    codeBearing = declaredNonCode ? executableChanges(changedPre) : [];
+    nonCode = declaredNonCode && codeBearing.length === 0;
+    if (declaredNonCode && codeBearing.length) {
+      log(`gate: wave ${wave.n} is declared ${wave.waveKind} but changed executable file(s) (${codeBearing.slice(0, 4).join(', ')}${codeBearing.length > 4 ? ', …' : ''}) — the ordinary code gates apply`);
+    }
+    if (!nonCode && !waveTestCommand) {
+      // final review 10-10 finding 1: a code-bearing change never passes on a docs label; without a ground-truth
+      // command it cannot be gated at all - a clear, typed stop, never a GO on declared outputs
+      const why = declaredNonCode
+        ? `is declared ${wave.waveKind} but changed executable file(s) (${codeBearing.slice(0, 4).join(', ')})`
+        : 'is a code wave (no non-code kind + outputs declared)';
+      const reason = `[taxonomy:missing-test-command] HALT: wave ${wave.n} ${why}, and the project has no ground-truth test command — a non-code label does not bypass the code gate`;
+      steps.push(`✗ ${reason}`);
+      return finishHalt({ reason, recommend:
+        `[taxonomy:missing-test-command] declare \`test-command:\` in the plan (or a per-wave \`gate-command:\`) so the executable change can be proven, ` +
+        `or keep wave ${wave.n} to its declared outputs, then re-invoke wave ${wave.n}` });
+    }
+
     // Required current-wave tests are independent of source changes, resume and
     // historical proven ledgers. A prior suite cannot implement a named test.
     const requiredTestHalt = guardRequiredTests();
@@ -1503,18 +1680,25 @@ export async function runWave(o) {
       // whose execute is a stub and whose work lands in the fix loop stays legal) — then the
       // vacuous-GREEN guard after the gate keeps the watch.
       const missing = missingWaveDeliverables(projectDir, planText, wave.n);
-      if (missing.length) {
-        const reason = `[taxonomy:wave-not-implemented] HALT: execute for wave ${wave.n} changed nothing in the project and the wave's named deliverable(s) do not exist afterwards (${missing.slice(0, 4).join(', ')}) — the wave was not implemented; the gate must not run on the previous wave's tree`;
+      // S3: a declared non-code wave is judged on its declared outputs - none created or changed = not implemented
+      // (the generic diff skips docs/ and other ignored folders, so the outputs' own snapshot is consulted)
+      const produced = declaredNonCode ? changedOutputsSince(projectDir, outputsStart) : [];
+      if (missing.length || (declaredNonCode && !produced.length)) {
+        const what = missing.length
+          ? `the wave's named deliverable(s) do not exist afterwards (${missing.slice(0, 4).join(', ')})`
+          : `none of its declared outputs (${(wave.outputs || []).slice(0, 4).join(', ')}) was created or changed`;
+        const reason = `[taxonomy:wave-not-implemented] HALT: execute for wave ${wave.n} changed nothing in the project and ${what} — the wave was not implemented; the gate must not run on the previous wave's tree`;
         steps.push(`✗ ${reason}`);
-        log(`execute: NOTHING changed and ${missing.length} named deliverable(s) missing — HALT wave-not-implemented (never "complete")`);
+        log(`execute: NOTHING changed and ${missing.length ? `${missing.length} named deliverable(s) missing` : 'no declared output produced'} — HALT wave-not-implemented (never "complete")`);
         return finishHalt({
           reason,
-          recommend: `[taxonomy:wave-not-implemented] the execute seat produced no change for wave ${wave.n} and ${missing[0]} does not exist. ` +
+          recommend: `[taxonomy:wave-not-implemented] the execute seat produced no change for wave ${wave.n}${missing.length ? ` and ${missing[0]} does not exist` : ' and its declared outputs were not produced'}. ` +
             `Check the routing header (a seat that cannot run the execute prompt — e.g. a Codex seat on a ` +
             `Claude-shaped prompt — reports "complete" with 0 tool calls), fix the seat, then re-invoke wave ${wave.n}.`,
         });
       }
-      log(`execute: changed nothing, but the wave section names no missing deliverable — continuing to the gate (vacuous-GREEN guard stands)`);
+      if (produced.length) log(`execute: produced ${produced.length} declared output(s) (${produced.slice(0, 4).join(', ')}) — continuing to the outputs gate`);
+      else log(`execute: changed nothing, but the wave section names no missing deliverable — continuing to the gate (vacuous-GREEN guard stands)`);
     }
 
     // ----- Pre-gate syntax smoke (0082 P3.14) -----
@@ -1532,11 +1716,14 @@ export async function runWave(o) {
     // Async + heartbeat (0078 T4/T8): the gate now emits `gate running · t+Nm · last:
     // <line>` and updates waiting-on.json every minute — during a gate the operator can
     // finally tell hung from working.
-    lastGate = await agentWait('gate', () => runGate({
-      projectDir, testCommand: waveTestCommand, foremanDir, wave, iteration,
-      heartbeat: ({ elapsedMs, lastLine }) =>
-        log(`gate running · t+${Math.max(1, Math.round(elapsedMs / 60000))}m · last: ${lastLine || '(no output yet)'}`),
-    }));
+    lastGate = await agentWait('gate', async () => (nonCode
+      // S3: a non-code wave's gate is its declared outputs, each created or changed by this wave
+      ? outputsGate({ projectDir, foremanDir, wave, iteration, changed: changedPre, before: outputsStart })
+      : runGate({
+        projectDir, testCommand: waveTestCommand, foremanDir, wave, iteration,
+        heartbeat: ({ elapsedMs, lastLine }) =>
+          log(`gate running · t+${Math.max(1, Math.round(elapsedMs / 60000))}m · last: ${lastLine || '(no output yet)'}`),
+      })));
     if (lastGate.timed_out) {
       // 0078 T1: a killed gate proved NOTHING — never a "0 pass 0 fail" RED for the
       // FIX loop to chase. HALT with the honest class + progress and a scoping steer.
@@ -1665,6 +1852,10 @@ export async function runWave(o) {
       (wave?.n != null && totalWaves != null && totalWaves > 1 && wave.n === totalWaves) || iteration > 0);
     const effectiveReviewers = fullPanel ? reviewerCount : Math.min(reviewerCount, 1);
 
+    // S5: the test-to-oracle trace of this wave rides into the review (the slim elegance question 3) and the record
+    const oracleTrace = traceOracles(planText, wave.n, changed, projectDir);
+    // S3: the review sees the declared outputs this wave produced (the generic diff skips docs/ and other ignored dirs)
+    const reviewChanged = nonCode ? [...new Set([...changed, ...changedOutputsSince(projectDir, outputsStart)])] : changed;
     const skipReview = !lastGate.green && process.env.FOREMAN_REVIEW_ON_RED !== '1' && iteration < fixIterCap;
     reviewEvidence = {
       version: 1, written_by: 'orchestrator', wave: wave.n, iteration, round_id: crypto.randomUUID(),
@@ -1677,7 +1868,7 @@ export async function runWave(o) {
     const receiveReview = async (r) => {
       const seat = `reviewer-${r}`;
       let raw;
-      try { raw = await driver.review({ ...ctx, reviewerIndex: r, changed }, lastGate); }
+      try { raw = await driver.review({ ...ctx, reviewerIndex: r, changed: reviewChanged, oracles: oracleTrace }, lastGate); }
       catch (error) { raw = { transport_failed: true, note: `reviewer call rejected (${error?.message || error})` }; }
       const valid = validReview(raw);
       const rv = valid ? { ...raw, reviewer: raw.reviewer ?? seat } : {
@@ -1841,10 +2032,24 @@ export async function runWave(o) {
     if (verdict.go) {
       const requiredTestHalt = guardRequiredTests();
       if (requiredTestHalt) return requiredTestHalt;
+      // S3: a declared non-code wave that fell back to the code gates (it changed executable files) must STILL have
+      // produced its declared outputs - its contract is both; checked here, after the code gate it took instead
+      if (declaredNonCode && !nonCode) {
+        const og = outputsGate({ projectDir, foremanDir, wave, iteration, changed, before: outputsStart, artifact: 'outputs' });
+        if (!og.green) {
+          const bad = og.outputs.filter((r) => r.state !== 'present').map((r) => `${r.output} (${r.state})`);
+          const reason = `[taxonomy:outputs-missing] HALT: wave ${wave.n} passed its code gate but its declared outputs were not all produced by this wave: ${bad.slice(0, 4).join(', ')}`;
+          steps.push(`✗ ${reason}`);
+          return finishHalt({ reason, recommend:
+            `[taxonomy:outputs-missing] produce the declared outputs (each a non-empty file inside the project, created or changed by this wave), then re-invoke wave ${wave.n}` });
+        }
+        steps.push(`▸ declared outputs: ${og.tap.pass}/${og.tap.tests} produced by this wave (the code gate applied as well)`);
+      }
       // ----- vacuous-GREEN guard before declaring convergence (§5) -----
       // T4: hand the guard the test-only evidence it needs (wave-start inventory
       // snapshot, fresh inventory, the gate's executed counts, the wave title).
-      const vac = checkVacuousGreen(projectDir, foremanDir, changed, {
+      // S3: a non-code wave's outputs are its proof - there is no code for a test to exercise.
+      const vac = nonCode ? null : checkVacuousGreen(projectDir, foremanDir, changed, {
         invBefore,
         invNow: inventory(projectDir, foremanDir, invScopeFor(waveTestCommand)),
         gateTap: lastGate.tap,
@@ -1945,11 +2150,26 @@ export async function runWave(o) {
         try {
           fs.writeFileSync(
             path.join(foremanDir, `wave-${wave.n}-delta-coverage.json`),
-            JSON.stringify({ ...delta, wave: wave.n, at: new Date().toISOString() }, null, 2) + '\n',
+            JSON.stringify({ ...delta, oracle_map: oracleTrace, wave: wave.n, at: new Date().toISOString() }, null, 2) + '\n',
             'utf8',
           );
         } catch { /* best-effort */ }
-        if (!delta.pass) {
+        // S5: the trace, said aloud - which acceptance items name a test, which changed tests answer to no oracle
+        if (oracleTrace.oracles.length || oracleTrace.tests_beyond_oracles.length) {
+          const named = oracleTrace.oracles.filter((o) => o.tests.length).length;
+          const beyond = oracleTrace.tests_beyond_oracles;
+          steps.push(`▸ oracles: ${named}/${oracleTrace.oracles.length} acceptance item(s) name a test file${named ? ' (all present)' : ''} · ` +
+            `${beyond.length} changed test(s) beyond any oracle${beyond.length ? ` (${beyond.slice(0, 3).join(', ')})` : ''}`);
+        }
+        if (!delta.pass && (slim || nonCode)) {
+          // S5 (2026-10-10, John's Q3 "so many tests"; final review 10-10 finding 2): the tests the plan REQUIRES were
+          // enforced above - guardRequiredTests halted on any missing `(oracle: test/...)` or `Test file` declaration -
+          // and vacuity still holds; what is left is coverage BEYOND the plan's oracles. In the slim profile that is
+          // advisory (the one reviewer's elegance questions judge whether a test is proportionate), and a non-code
+          // wave has no code surface to judge. Said aloud and kept in the wave's record, never a halt.
+          steps.push(`▸ delta-coverage (advisory${nonCode ? ', non-code wave' : ', slim: required oracle tests enforced, extra coverage is the reviewer\'s call'}): ${delta.detail}`);
+          log(`delta-coverage: advisory wave ${wave.n} — ${delta.detail}`);
+        } else if (!delta.pass) {
           const reason = `delta-coverage HALT (journal 0091): ${delta.detail}`;
           steps.push(`✗ ${reason}`);
           log(`delta-coverage: FAIL wave ${wave.n} — ${delta.detail}`);
@@ -2161,7 +2381,7 @@ export async function runWave(o) {
         const p = path.isAbsolute(docs.execution_log) ? docs.execution_log : path.join(projectDir, docs.execution_log);
         const line = `- ${new Date().toISOString()} — Wave ${wave.n}/${totalWaves} GREEN` +
           `${wave.title ? ` — ${wave.title}` : ''} (gate exit ${lastGate?.exit_code ?? '?'} · ` +
-          `tests ${lastGate?.tap?.tests ?? '?'} pass ${lastGate?.tap?.pass ?? '?'} fail ${lastGate?.tap?.fail ?? '?'} · iter ${iteration}; appended by orchestrator on GO)\n`;
+          `${nonCode ? 'outputs' : 'tests'} ${lastGate?.tap?.tests ?? '?'} pass ${lastGate?.tap?.pass ?? '?'} fail ${lastGate?.tap?.fail ?? '?'} · iter ${iteration}; appended by orchestrator on GO)\n`;
         fs.appendFileSync(p, line, 'utf8');
         for (const h of eleganceHolds) fs.appendFileSync(p, `  - elegance HOLD (Grasscatcher): ${h}\n`, 'utf8');
         steps.push(`▸ execution log: appended Wave ${wave.n} GREEN${eleganceHolds.length ? ` + ${eleganceHolds.length} elegance HOLD line(s)` : ''}`);

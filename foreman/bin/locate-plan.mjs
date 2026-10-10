@@ -23,7 +23,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  HaltError, locateDocs, parseWaves, discoverTestCommand, preflightTestCommand,
+  HaltError, locateDocs, parseWaves, discoverGateCommand, preflightTestCommand,
   projectDoneDefinition,
 } from './foreman-lib.mjs';
 
@@ -37,9 +37,10 @@ function main(argv) {
   // 2 + 3 read the plan once
   const planText = fs.readFileSync(docs.plan, 'utf8');
   const waves = parseWaves(planText);
-  const rawCmd = discoverTestCommand(planText, dir);
-  // cf-slick: same honesty as runProject (broken test/ + under-gate + dual-root)
-  const testCmd = preflightTestCommand(rawCmd, dir);
+  // S3 (2026-10-10): an artifact-only plan (every wave non-code, gated by declared outputs) has no command to find
+  const rawCmd = discoverGateCommand(planText, dir, waves);
+  // cf-slick: same honesty as runProject (broken test/ + under-gate + dual-root); nothing to preflight without a command
+  const testCmd = rawCmd.command ? preflightTestCommand(rawCmd, dir) : { ...rawCmd, warnings: [] };
   const done = projectDoneDefinition(waves);
 
   const report = {
@@ -51,7 +52,7 @@ function main(argv) {
       execution_log: docs.execution_log,
       resolved_via: docs.source,
     },
-    waves: waves.map((w) => ({ n: w.n, title: w.title, line: w.line })),
+    waves: waves.map((w) => ({ n: w.n, title: w.title, line: w.line, kind: w.waveKind ?? null, outputs: w.outputs ?? [] })),
     total_waves: waves.length,
     test_command: testCmd,
     project_done: done,
@@ -77,7 +78,7 @@ function main(argv) {
     out.push(`     ${String(w.n).padStart(2)}. ${w.title || '(untitled)'}   [plan:${w.line}]`);
   }
   out.push('');
-  out.push(`  test command   : ${testCmd.command}   (source: ${testCmd.source})`);
+  out.push(`  test command   : ${testCmd.command ?? '(none — every wave is a non-code wave proven by its declared outputs)'}   (source: ${testCmd.source})`);
   out.push(`  project DONE   : ${done.predicate}`);
   out.push(`                   terminal wave = ${done.last_wave} "${done.last_wave_title}"`);
   out.push('');

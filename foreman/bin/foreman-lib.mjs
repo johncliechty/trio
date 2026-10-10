@@ -156,7 +156,9 @@ const WAVE_RE = /^##\s+(Wave|Sprint|Section)\s+(\d+)\b[ \t]*[—:\-.]?[ \t]*(.*)
 
 /**
  * Parse waves from plan markdown text.
- * @returns {Array<{n:number, title:string, kind:string, line:number}>}
+ * @returns {Array<{n:number, title:string, kind:string, line:number, gateCommand?:string, waveKind?:string,
+ *   outputs?:string[], acceptance:string, oracles:{item:string, oracle:string}[]}>}
+ *   `kind` is the heading word (wave/sprint/section); `waveKind` is a declared non-code kind (S3).
  * @throws HaltError if zero waves found, or wave numbers are not 1..N contiguous.
  */
 export function parseWaves(planText) {
@@ -218,6 +220,8 @@ export function parseWaves(planText) {
   for (let wi = 0; wi < waves.length; wi++) {
     const start = waves[wi].line; // 1-based
     const end = wi + 1 < waves.length ? waves[wi + 1].line : lines.length + 1;
+    const section = [];      // S6: the wave's own text, fenced examples left out
+    let fenced = false;
     for (let li = start; li < end - 1 && li < lines.length; li++) {
       const body = lines[li];
       const gm = body.match(/^\s*(?:wave[-_ ]?)?gate[-_ ]?command\s*[:=]\s*(.+)$/i);
@@ -225,9 +229,65 @@ export function parseWaves(planText) {
         const cmd = gm[1].replace(/^`+|`+$/g, '').trim();
         if (cmd) waves[wi].gateCommand = cmd;
       }
+      if (/^\s*(```|~~~)/.test(body)) { fenced = !fenced; continue; }
+      if (fenced) continue;
+      section.push(body);
+      // S3 (2026-10-10, slim plan): a wave that makes no code - docs, a landing, a verification, a render, data -
+      // says so (`kind:`) and names its outputs (`outputs:`); its gate is those outputs (wave-engine outputsGate),
+      // not a test suite with nothing to test (W0: two "vacuous GREEN" halts were waves of 24 rendered images).
+      const km = body.match(/^\s*(?:wave[-_ ]?)?kind\s*[:=]\s*`?([a-z][a-z-]*)`?\s*$/i);
+      if (km) waves[wi].waveKind = km[1].toLowerCase();
+      const om = body.match(/^\s*(?:(?:declared|wave)[-_ ]?outputs?|outputs)\s*[:=]\s*(.+)$/i);
+      if (om) {
+        const outs = [...om[1].matchAll(/`([^`]+)`|"([^"]+)"|'([^']+)'|([^\s,`"']+)/g)]
+          .map((x) => (x[1] ?? x[2] ?? x[3] ?? x[4]).trim()).filter(Boolean);
+        waves[wi].outputs = [...(waves[wi].outputs || []), ...outs];
+      }
     }
+    // S6 (2026-10-10, final review 10-10 finding 8): the acceptance text rides WITH the wave. Crucible's hardening
+    // lint reads `acceptance`, the review reads it, and wave-engine's required-test guard reads the same
+    // `(oracle: ...)` items - one representation, never a second parse of the plan.
+    waves[wi].acceptance = section.join('\n').trim();
+    waves[wi].oracles = parseWaveOracles(waves[wi].acceptance);
   }
   return waves;
+}
+
+/**
+ * S5/S6 (2026-10-10): the `(oracle: ...)` of each acceptance item - the one grammar the slim plan writes, the
+ * hardening lint reads (through `acceptance`) and wave-engine's required-test guard enforces. An oracle that names
+ * a test file makes that file a REQUIRED test of the wave (wave-engine requiredWaveTestPaths); any other oracle (a
+ * command, an observable fact) is kept as text so a review and the wave's record can trace each test to the item
+ * it proves. One level of parentheses inside the oracle is allowed.
+ * @param {string} sectionText  a wave's acceptance/section text (fenced examples already removed)
+ * @returns {{item:string, oracle:string}[]}
+ */
+export function parseWaveOracles(sectionText) {
+  const out = [];
+  const re = /\(\s*oracle\s*:\s*([^()]*(?:\([^()]*\)[^()]*)*)\)/gi;
+  for (const raw of String(sectionText || '').split(/\r?\n/)) {
+    const line = raw.replace(/\*\*/g, '').trim();
+    let m;
+    while ((m = re.exec(line)) !== null) {
+      const oracle = m[1].trim();
+      if (!oracle) continue;
+      const item = line.slice(0, m.index).replace(/^(?:[-*+]|\d+[.)])\s*/, '').trim();
+      out.push({ item, oracle });
+    }
+    re.lastIndex = 0;
+  }
+  return out;
+}
+
+/** S3: the wave kinds whose gate is their declared outputs rather than a test suite. */
+export const NONCODE_WAVE_KINDS = Object.freeze(['docs', 'landing', 'verification', 'render', 'data']);
+
+/** S3: a wave is non-code only when it DECLARES a non-code kind AND names its outputs - a kind with nothing declared
+ *  proves nothing, and outputs without the kind are a code wave's deliverables. The label alone never selects the
+ *  gate: wave-engine still inspects the measured changes (final review 10-10, finding 1). */
+export function isNonCodeWave(wave) {
+  return !!(wave && NONCODE_WAVE_KINDS.includes(String(wave.waveKind || '').toLowerCase())
+    && Array.isArray(wave.outputs) && wave.outputs.length > 0);
 }
 
 /**
@@ -378,6 +438,33 @@ export function discoverTestCommand(planText, projectDir) {
     'no ground-truth test command found',
     'no `test-command:` in the plan and no recognizable test script in the manifest — cannot gate (§4.4: "no ground truth → cannot gate"). Declare one in the plan or add a test script.',
   );
+}
+
+/**
+ * S3 (2026-10-10, final review 10-10 finding 6): the project's gate command through PRODUCTION startup - or NO
+ * command when EVERY parsed wave is a non-code wave (each is proven by its declared outputs; a fictitious
+ * `test-command:` would be the lie the W0 runs told). A plan with any code wave (no `kind:`, or a kind without
+ * outputs) still needs its command: §4.4 "no ground truth → cannot gate" is unchanged for it. The one caller-facing
+ * shape is discoverTestCommand's, with `command: null` for the artifact-only case.
+ * @param {string} planText
+ * @param {string} projectDir
+ * @param {ReturnType<typeof parseWaves>} waves
+ * @returns {{command:?string, source:string, artifactOnly?:true}}
+ */
+export function discoverGateCommand(planText, projectDir, waves) {
+  try {
+    return discoverTestCommand(planText, projectDir);
+  } catch (e) {
+    const artifactOnly = Array.isArray(waves) && waves.length > 0 && waves.every((w) => isNonCodeWave(w));
+    if (e instanceof HaltError && /no ground-truth test command/.test(String(e.reason)) && artifactOnly) {
+      return {
+        command: null,
+        artifactOnly: true,
+        source: `none — every wave is a non-code wave (${waves.map((w) => `${w.n}:${w.waveKind}`).join(', ')}) proven by its declared outputs`,
+      };
+    }
+    throw e;
+  }
 }
 
 // ---------------------------------------------------------------------------

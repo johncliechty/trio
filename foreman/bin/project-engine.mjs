@@ -45,7 +45,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  HaltError, locateDocs, parseWaves, discoverTestCommand, preflightTestCommand,
+  HaltError, locateDocs, parseWaves, discoverGateCommand, preflightTestCommand,
   readCheckpoint, projectDoneDefinition, newCheckpoint, writeCheckpointAtomic, makeBudget,
 } from './foreman-lib.mjs';
 import { runWave, runGate } from './wave-engine.mjs';
@@ -63,9 +63,11 @@ export function resolveContract(projectDir) {
   const docs = locateDocs(projectDir);
   const planText = fs.readFileSync(docs.plan, 'utf8');
   const waves = parseWaves(planText);      // ascending/contiguous 1..N or HaltError
-  const rawCmd = discoverTestCommand(planText, projectDir);
-  // cf-slick: refuse known-broken node --test test/ (journals 0038/0047)
-  const pre = preflightTestCommand(rawCmd, projectDir);
+  // S3 (2026-10-10): a plan whose EVERY wave is a non-code wave has no test command to discover - its waves are
+  // gated by their declared outputs (wave-engine outputsGate); a plan with any code wave still needs the command.
+  const rawCmd = discoverGateCommand(planText, projectDir, waves);
+  // cf-slick: refuse known-broken node --test test/ (journals 0038/0047); nothing to preflight without a command
+  const pre = rawCmd.command ? preflightTestCommand(rawCmd, projectDir) : { ...rawCmd, warnings: [] };
   const testCmd = { command: pre.command, source: pre.source };
   return {
     docs, planText, waves, testCmd, totalWaves: waves.length,
@@ -357,7 +359,7 @@ export async function runProject(o) {
 
   // ---- §4 contract (ascending/contiguous guard HALTs a bad plan here) ----
   const { docs, waves, testCmd, totalWaves, gateWarnings = [] } = resolveContract(projectDir);
-  log(`contract: ${totalWaves} wave(s) · gate "${testCmd.command}" (${testCmd.source})`);
+  log(`contract: ${totalWaves} wave(s) · gate "${testCmd.command ?? 'declared outputs'}" (${testCmd.source})`);
   for (const w of gateWarnings) log(`gate preflight WARNING: ${w}`);
 
   // ---- decide the starting wave (wave-level + intra-wave resume) ----

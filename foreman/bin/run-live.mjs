@@ -494,6 +494,10 @@ if (argv.includes('--doctor')) {
     const { resolveContract } = await import(new URL('./project-engine.mjs', import.meta.url));
     const { doctorTestCommand } = await import(new URL('./foreman-lib.mjs', import.meta.url));
     const c = resolveContract(PROJECT);
+    if (!c.testCmd.command) {   // S3: an artifact-only plan has no suite to doctor - its waves are gated by their declared outputs
+      emit(`doctor: no test command — ${c.testCmd.source}`);
+      process.exit(0);
+    }
     const d = doctorTestCommand(c.testCmd.command, PROJECT);
     emit(`doctor: command=${d.command}`);
     emit(`doctor: ${d.ok ? 'OK' : 'FAIL'} tests=${d.tests} — ${d.note}`);

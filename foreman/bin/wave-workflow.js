@@ -28,6 +28,7 @@ import { runElegancePass } from '../../drivers/elegance-pass.mjs';
 import path from 'node:path';
 import fs from 'node:fs';
 import { lookinAppendix, superviseSeat, trailFromFile } from '../../drivers/swarm-lookin.mjs';
+import { isNonCodeWave } from './foreman-lib.mjs';
 
 // 2026-09-01 (Gate 5 wave 1, proven live): every Foreman seat was supervised with NO heartbeat
 // trail and the supervisor's defaults (90 s check-in + 60 s grace), so "silence is death"
@@ -147,12 +148,17 @@ function authoringToolRule(env = process.env, role = 'EXECUTE') {
 
 function executePrompt(ctx) {
   const planPath = ctx.planPath || path.join(ctx.projectDir || '.', 'IMPLEMENTATION-PLAN.md');
-  const testCommand = ctx.testCommand || '(see plan test-command:)';
+  // S3 (2026-10-10): a non-code wave's gate is its declared outputs - the seat is told exactly that, and that any
+  // executable change puts the wave back under the code gates (the label alone never selects the gate)
+  const nonCode = isNonCodeWave(ctx.wave);
+  const gateLine = nonCode
+    ? `ORCHESTRATOR GATE (you do NOT run it): the declared outputs — ${ctx.wave.outputs.join(', ')} — each must be a non-empty FILE inside the project that THIS wave creates or changes (an existing, untouched file proves nothing). A ${ctx.wave.waveKind} wave must not change source, tests, manifests, scripts or CI configuration; if it does, the ordinary code gates apply.`
+    : `ORCHESTRATOR GATE (you do NOT run it): ${ctx.testCommand || '(see plan test-command:)'}`;
   const section = extractWaveSection(ctx.planText || '', ctx.wave?.n);
   const contractBlock = section
     ? [
         `FROZEN PLAN PATH: ${planPath}`,
-        `ORCHESTRATOR GATE (you do NOT run it): ${testCommand}`,
+        gateLine,
         `THIS WAVE'S CONTRACT (from the frozen plan — implement ALL of it; do not invent scope):`,
         '----- BEGIN WAVE CONTRACT -----',
         section,
@@ -160,7 +166,7 @@ function executePrompt(ctx) {
       ]
     : [
         `FROZEN PLAN PATH: ${planPath}`,
-        `ORCHESTRATOR GATE (you do NOT run it): ${testCommand}`,
+        gateLine,
         `WARNING: could not extract ## Wave ${ctx.wave?.n} body from plan text — open the plan file and implement that wave's Deliverables and done-when only.`,
       ];
   const lite = /^(LITE|LIGHT)$/i.test(String(process.env.FOREMAN_BAND_DEPTH || ''));
@@ -170,19 +176,26 @@ function executePrompt(ctx) {
         `smallest tests that import new modules. No drive-by refactors, no docs fluff.`,
       ]
     : [];
+  // 0082 P3.15–16 acceptance checklist (S3: a non-code wave's first item is its outputs, not a test import)
+  const checklist = [
+    ...(nonCode
+      ? [`Every declared output exists as a non-empty file inside the project and was written by you in this wave.`]
+      : [`Every new module is imported by at least one test that will run under the gate command.`]),
+    `No absolute host paths (C:\\Users\\..., /Users/...) in shipped strings, pointers, or docs — use relative paths or env.`,
+    `Syntax-valid sources only (no half-written files that fail node --check / py_compile).`,
+  ].map((t, i) => `  (${i + 1}) ${t}`);
   return [
     `You are the EXECUTE agent for Foreman wave ${ctx.wave.n} ("${ctx.wave.title}").`,
     `Project: ${ctx.projectDir}. Implement ONLY this wave's work as specified in the`,
     `frozen plan. Do not refactor outside the plan; do not weaken or delete tests.`,
     ...contractBlock,
     ...liteBudget,
-    `Ship real source that NEW tests import and exercise (or keep/extend tests that import your source).`,
-    `A green suite that does not exercise this wave's files is a failed execute — the orchestrator will vacuous-GREEN HALT.`,
-    // 0082 P3.15–16 acceptance checklist
+    ...(nonCode
+      ? [`Produce ONLY the declared outputs (and what they need); no tests are expected of a ${ctx.wave.waveKind} wave.`]
+      : [`Ship real source that NEW tests import and exercise (or keep/extend tests that import your source).`,
+         `A green suite that does not exercise this wave's files is a failed execute — the orchestrator will vacuous-GREEN HALT.`]),
     `ACCEPTANCE CHECKLIST (must satisfy before you stop):`,
-    `  (1) Every new module is imported by at least one test that will run under the gate command.`,
-    `  (2) No absolute host paths (C:\\Users\\..., /Users/...) in shipped strings, pointers, or docs — use relative paths or env.`,
-    `  (3) Syntax-valid sources only (no half-written files that fail node --check / py_compile).`,
+    ...checklist,
     authoringToolRule(),
     `If the wave is not answerable from the frozen docs, say so explicitly.`,
     `If you discover the wave is BLOCKED (a required human approval/amendment is`,
@@ -206,13 +219,22 @@ function reviewPrompt(ctx, gate) {
   // 2026-07-04 (wave-6 false-GO fix): an empty/deliverable-free diff is a
   // mandatory blocker, not something a reviewer may wave through — a green gate
   // over an unchanged tree proves nothing about the wave.
-  const notImplementedRule = [
-    `MANDATORY: if the changed-file list is empty, or nothing in it could plausibly`,
-    `implement this wave's stated deliverables (e.g. only regenerated data/doc`,
-    `artifacts or log noise), you MUST report a BLOCKER finding with`,
-    `rule: "wave-not-implemented" (title optional) — do NOT approve an unimplemented wave because the`,
-    `gate is green.`,
-  ];
+  // S3 (2026-10-10): a non-code wave's deliverables ARE doc/data artifacts - the orchestrator proved each was created
+  // or changed by this wave; the reviewer judges whether they deliver the acceptance, not whether code moved
+  const notImplementedRule = isNonCodeWave(ctx.wave)
+    ? [
+      `This is a NON-CODE wave (kind: ${ctx.wave.waveKind}); its deliverables are the declared outputs: ${ctx.wave.outputs.join(', ')}.`,
+      `The orchestrator verified each is a non-empty file inside the project that this wave created or changed (the gate`,
+      `artifact lists them). Judge whether they deliver the wave's stated acceptance; report a BLOCKER with`,
+      `rule: "wave-not-implemented" if they do not, or if the changed-file list shows work outside this wave's contract.`,
+    ]
+    : [
+      `MANDATORY: if the changed-file list is empty, or nothing in it could plausibly`,
+      `implement this wave's stated deliverables (e.g. only regenerated data/doc`,
+      `artifacts or log noise), you MUST report a BLOCKER finding with`,
+      `rule: "wave-not-implemented" (title optional) — do NOT approve an unimplemented wave because the`,
+      `gate is green.`,
+    ];
   return [
     `You are an INDEPENDENT, READ-ONLY reviewer (#${ctx.reviewerIndex}) for Foreman`,
     `wave ${ctx.wave.n}. Your job is to REFUTE, not to praise. The ground-truth gate`,
@@ -228,19 +250,25 @@ function reviewPrompt(ctx, gate) {
     `API not behaving as assumed) — distinct from mere ambiguity — you MAY attach a`,
     `plan_amendment {proposed_diff, rationale}; the orchestrator will HALT for human`,
     `approval and will NEVER apply it autonomously.`,
-    ...(ctx.eleganceInReview ? eleganceInReview() : []),
+    ...(ctx.eleganceInReview ? eleganceInReview(ctx) : []),
     lookinAppendix({ heartbeatPath: seatHeartbeatPath(ctx) }),
   ].join(' ');
 }
 
 /** S4 (2026-10-10, John's Q3: "a very simple elegance check"): the slim profile's one reviewer also answers three
- * questions, so no separate elegance phase runs. A cut is a MAJOR finding like any other (rule "elegance"). */
-function eleganceInReview() {
+ * questions, so no separate elegance phase runs. A cut is a MAJOR finding like any other (rule "elegance").
+ * S5: the orchestrator's test-to-oracle trace (ctx.oracles) feeds question (3) - a changed test no acceptance item
+ * asked for is named, so the judgement is made on the plan's oracles, not on taste. */
+function eleganceInReview(ctx = {}) {
+  const beyond = Array.isArray(ctx.oracles?.tests_beyond_oracles) ? ctx.oracles.tests_beyond_oracles : [];
   return [
     `ELEGANCE (three questions, answer within your findings): (1) Is anything in this diff not needed by the wave's`,
     `stated deliverable? (2) Is anything built that an existing function, file or library already does? (3) Is a`,
     `test asserting more than the plan's acceptance needs? Report each real case as a MAJOR finding with`,
     `rule: "elegance", naming what to remove and the plan line it fails; report nothing for taste.`,
+    ...(beyond.length
+      ? [`Changed test file(s) that no acceptance item's (oracle: ...) names: ${beyond.slice(0, 12).join(', ')} — question (3) applies to each.`]
+      : []),
   ];
 }
 

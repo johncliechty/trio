@@ -8,6 +8,10 @@ import assert from 'node:assert/strict';
 import { HaltError } from '../bin/crucible-lib.mjs';
 import { makeAgentSeam, defaultRunClaude, extractJson } from '../bin/agent.mjs';
 
+// Synthetic transport receipts follow the installed fail-closed seat contract.
+// These are test doubles, never provider attestations or live-run evidence.
+const reply = text => ({ text, rec: { ok: true, status: 'success', model_served: 'test-double', model_attested: false } });
+
 test('env-gated: the live transport refuses to spawn unless CRUCIBLE_AGENT_LIVE=1', () => {
   assert.throws(
     () => defaultRunClaude('hi', 'l', { env: {} }),
@@ -16,13 +20,13 @@ test('env-gated: the live transport refuses to spawn unless CRUCIBLE_AGENT_LIVE=
 });
 
 test('stubbable: plain prompt returns the transport text verbatim (no schema)', async () => {
-  const { agent } = makeAgentSeam({ runClaude: async () => ({ text: 'hello world' }) });
+  const { agent } = makeAgentSeam({ runClaude: async () => reply('hello world') });
   assert.equal(await agent('say hi'), 'hello world');
 });
 
 test('schema reply: a fenced JSON object is parsed and returned', async () => {
   const { agent } = makeAgentSeam({
-    runClaude: async () => ({ text: '```json\n{"answerable":"yes","findings":[]}\n```' }),
+    runClaude: async () => reply('```json\n{"answerable":"yes","findings":[]}\n```'),
   });
   const r = await agent('review', { schema: { type: 'object' } });
   assert.equal(r.answerable, 'yes');
@@ -34,7 +38,7 @@ test('schema reply: an unparseable first reply RETRIES once, then succeeds', asy
   const { agent } = makeAgentSeam({
     runClaude: async () => {
       calls += 1;
-      return { text: calls === 1 ? 'totally not json' : '{"answerable":"yes","findings":[]}' };
+      return reply(calls === 1 ? 'totally not json' : '{"answerable":"yes","findings":[]}');
     },
   });
   const r = await agent('review', { schema: { type: 'object' } });
@@ -42,16 +46,19 @@ test('schema reply: an unparseable first reply RETRIES once, then succeeds', asy
   assert.equal(r.answerable, 'yes');
 });
 
-test('schema reply: still unparseable after the retry => ABSTAIN (answerable:no, empty findings)', async () => {
+test('schema reply: still unparseable after one retry fails closed with the failed seat status', async () => {
   let calls = 0;
   const { agent } = makeAgentSeam({
-    runClaude: async () => { calls += 1; return { text: 'no json here, ever' }; },
+    runClaude: async () => { calls += 1; return reply('no json here, ever'); },
   });
-  const r = await agent('review', { schema: { type: 'object' }, label: 'rev#1' });
-  assert.equal(calls, 2, 'initial + one retry, then abstain (no infinite retry)');
-  assert.equal(r.answerable, 'no');
-  assert.deepEqual(r.findings, []);
-  assert.match(r.note, /not parseable/i);
+  await assert.rejects(agent('review', { schema: { type: 'object' }, label: 'rev#1' }),
+    error => error.seat_unavailable === true && error.seat_status === 'schema_nonconforming');
+  assert.equal(calls, 2, 'initial + one retry, then refusal (no infinite retry)');
+});
+
+test('a receipt-less response is not promoted into a successful seat', async () => {
+  const { agent } = makeAgentSeam({ runClaude: async () => ({ text: 'plausible answer' }) });
+  await assert.rejects(agent('review'), error => error.seat_status === 'missing_receipt');
 });
 
 test('extractJson handles bare, fenced, and embedded JSON; rejects non-JSON', () => {

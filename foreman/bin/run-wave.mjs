@@ -19,7 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  HaltError, locateDocs, parseWaves, discoverTestCommand,
+  HaltError, locateDocs, parseWaves, discoverGateCommand,
 } from './foreman-lib.mjs';
 import { runWave } from './wave-engine.mjs';
 import { makeScriptedDriver } from './drivers/scripted-driver.mjs';
@@ -42,7 +42,7 @@ async function main(argv) {
   const docs = locateDocs(dir);
   const planText = fs.readFileSync(docs.plan, 'utf8');
   const waves = parseWaves(planText);
-  const testCmd = discoverTestCommand(planText, dir);
+  const testCmd = discoverGateCommand(planText, dir, waves);   // S3: null command for an artifact-only plan
 
   // --- select the single target wave (default = terminal wave) ---
   const waveN = args.includes('--wave') ? Number(getFlag(args, '--wave')) : waves[waves.length - 1].n;
@@ -62,7 +62,7 @@ async function main(argv) {
 
   process.stderr.write(
     `[run-wave] project=${dir}\n` +
-    `[run-wave] gate command=${testCmd.command} (source: ${testCmd.source})\n` +
+    `[run-wave] gate command=${testCmd.command ?? '(declared outputs)'} (source: ${testCmd.source})\n` +
     `[run-wave] wave ${wave.n}/${waves.length} "${wave.title}" · cap=${cap} reviewers=${reviewers}\n`,
   );
 

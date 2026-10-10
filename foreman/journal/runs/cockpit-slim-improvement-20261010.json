@@ -1,0 +1,1 @@
+{"schema":1,"kind":"formal-improvement","journal_ref":"0137-cockpit-slim-formal-improvement","date":"2026-10-10","authors":["claude","chatgpt"],"failover":"Claude Fable quota; preserved edits completed by Codex","reviewer":"grok-4.7-build","review_verdict":"ACCEPT correction","tests":{"passed":272,"failed":0},"installed":false,"comparative_performance_proven":false}

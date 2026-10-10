@@ -1,0 +1,32 @@
+{
+  "skill": "crucible",
+  "tier": "slim",
+  "started": "2026-10-10T17:44:57.971Z",
+  "ended": "2026-10-10T17:45:02.275Z",
+  "input": "Create a concise GUIDE.md in docs/ explaining three existing workflow states: a job is producing, a checked candidate awaits human activation, and an activated update is installed. This is one documentation wave in a disposable project. Do not change code or create tests. The guide needs one brief example for each state and must explain that finishing a worker does not install its candidate.",
+  "params": {
+    "profile": "slim",
+    "depth": "LITE",
+    "tier": "standard",
+    "require_independent": true,
+    "context_file": null,
+    "calls": 1,
+    "max_calls": 3
+  },
+  "output": [],
+  "result": "HALT: trio seat seat_unavailable: slim:plan",
+  "cross_model": false,
+  "models": [
+    {
+      "role": "draft",
+      "family": "claude",
+      "model_served": null,
+      "model_attested": false,
+      "family_attested": false,
+      "status": "seat_unavailable",
+      "failover_used": false
+    }
+  ],
+  "duration_s": 4,
+  "journal_ref": "0106-cockpit-slim-formal-improvement"
+}

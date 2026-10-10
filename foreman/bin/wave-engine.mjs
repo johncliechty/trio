@@ -265,7 +265,9 @@ export function executableChanges(changed) {
 }
 
 /** Recursively list project files, skipping noise + the foreman state dir. */
-function listFiles(root, foremanDir) {
+const DELIVERABLE_DIRS = new Set(['docs', 'bundle', 'bundle_staging']);
+
+function listFiles(root, foremanDir, includeDeliverables = false) {
   const out = [];
   const foreman = path.resolve(foremanDir);
   (function walk(dir) {
@@ -275,7 +277,7 @@ function listFiles(root, foremanDir) {
       const abs = path.join(dir, e.name);
       if (path.resolve(abs) === foreman) continue;       // never count gate artifacts/logs
       if (e.isDirectory()) {
-        if (IGNORE_DIRS.has(e.name)) continue;
+        if (IGNORE_DIRS.has(e.name) && !(includeDeliverables && DELIVERABLE_DIRS.has(e.name))) continue;
         walk(abs);
       } else if (e.isFile()) {
         if (e.name.endsWith('.tmp')) continue;
@@ -294,9 +296,9 @@ function hashFile(abs) {
 }
 
 /** Map of relpath -> sha256 for every project file (the wave-start snapshot). */
-function snapshotHashes(root, foremanDir) {
+function snapshotHashes(root, foremanDir, includeDeliverables = false) {
   const snap = {};
-  for (const abs of listFiles(root, foremanDir)) {
+  for (const abs of listFiles(root, foremanDir, includeDeliverables)) {
     snap[path.relative(root, abs).split(path.sep).join('/')] = hashFile(abs);
   }
   return snap;
@@ -462,8 +464,15 @@ export function missingRequiredWaveTests(projectDir, planText, waveN) {
   });
 }
 
-function changedSince(root, foremanDir, startSnap) {
-  const now = snapshotHashes(root, foremanDir);
+function measuredChanges(root, foremanDir, startSnap, git, includeDeliverables) {
+  const measured = () => changedSince(root, foremanDir, startSnap, includeDeliverables);
+  if (!git) return measured();
+  const changed = git.changedVsHead();
+  return includeDeliverables ? [...new Set([...changed, ...measured()])] : changed;
+}
+
+function changedSince(root, foremanDir, startSnap, includeDeliverables = false) {
+  const now = snapshotHashes(root, foremanDir, includeDeliverables);
   const changed = [];
   for (const rel of Object.keys(now)) {
     if (now[rel] !== startSnap[rel]) changed.push(rel);
@@ -1512,7 +1521,7 @@ export async function runWave(o) {
     return scopePaths.length ? { scopePaths } : undefined;
   };
   const invBefore = inventory(projectDir, foremanDir, invScopeFor(resolveWaveGateCommand(wave, testCommand)));
-  const hashStart = snapshotHashes(projectDir, foremanDir);
+  const hashStart = snapshotHashes(projectDir, foremanDir, declaredNonCode);
   // S3: the declared outputs' own wave-start snapshot - "created or changed by this wave" is measured on them
   const outputsStart = declaredNonCode ? snapshotPaths(projectDir, wave.outputs) : null;
 
@@ -1643,11 +1652,11 @@ export async function runWave(o) {
       waveTestCommand = reboundCmd;
     }
     // §8: measure changed set before gate so syntax smoke can target it.
-    const changedPre = git ? git.changedVsHead() : changedSince(projectDir, foremanDir, hashStart);
+  const changedPre = measuredChanges(projectDir, foremanDir, hashStart, git, declaredNonCode);
     lastChanged = changedPre;
 
     // ----- S3: the measured changes, not the label, decide whether the outputs gate applies -----
-    codeBearing = declaredNonCode ? executableChanges(changedPre) : [];
+    codeBearing = declaredNonCode ? executableChanges([...new Set([...changedPre, ...(wave.outputs ?? [])])]) : [];
     nonCode = declaredNonCode && codeBearing.length === 0;
     if (declaredNonCode && codeBearing.length) {
       log(`gate: wave ${wave.n} is declared ${wave.waveKind} but changed executable file(s) (${codeBearing.slice(0, 4).join(', ')}${codeBearing.length > 4 ? ', …' : ''}) — the ordinary code gates apply`);
@@ -1774,7 +1783,7 @@ export async function runWave(o) {
     // measured vs git HEAD (so a crash-before-commit RESUME still sees the prior
     // run's uncommitted deliverable, which the per-invocation hash snapshot would
     // miss). Without git, fall back to the hash-diff since this invocation started.
-    const changed = git ? git.changedVsHead() : changedSince(projectDir, foremanDir, hashStart);
+    const changed = measuredChanges(projectDir, foremanDir, hashStart, git, declaredNonCode);
     lastChanged = changed;
 
     // ----- §5 test-integrity guard (any iteration) -----

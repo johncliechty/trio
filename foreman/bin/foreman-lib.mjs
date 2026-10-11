@@ -364,29 +364,31 @@ export function doctorTestCommand(command, projectDir = process.cwd()) {
 // dead-stopped a genuine RED). Normalize at CONTRACT time instead:
 //   - bare pytest       -> `-v` inserted after the pytest token (verbosity only,
 //                          semantics unchanged; safe in chained commands).
-//   - -q/--quiet        -> HALT with the exact edit to make (stripping a flag the
-//                          plan explicitly declares would be guessing — §4 "never
-//                          guess"; the author confirms by editing the plan).
-//   - already -v        -> untouched. Non-pytest commands -> untouched.
+//   - -q/--quiet        -> enough -v inserted to outweigh them (pytest nets -v
+//                          against -q), so `pytest -q` runs as `pytest -vv -q`: the
+//                          author's check, with the per-test events GREEN needs
+//                          (John 2026-10-11: an ordinary `python -m pytest -q`
+//                          check must never be refused).
+//   - already verbose   -> untouched. Non-pytest commands -> untouched.
 const PYTEST_TOKEN_RE = /(^|[\s/\\])(python(?:\d(?:\.\d+)?)?\s+-m\s+pytest|pytest|py\.test)(?=\s|$)/;
+
+function flagCount(cmd, letter, long) {
+  const short = (cmd.match(new RegExp(`(^|\\s)-${letter}+(?=\\s|$)`, 'g')) || [])
+    .reduce((n, t) => n + t.trim().length - 1, 0);
+  return short + (cmd.match(new RegExp(`(^|\\s)--${long}(?=\\s|$)`, 'g')) || []).length;
+}
 
 export function normalizePytestGate(command, source) {
   const cmd = String(command).trim();
   const m = cmd.match(PYTEST_TOKEN_RE);
   if (!m) return { command: cmd, source };
-  if (/(^|\s)(-q|--quiet)\b/.test(cmd)) {
-    throw new HaltError(
-      'pytest gate uses -q/--quiet — a gate the engine can NEVER pass as written',
-      `test command "${cmd}" (${source}) suppresses per-test events, but GREEN requires them ` +
-        `(§5 anti-forgery: a summary line alone is refusable). Change the declaration to use ` +
-        `\`-v\` (e.g. \`pytest -v\`) and re-run. Halting NOW, before any execute call is spent.`,
-    );
-  }
-  if (/(^|\s)(-v+|--verbose)\b/.test(cmd)) return { command: cmd, source };
+  const need = 1 - (flagCount(cmd, 'v', 'verbose') - flagCount(cmd, 'q', 'quiet'));
+  if (need <= 0) return { command: cmd, source };
   const insertAt = m.index + m[0].length;
+  const flag = '-' + 'v'.repeat(need);
   return {
-    command: cmd.slice(0, insertAt) + ' -v' + cmd.slice(insertAt),
-    source: `${source} (normalized: -v inserted — GREEN requires per-test events)`,
+    command: cmd.slice(0, insertAt) + ' ' + flag + cmd.slice(insertAt),
+    source: `${source} (normalized: ${flag} inserted — GREEN requires per-test events)`,
   };
 }
 

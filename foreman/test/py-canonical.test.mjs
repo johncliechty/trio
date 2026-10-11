@@ -393,7 +393,7 @@ test('T3: pytest output with NO summary and NO events (true nothing-ran) is stil
   } finally { cleanup(dir); }
 });
 
-test('T3 unit — normalizePytestGate: bare pytest gains -v; -q HALTs at contract time; -v and non-pytest untouched', () => {
+test('T3 unit — normalizePytestGate: bare pytest gains -v; -q is outweighed by -v; -v and non-pytest untouched', () => {
   // bare pytest -> -v inserted (the manifest-discovery self-sabotage fix)
   assert.equal(normalizePytestGate('pytest', 'plan declaration').command, 'pytest -v');
   assert.equal(normalizePytestGate('python -m pytest', 'plan').command, 'python -m pytest -v');
@@ -404,9 +404,12 @@ test('T3 unit — normalizePytestGate: bare pytest gains -v; -q HALTs at contrac
   // already verbose -> untouched
   assert.equal(normalizePytestGate('python -m pytest -v', 'plan').command, 'python -m pytest -v');
   assert.equal(normalizePytestGate('pytest -vv tests/', 'plan').command, 'pytest -vv tests/');
-  // -q/--quiet -> HALT with the exact edit, BEFORE any execute call is spent
-  assert.throws(() => normalizePytestGate('pytest -q', 'plan declaration'), (e) => e instanceof HaltError);
-  assert.throws(() => normalizePytestGate('python -m pytest --quiet tests/', 'plan'), (e) => e instanceof HaltError);
+  // -q/--quiet -> enough -v to outweigh them, so per-test events print (John 2026-10-11: never refused)
+  assert.equal(normalizePytestGate('python -m pytest -q', 'plan declaration').command, 'python -m pytest -vv -q');
+  assert.equal(normalizePytestGate('python -m pytest --quiet tests/', 'plan').command, 'python -m pytest -vv --quiet tests/');
+  assert.equal(normalizePytestGate('pytest -qq', 'plan').command, 'pytest -vvv -qq');
+  assert.equal(normalizePytestGate('pytest -q -v', 'plan').command, 'pytest -v -q -v', '-q -v nets to default: one more -v');
+  assert.equal(normalizePytestGate('pytest -vv -q', 'plan').command, 'pytest -vv -q', 'already outweighs -q');
   // non-pytest commands pass through byte-identical
   assert.equal(normalizePytestGate('node --test', 'plan').command, 'node --test');
   assert.equal(normalizePytestGate('npm test', 'plan').command, 'npm test');
@@ -418,7 +421,7 @@ test('T3: manifest-discovered pytest gate is born with -v (never a gate the engi
     fs.writeFileSync(path.join(dir, 'pyproject.toml'), '[tool.pytest.ini_options]\ntestpaths = ["tests"]\n');
     const r = discoverTestCommand('# Plan with no test-command line\n', dir);
     assert.equal(r.command, 'pytest -v');
-    // and a plan-declared -q is refused at discovery (contract) time
-    assert.throws(() => discoverTestCommand('test-command: `pytest -q`\n', dir), (e) => e instanceof HaltError);
+    // and a plan-declared -q is kept, made verbose enough at discovery (contract) time
+    assert.equal(discoverTestCommand('test-command: `pytest -q`\n', dir).command, 'pytest -vv -q');
   } finally { cleanup(dir); }
 });

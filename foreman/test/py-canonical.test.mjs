@@ -410,6 +410,9 @@ test('T3 unit — normalizePytestGate: bare pytest gains -v; -q is outweighed by
   assert.equal(normalizePytestGate('pytest -qq', 'plan').command, 'pytest -vvv -qq');
   assert.equal(normalizePytestGate('pytest -q -v', 'plan').command, 'pytest -v -q -v', '-q -v nets to default: one more -v');
   assert.equal(normalizePytestGate('pytest -vv -q', 'plan').command, 'pytest -vv -q', 'already outweighs -q');
+  assert.equal(normalizePytestGate('python -m pytest -q -qqv', 'plan').command, 'python -m pytest -vvv -q -qqv',
+    'mixed groups count each flag: three q, one v');
+  assert.equal(normalizePytestGate('pytest -xvs', 'plan').command, 'pytest -xvs', '-xvs is already verbose');
   // non-pytest commands pass through byte-identical
   assert.equal(normalizePytestGate('node --test', 'plan').command, 'node --test');
   assert.equal(normalizePytestGate('npm test', 'plan').command, 'npm test');

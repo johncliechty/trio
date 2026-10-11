@@ -372,9 +372,12 @@ export function doctorTestCommand(command, projectDir = process.cwd()) {
 //   - already verbose   -> untouched. Non-pytest commands -> untouched.
 const PYTEST_TOKEN_RE = /(^|[\s/\\])(python(?:\d(?:\.\d+)?)?\s+-m\s+pytest|pytest|py\.test)(?=\s|$)/;
 
+// pytest's no-value short flags combine (`-qqv`, `-xvs`): each v/q in such a group counts
+const SHORT_GROUP_RE = /(^|\s)-([vqxsl]+)(?=\s|$)/g;
+
 function flagCount(cmd, letter, long) {
-  const short = (cmd.match(new RegExp(`(^|\\s)-${letter}+(?=\\s|$)`, 'g')) || [])
-    .reduce((n, t) => n + t.trim().length - 1, 0);
+  let short = 0;
+  for (const m of cmd.matchAll(SHORT_GROUP_RE)) short += m[2].split(letter).length - 1;
   return short + (cmd.match(new RegExp(`(^|\\s)--${long}(?=\\s|$)`, 'g')) || []).length;
 }
 

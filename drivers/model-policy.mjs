@@ -68,6 +68,9 @@ export function validatePolicy(policy = DEFAULT_POLICY) {
 
 function validatePrefs(raw, source) {
   if (!object(raw) || raw.settings_error) fail(null, 'Model preferences are invalid.', 'settings_invalid');
+  if (raw.orchestrator_family && !raw.coding_family) raw = { ...raw, coding_family: raw.orchestrator_family };
+  if (raw.orchestrator_family && !raw.default_cli) raw = { ...raw, default_cli: raw.orchestrator_family };
+  if (raw.reviewer_family && !raw.review_family) raw = { ...raw, review_family: raw.reviewer_family };
   for (const key of ['coding_family', 'review_family', 'default_cli']) {
     if (!FAMILIES.has(raw[key])) fail(null, `Missing or invalid ${key}.`, 'settings_invalid');
   }

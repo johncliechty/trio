@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-15T16:09:43.785Z",
+  "ended": "2026-09-15T16:13:03.972Z",
+  "input": "C:\\dev\\DARPA\\DARPA proposal\\research\\researchprime-methodology-20260915",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\DARPA\\DARPA proposal\\research\\researchprime-methodology-20260915\\DELIVERABLE-ENGINE.json",
+  "result": "converged (clean)",
+  "cross_model": false,
+  "models": [
+    "grok"
+  ],
+  "duration_s": 200,
+  "journal_ref": null
+}

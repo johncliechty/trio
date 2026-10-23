@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-07T16:53:56.889Z",
+  "ended": "2026-10-07T16:54:01.089Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261007-105354-90a3a3",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261007-105354-90a3a3\\_foreman-status.log",
+  "result": "HALT: 1:HALT — [taxonomy:agent-died] HALT: the execute agent died (agent execute:w1 died: class error-result, 0 tool calls, 334ms; it said: You've reached your Fable limit. Switch to another model, or manage usage c",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 4,
+  "journal_ref": null
+}

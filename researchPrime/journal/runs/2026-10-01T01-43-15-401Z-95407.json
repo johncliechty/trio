@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-10-01T01:43:15.401Z",
+  "ended": "2026-10-01T01:43:15.407Z",
+  "input": "transformers/refinement-1/evidence/researchprime/run",
+  "params": {
+    "maxRounds": 8,
+    "live": false,
+    "spawnPanel": false,
+    "stakesTier": "low"
+  },
+  "output": "transformers\\refinement-1\\evidence\\researchprime\\run\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

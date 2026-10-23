@@ -1,0 +1,62 @@
+{
+  "schema": "foreman-run-record/v1",
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-11T20:33:46.009Z",
+  "ended": "2026-10-11T20:33:46.075Z",
+  "duration_s": 0,
+  "input": "C:\\dev\\Anchor-code-jobs\\20261011-143344-d59d95",
+  "stage": "run",
+  "status": "THREW",
+  "exit_code": 0,
+  "halt_reason": "HaltError: pytest gate uses -q/--quiet — a gate the engine can NEVER pass as written — pytest gate uses -q/--quiet — a gate the engine can NEVER pass as written",
+  "taxonomy": "run-threw",
+  "recommend": null,
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "stoppedAt": null,
+  "totalWaves": null,
+  "waves": [],
+  "agent_calls": 0,
+  "totals": {
+    "out": 0,
+    "cost": 0,
+    "ms": 0,
+    "denials": 0
+  },
+  "phases": {
+    "ms": {
+      "execute": 0,
+      "gate": 0,
+      "review": 0,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    },
+    "total_ms": 0,
+    "share": {
+      "execute": 0,
+      "gate": 0,
+      "review": 0,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    }
+  },
+  "threw": {
+    "name": "HaltError",
+    "message": "pytest gate uses -q/--quiet — a gate the engine can NEVER pass as written",
+    "reason": "pytest gate uses -q/--quiet — a gate the engine can NEVER pass as written"
+  },
+  "output": "C:\\dev\\Anchor-code-jobs\\20261011-143344-d59d95\\_foreman-status.log",
+  "result": "THREW: none — HaltError: pytest gate uses -q/--quiet — a gate the engine can NEVER pass as written — pytest gate uses -q/--quiet — a gate the engine can NEVER pass as written",
+  "cross_model": true,
+  "models": null,
+  "journal_ref": null
+}

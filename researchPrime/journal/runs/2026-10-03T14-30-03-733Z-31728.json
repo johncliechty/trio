@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-10-03T14:30:03.733Z",
+  "ended": "2026-10-03T14:43:51.728Z",
+  "input": "C:/dev/_rp-poincare/run2",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\_rp-poincare\\run2\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 828,
+  "journal_ref": null
+}

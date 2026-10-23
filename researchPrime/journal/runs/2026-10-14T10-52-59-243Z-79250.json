@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-10-14T10:52:59.243Z",
+  "ended": "2026-10-14T10:52:59.250Z",
+  "input": "C:\\dev\\plans\\2026-10-14-utah-native-hawaiian-health-insurance\\rp-run1",
+  "params": {
+    "maxRounds": 4,
+    "live": false,
+    "spawnPanel": false,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\plans\\2026-10-14-utah-native-hawaiian-health-insurance\\rp-run1\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

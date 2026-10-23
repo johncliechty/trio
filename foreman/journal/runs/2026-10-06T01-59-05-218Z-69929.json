@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-06T01:59:05.218Z",
+  "ended": "2026-10-06T02:01:09.929Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\Temp\\claude\\C--dev\\d40ab048-d815-4dac-8245-973109edd237\\scratchpad\\fm-chatgpt-trace-195904",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 1,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\Temp\\claude\\C--dev\\d40ab048-d815-4dac-8245-973109edd237\\scratchpad\\fm-chatgpt-trace-195904\\_foreman-status.log",
+  "result": "HALT: 1:HALT — non-convergence HALT: hit MAX_ITERS=1 without GO (gate RED (exit 1, fail 1))",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 125,
+  "journal_ref": null
+}

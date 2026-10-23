@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-10-02T15:38:01.056Z",
+  "ended": "2026-10-02T15:45:36.799Z",
+  "input": ".",
+  "params": {
+    "maxRounds": 1,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "low"
+  },
+  "output": "DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "grok"
+  ],
+  "duration_s": 456,
+  "journal_ref": null
+}

@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-17T01:11:45.348Z",
+  "ended": "2026-09-17T01:25:53.591Z",
+  "input": "C:/dev/MBA Teaching AI/.ecgberht/ai-validation-20260917/researchprime",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\MBA Teaching AI\\.ecgberht\\ai-validation-20260917\\researchprime\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 848,
+  "journal_ref": null
+}

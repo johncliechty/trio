@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-06T23:57:08.832Z",
+  "ended": "2026-10-06T23:58:21.566Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261006-175704-c5594f",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261006-175704-c5594f\\_foreman-status.log",
+  "result": "HALT: 1:HALT — [taxonomy:agent-died] HALT: the execute agent died (agent execute:w1 (chatgpt-cli) answered BLOCKED; it said: **BLOCKED:** The assurance plan and required rigor/hardening tests are absent from this wo",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 73,
+  "journal_ref": null
+}

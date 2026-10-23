@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-21T14:07:41.177Z",
+  "ended": "2026-09-21T14:23:13.459Z",
+  "input": "C:/dev/Writing/Artificial Magi/Book 1/spine-review/v8/refinement-1/board-review/research/run-2026-09-21",
+  "params": {
+    "maxRounds": 4,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Writing\\Artificial Magi\\Book 1\\spine-review\\v8\\refinement-1\\board-review\\research\\run-2026-09-21\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "claude",
+    "grok"
+  ],
+  "duration_s": 932,
+  "journal_ref": null
+}

@@ -1,0 +1,74 @@
+{
+  "schema": "foreman-run-record/v1",
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-09T21:41:29.005Z",
+  "ended": "2026-10-09T21:42:55.667Z",
+  "duration_s": 87,
+  "input": "C:\\dev\\Anchor-code-jobs\\fcj-live1\\jobs\\20261009-154128-63e93f",
+  "stage": "run",
+  "status": "DONE",
+  "exit_code": 0,
+  "halt_reason": null,
+  "taxonomy": null,
+  "recommend": null,
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "stoppedAt": null,
+  "totalWaves": 1,
+  "waves": [
+    {
+      "wave": 1,
+      "title": "Add a multiply(a, b) function to calc.py that returns a * b, with a pytest test for it in test_calc.py.",
+      "status": "GO",
+      "green": true,
+      "tap": {
+        "tests": 4,
+        "pass": 4,
+        "fail": 0,
+        "skipped": 0,
+        "todo": null
+      },
+      "iterations": 0,
+      "halt": null
+    }
+  ],
+  "agent_calls": 1,
+  "totals": {
+    "out": 1576,
+    "cost": 0.2086922,
+    "ms": 14134,
+    "denials": 0
+  },
+  "phases": {
+    "ms": {
+      "execute": 16833,
+      "gate": 954,
+      "review": 68680,
+      "fix": 0,
+      "elegance": 0,
+      "land": 3
+    },
+    "total_ms": 86470,
+    "share": {
+      "execute": 0.195,
+      "gate": 0.011,
+      "review": 0.794,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    }
+  },
+  "threw": null,
+  "output": "C:\\dev\\Anchor-code-jobs\\fcj-live1\\jobs\\20261009-154128-63e93f\\_foreman-status.log",
+  "result": "DONE: 1:GO",
+  "cross_model": true,
+  "models": null,
+  "journal_ref": null
+}

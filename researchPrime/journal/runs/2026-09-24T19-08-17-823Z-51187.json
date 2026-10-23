@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-24T19:08:17.823Z",
+  "ended": "2026-09-24T19:35:51.187Z",
+  "input": "C:/dev/HIERAR~1/PAPER1~1/research/plan-gate-run",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\HIERAR~1\\PAPER1~1\\research\\plan-gate-run\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 1653,
+  "journal_ref": null
+}

@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-10-09T23:01:07.574Z",
+  "ended": "2026-10-09T23:07:00.587Z",
+  "input": "C:/dev/Anchor-code-jobs/20261009-154600-781c85/.anchor/projects/6765ece4b3bc43b0b0b0907b92b17280/jobs/lecture5-plans-20261009/researchprime",
+  "params": {
+    "maxRounds": 2,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "low"
+  },
+  "output": "C:\\dev\\Anchor-code-jobs\\20261009-154600-781c85\\.anchor\\projects\\6765ece4b3bc43b0b0b0907b92b17280\\jobs\\lecture5-plans-20261009\\researchprime\\RUN-STATE.json",
+  "result": "not converged — awaiting next round",
+  "cross_model": true,
+  "models": [
+    "claude",
+    "gemini"
+  ],
+  "duration_s": 353,
+  "journal_ref": null
+}

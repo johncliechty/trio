@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-17T20:30:03.015Z",
+  "ended": "2026-09-17T20:30:58.545Z",
+  "input": "C:\\dev\\Open Source Token Source\\Basic Infastructure\\research\\commissions-v2\\distillation-schooling",
+  "params": {
+    "maxRounds": 8,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Open Source Token Source\\Basic Infastructure\\research\\commissions-v2\\distillation-schooling\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 56,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "regular",
+  "started": null,
+  "ended": "2026-09-30T17:27:16.586306+00:00",
+  "input": "C:/dev/AI Club/MIT Lectures/.ecgberht/conversation-log.json",
+  "params": {
+    "scope": "Phase-1 supplemental research plan"
+  },
+  "output": [
+    "C:/dev/AI Club/MIT Lectures/research/supplemental-v1/PLAN.html"
+  ],
+  "result": "Import probe passed; installed buildResearchPlan froze a medium-stakes proposal with three retained branches and one cut catalogue branch. Awaiting explicit review of that exact plan; no evidence execution or Phase-3 validation has run.",
+  "cross_model": false,
+  "models": {
+    "planner_family": "chatgpt",
+    "reviewer": "not commissioned for Phase-1 planning"
+  },
+  "duration_s": null,
+  "journal_ref": "0106-mit-companion-phase1.md"
+}

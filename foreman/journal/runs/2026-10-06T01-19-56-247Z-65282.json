@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-06T01:19:56.247Z",
+  "ended": "2026-10-06T01:21:05.282Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261005-191956-a84d92",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261005-191956-a84d92\\_foreman-status.log",
+  "result": "HALT: 1:HALT — [taxonomy:ambiguity] HALT: a reviewer could not answer from the frozen docs",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 69,
+  "journal_ref": null
+}

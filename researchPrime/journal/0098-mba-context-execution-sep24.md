@@ -1,0 +1,7 @@
+id: 0098-mba-context-execution-sep24
+skill: researchPrime@2026-09-24
+situation: Execute the exact approved low-stakes Claude interfaces/context plan
+context: MBA Teaching AI; saved John approval6cfceaab; plan hash435f54bf391267fed7b2bb9ef2a6b190dce4eed0f918dcaa632967dae020b9cd
+observation: Fresh plan-only worker received no parent nonce; root supplied current primary excerpts. First live Grok panel halted with zero final assessments after idle failures, despite intermediate heartbeats. One bounded retry used a complete compact source packet with no discovery. The first panel returned zero usable assessments. The compact-packet retry returned one Grok Skeptic assessment with an empty findings array; Contrarian and Analyst abstained after idle failures. The engine labelled its round DRY, but also empty=true, panelSurviving=1 and panelDegraded=true; its convergence tracker is false and no DELIVERABLE-ENGINE was produced. The actual governor tier was low, with zero Judge, Synthesizer or debate calls. One family and one completed assessment do not meet independent corroboration. The bounded attempt ends here with the review limit explicit; no CLEAN/converged/verified claim is made. Root corrected Cowork article date to June3 and made the instructor save/clear recipe explicitly unobserved. Same-publisher documentation is not independent corroboration. No deck changed or slice closed.
+outcome: friction
+provenance: genuine-execution

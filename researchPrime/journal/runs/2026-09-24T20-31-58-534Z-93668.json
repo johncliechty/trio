@@ -1,0 +1,22 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "started": "2026-09-24T20:31:58.534Z",
+  "ended": "2026-09-24T20:46:33.668Z",
+  "input": "C:/dev/Skill Foundry/planning/high-seat-2026-09-24/research/run",
+  "params": {
+    "maxRounds": 4,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\dev\\Skill Foundry\\planning\\high-seat-2026-09-24\\research\\run\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": true,
+  "models": [
+    "chatgpt",
+    "grok"
+  ],
+  "duration_s": 875,
+  "journal_ref": null
+}

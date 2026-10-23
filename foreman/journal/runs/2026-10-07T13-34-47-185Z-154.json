@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-07T13:34:47.185Z",
+  "ended": "2026-10-07T14:15:00.155Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261007-073444-de5804",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261007-073444-de5804\\_foreman-status.log",
+  "result": "DONE: 1:GO",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 2413,
+  "journal_ref": null
+}

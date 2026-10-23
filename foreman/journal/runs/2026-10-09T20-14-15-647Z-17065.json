@@ -1,0 +1,74 @@
+{
+  "schema": "foreman-run-record/v1",
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-09T20:14:15.647Z",
+  "ended": "2026-10-09T20:15:17.063Z",
+  "duration_s": 61,
+  "input": "C:\\dev\\Anchor-code-jobs\\fcj-live1\\jobs\\20261009-141414-05349f",
+  "stage": "run",
+  "status": "DONE",
+  "exit_code": 0,
+  "halt_reason": null,
+  "taxonomy": null,
+  "recommend": null,
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "stoppedAt": null,
+  "totalWaves": 1,
+  "waves": [
+    {
+      "wave": 1,
+      "title": "Add a subtract(a, b) function to calc.py that returns a - b, with a pytest test for it in test_calc.py (cover a negative",
+      "status": "GO",
+      "green": true,
+      "tap": {
+        "tests": 3,
+        "pass": 3,
+        "fail": 0,
+        "skipped": 0,
+        "todo": null
+      },
+      "iterations": 0,
+      "halt": null
+    }
+  ],
+  "agent_calls": 1,
+  "totals": {
+    "out": 1483,
+    "cost": 0.19748780000000002,
+    "ms": 12282,
+    "denials": 0
+  },
+  "phases": {
+    "ms": {
+      "execute": 15815,
+      "gate": 872,
+      "review": 44562,
+      "fix": 0,
+      "elegance": 0,
+      "land": 2
+    },
+    "total_ms": 61251,
+    "share": {
+      "execute": 0.258,
+      "gate": 0.014,
+      "review": 0.728,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    }
+  },
+  "threw": null,
+  "output": "C:\\dev\\Anchor-code-jobs\\fcj-live1\\jobs\\20261009-141414-05349f\\_foreman-status.log",
+  "result": "DONE: 1:GO",
+  "cross_model": true,
+  "models": null,
+  "journal_ref": null
+}

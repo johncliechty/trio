@@ -1,0 +1,89 @@
+{
+  "schema": "foreman-run-record/v1",
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-11T20:35:36.992Z",
+  "ended": "2026-10-11T20:40:09.702Z",
+  "duration_s": 273,
+  "input": "C:\\dev\\Anchor-code-jobs\\20261011-143533-13d7e9",
+  "stage": "run",
+  "status": "DONE",
+  "exit_code": 0,
+  "halt_reason": null,
+  "taxonomy": null,
+  "recommend": null,
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "stoppedAt": null,
+  "totalWaves": 2,
+  "waves": [
+    {
+      "wave": 1,
+      "title": "",
+      "status": "GO",
+      "green": true,
+      "tap": {
+        "tests": 16,
+        "pass": 16,
+        "fail": 0,
+        "skipped": 0,
+        "todo": null
+      },
+      "iterations": 0,
+      "halt": null
+    },
+    {
+      "wave": 2,
+      "title": "",
+      "status": "GO",
+      "green": true,
+      "tap": {
+        "tests": 31,
+        "pass": 31,
+        "fail": 0,
+        "skipped": 0,
+        "todo": null
+      },
+      "iterations": 0,
+      "halt": null
+    }
+  ],
+  "agent_calls": 2,
+  "totals": {
+    "out": 7612,
+    "cost": 0.5666586,
+    "ms": 70427,
+    "denials": 0
+  },
+  "phases": {
+    "ms": {
+      "execute": 76140,
+      "gate": 3567,
+      "review": 192608,
+      "fix": 0,
+      "elegance": 0,
+      "land": 15
+    },
+    "total_ms": 272330,
+    "share": {
+      "execute": 0.28,
+      "gate": 0.013,
+      "review": 0.707,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    }
+  },
+  "threw": null,
+  "output": "C:\\dev\\Anchor-code-jobs\\20261011-143533-13d7e9\\_foreman-status.log",
+  "result": "DONE: 1:GO,2:GO",
+  "cross_model": true,
+  "models": null,
+  "journal_ref": null
+}

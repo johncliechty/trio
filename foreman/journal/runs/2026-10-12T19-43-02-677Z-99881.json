@@ -1,0 +1,89 @@
+{
+  "schema": "foreman-run-record/v1",
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-12T19:43:02.677Z",
+  "ended": "2026-10-12T19:48:19.878Z",
+  "duration_s": 317,
+  "input": "C:\\dev\\Anchor-code-jobs\\20261012-134301-3a71f9",
+  "stage": "run",
+  "status": "DONE",
+  "exit_code": 0,
+  "halt_reason": null,
+  "taxonomy": null,
+  "recommend": null,
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "stoppedAt": null,
+  "totalWaves": 2,
+  "waves": [
+    {
+      "wave": 1,
+      "title": "Record successful calculations and isolate the tests",
+      "status": "GO",
+      "green": true,
+      "tap": {
+        "tests": 45,
+        "pass": 45,
+        "fail": 0,
+        "skipped": 0,
+        "todo": null
+      },
+      "iterations": 0,
+      "halt": null
+    },
+    {
+      "wave": 2,
+      "title": "The history command",
+      "status": "GO",
+      "green": true,
+      "tap": {
+        "tests": 57,
+        "pass": 57,
+        "fail": 0,
+        "skipped": 0,
+        "todo": null
+      },
+      "iterations": 0,
+      "halt": null
+    }
+  ],
+  "agent_calls": 2,
+  "totals": {
+    "out": 14783,
+    "cost": 0.8965487999999999,
+    "ms": 118050,
+    "denials": 0
+  },
+  "phases": {
+    "ms": {
+      "execute": 124147,
+      "gate": 8108,
+      "review": 184511,
+      "fix": 0,
+      "elegance": 0,
+      "land": 10
+    },
+    "total_ms": 316776,
+    "share": {
+      "execute": 0.392,
+      "gate": 0.026,
+      "review": 0.582,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    }
+  },
+  "threw": null,
+  "output": "C:\\dev\\Anchor-code-jobs\\20261012-134301-3a71f9\\_foreman-status.log",
+  "result": "DONE: 1:GO,2:GO",
+  "cross_model": true,
+  "models": null,
+  "journal_ref": null
+}

@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-06T18:04:45.080Z",
+  "ended": "2026-10-06T18:11:46.728Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261006-120437-b144a4",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261006-120437-b144a4\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: gate exited 0 with summary counts but no real per-test events ran (only an echoed/forged summary line) — refusing vacuous GREEN",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 422,
+  "journal_ref": null
+}

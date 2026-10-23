@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-07T13:10:32.334Z",
+  "ended": "2026-10-07T13:31:13.690Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261007-071029-ff8ea0",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261007-071029-ff8ea0\\_foreman-status.log",
+  "result": "HALT: 1:HALT — vacuous-GREEN HALT: GREEN gate did not exercise any changed source file (.proof/foundry-refinement2/1440x1000-disagreement-source.png, .proof/foundry-refinement2/1440x1000-human-guide.png, .proof/foun",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 1241,
+  "journal_ref": null
+}

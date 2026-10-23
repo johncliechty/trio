@@ -1,0 +1,9 @@
+# 0124 — Utah Native Hawaiian / AI/AN Health Insurance Eligibility & MAGI Verification (2 Runs)
+
+- **Date / skill / tier**: 2026-10-14 · `researchPrime` · Heavy / FULL (2 engine runs: `rp-run1` & `rp-run2`, replay/session-hosted, `cross_model: false` stamped honestly on engine deliverables; session model Gemini 3.1 Pro + Claude review lineage in round inputs)
+- **Task**: Verify health insurance options in Utah (Oct 2026 / Plan Year 2027) for a 24yo woman (Utah resident, native of Hawaii / Native American) earning just above the 138% FPL Utah Medicaid cutoff with limited family assistance.
+- **Outcome**: Both `rp-run1` (`triageHash=32811e99c0b3`, `planHash=cebacec34718`) and `rp-run2` (`triageHash=d6bcb9e7d10b`, `planHash=16f62997503c`) converged DRY in 2 rounds (`unresolvedHigh=0`), passing `checkOutputConformance` and emitting `DELIVERABLE-ENGINE.json` + 3-level `SURFACES.md`.
+- **What worked**: Two-pass pairing with Gandalf separated passive statutory mapping (Run 1: 45 CFR 155.350 vs 42 USC 11701 Branch A/B split, 2026 Utah Medicaid FPL $22,025 vs 2025 Marketplace FPL $21,597 lag, Aug 2025 repeal of 150% FPL SEP) from active remedies (Run 2: IRC 62 / 219 Traditional IRA MAGI reduction, DWS denial 60-day SEP bridge, UPP $150/mo pre-enrollment rule).
+- **What failed / friction**: None; adhering to mechanized FIELD LAWS (`traces_to_north_star: "yes"|"no"` strings and absolute `artifactPath`) avoided any round-input halt.
+- **Workaround / fix**: Programmatic `runPlanReviewGate` + `runRounds` in a single batched orchestrator script (`run-campaign.mjs`) eliminated interactive TTY hangs while preserving full hash-bound Gate 1/2 governance records.
+- **Proposed skill change**: Document the two-run `researchPrime` -> `Gandalf` -> `researchPrime` -> `Gandalf` statutory-to-remedy pattern in `HUMAN.md` as the reference workflow for benefits/regulatory cliff analysis.

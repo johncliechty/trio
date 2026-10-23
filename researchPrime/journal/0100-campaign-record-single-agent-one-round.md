@@ -1,0 +1,9 @@
+# 0100 - the Campaign record read: one agent, three fetched ledgers, one live round, Judge CHALLENGE
+
+- **id:** 0100
+- **skill:** researchPrime (regular tier, adjudicated medium; Anchor job rp-high-seat-campaign-20260926)
+- **situation:** John asked how a steward should structure, run and keep honest one coordinating record of his initiatives (the Campaign above the High Seat), with the cockpit and portfolio reads off limits; the launcher removed sub-agents, allowed web, and capped Phase 3 at one round.
+- **context:** Plan gate driven programmatically (delegated APPROVE); three branches executed in-line; PDFs fetched with a local helper (run/pdftext.py, PyMuPDF) because WebFetch could not read most PDFs; 35 claims, 65 fetch attempts; Phase 3 launched detached (launch-phase3.ps1) and waited on in the foreground because a headless lane dies at end-of-turn.
+- **observation:** The Grok panel (3, one lineage) returned 15 substantive findings that could not tally (quorum 1 of 2), so the tracker stamped DRY while the Judge returned CHALLENGE/not-lockable; the findings were right on 14 counts (the draft's only CORROBORATED grade was two mechanisms stapled; second-hand effect sizes and practitioner text graded CLAIMED; nine rules written as if sources stated the agent's mechanisms). Judge and Synthesizer stamps again read model claude / cross_model false against substrate families chatgpt+grok; which model served them is not determinable from the records.
+- **outcome:** worked - three deliverables on disk, corrections applied by a logged script, revised text not re-reviewed (one round by instruction); friction on seat provenance and the single-lineage quorum, unchanged from journal 0068 and the 2026-09-24 run.
+- **provenance:** genuine-execution (engine run record journal/runs/2026-09-26T13-45-41-631Z-31107.json; deliverables under Skill Foundry/planning/high-seat-2026-09-24/research/campaign/)

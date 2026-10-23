@@ -1,0 +1,21 @@
+{
+  "skill": "researchPrime",
+  "tier": "replay",
+  "started": "2026-10-19T17:13:52.975Z",
+  "ended": "2026-10-19T17:13:52.983Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\Temp\\rp-nyu-viva-20261019",
+  "params": {
+    "maxRounds": 8,
+    "live": false,
+    "spawnPanel": false,
+    "stakesTier": "medium"
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\Temp\\rp-nyu-viva-20261019\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "claude"
+  ],
+  "duration_s": 0,
+  "journal_ref": null
+}

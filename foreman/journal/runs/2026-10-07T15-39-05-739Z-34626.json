@@ -1,0 +1,21 @@
+{
+  "skill": "foreman",
+  "tier": "standard",
+  "started": "2026-10-07T15:39:05.739Z",
+  "ended": "2026-10-07T16:52:14.626Z",
+  "input": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261007-093902-1acb50",
+  "params": {
+    "reviewers": 2,
+    "fixIterCap": 3,
+    "maxWaves": null,
+    "git": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "output": "C:\\Users\\john\\AppData\\Local\\anchor-code-jobs\\20261007-093902-1acb50\\_foreman-status.log",
+  "result": "HALT: 1:HALT — [taxonomy:agent-died] HALT: the fix agent died (agent fix:w1.3 died: class error-result, 8 tool calls, 258411ms; it said: You've reached your Fable limit. Switch to another model, or manage usage cred",
+  "cross_model": false,
+  "models": null,
+  "duration_s": 4389,
+  "journal_ref": null
+}

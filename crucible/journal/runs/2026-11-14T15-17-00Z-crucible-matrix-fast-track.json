@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "kind": "formal-improvement",
+  "journal_ref": "0112-matrix-fast-track-triage-rightsizing-and-chekhov-gates",
+  "date": "2026-11-14",
+  "authors": ["gemini"],
+  "reviewer": "gpt-6-luna",
+  "review_verdict": "ACCEPT after fixing mapping.mjs MATRIX-FAST-TRACK row & core.mjs empty targetFiles",
+  "tests": { "triage_passed": 207, "crucible_passed": 337, "failed": 0 },
+  "installed": true
+}

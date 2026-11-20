@@ -78,8 +78,8 @@ test('(a) the dry-round predicate FIRES on a no-new-blocker round, and not on a 
 // ── (b) an EMPTY round does NOT increment N (I7 honest convergence) ─────────────────────────────────
 
 test('(b) an EMPTY round does NOT increment the dry counter N (I7) — convergence needs real looking', () => {
-  // N=2: converged only after TWO non-empty dry rounds.
-  const tracker = makeConvergenceTracker({ N: 2 });
+  // N=2, cleanN=2: converged only after TWO non-empty dry rounds (empty round does not stand in for dry).
+  const tracker = makeConvergenceTracker({ N: 2, cleanN: 2 });
 
   let s = tracker.observe(dryNonEmpty()); // first real dry round
   assert.deepEqual([s.counted, s.dryStreak, s.converged], [true, 1, false]);
@@ -98,18 +98,22 @@ test('(b) an EMPTY round does NOT increment the dry counter N (I7) — convergen
   // distinct stamp — a genuinely defect-free artifact is no longer structurally unable to
   // converge (the old rule pressured reviewers into filler nits; the dogfood scripted one
   // per round just to terminate).
-  const onlyEmpty = makeConvergenceTracker({ N: 1 }); // cleanN defaults to N + 1 = 2
+  // Wave 4 / ELEGANCE.md Rule 5: cleanN defaults to 1 (one genuinely clean quorum-verified
+  // round ends the loop — never a 2-round filler streak); explicit cleanN override still works.
+  const onlyEmpty = makeConvergenceTracker({ N: 1 }); // cleanN defaults to 1 (Rule 5)
   let e = onlyEmpty.observe(emptyRound());
-  assert.equal(e.converged, false, 'one empty round is not enough (cleanN > N: clean needs MORE evidence than dry)');
+  assert.equal(e.converged, true, 'one genuinely clean quorum-verified round converges (cleanN=1, Rule 5)');
   assert.equal(e.dryStreak, 0, 'the DRY streak stays untouched — empty can never fake adversarial dryness');
-  e = onlyEmpty.observe(emptyRound());
-  assert.equal(e.converged, true, 'cleanN consecutive empty rounds converge');
   assert.equal(e.mode, 'clean', '...in CLEAN mode, never dry');
   assert.match(e.stamp, /CLEAN convergence/, 'the explicit stamp rides the state');
   assert.match(e.stamp, /DISTINCT from DRY/);
 
+  const explicitTwoClean = makeConvergenceTracker({ N: 1, cleanN: 2 });
+  assert.equal(explicitTwoClean.observe(emptyRound()).converged, false, 'explicit cleanN=2 still waits for 2 clean rounds');
+  assert.equal(explicitTwoClean.observe(emptyRound()).converged, true);
+
   // A non-empty round RESETS the clean streak — clean must be CONSECUTIVE evidence.
-  const cleanReset = makeConvergenceTracker({ N: 5 }); // cleanN 6; dry unreachable here
+  const cleanReset = makeConvergenceTracker({ N: 5, cleanN: 2 });
   cleanReset.observe(emptyRound());
   const afterFinding = cleanReset.observe(hotRound());
   assert.equal(afterFinding.emptyStreak, 0, 'a finding resets the clean streak');

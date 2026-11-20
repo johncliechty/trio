@@ -175,17 +175,59 @@ test('an ambiguous partial turn is not replayed on another family', async t => {
   assert.equal(receipts.length, 0);
 });
 
-test('verification fails closed even when the unavailable provider marks replay safe', async t => {
-  const { env } = fixture(t, preferenceObject('chatgpt', 'grok', 'claude'));
-  const calls = [];
-  await expectFailure(runAgent(request(env, {
+test('verification fails closed on non-quota provider errors or when only coding_family remains, and fails over only to a healthy non-drafter 3rd family on quota/auth', async t => {
+  // (a) Non-quota/auth error (cli_error) on review seat still fails closed even if replay_safe: true
+  const { env: envCliErr } = fixture(t, preferenceObject('chatgpt', 'grok', 'claude'));
+  const callsCliErr = [];
+  await assert.rejects(runAgent(request(envCliErr, {
     driver: 'grok-cli', role: 'review',
-    runGrokCli: async () => { calls.push('grok'); return unavailable('grok', true); },
-    runCodexCli: async () => { calls.push('chatgpt'); return success('chatgpt'); },
-    runClaude: async () => { calls.push('claude'); return success('claude'); },
+    runGrokCli: async () => {
+      callsCliErr.push('grok');
+      return {
+        text: '',
+        rec: {
+          ok: false, status: 'cli_error', requested_model: 'grok-synthetic-requested',
+          model_served: null, model_family: 'grok', family_attested: false, model_attested: false,
+          replay_safe: true,
+        },
+      };
+    },
+    runCodexCli: async () => { callsCliErr.push('chatgpt'); return success('chatgpt'); },
+    runClaude: async () => { callsCliErr.push('claude'); return success('claude'); },
+    onRoutingEvent: async () => {},
+  })), error => {
+    assert.equal(error.receipt?.status, 'verification_fail_closed');
+    assert.equal(error.receipt?.attempts?.length, 1);
+    return true;
+  });
+  assert.deepEqual(callsCliErr, ['grok']);
+
+  // (b) Quota failure when only coding_family ('chatgpt') is available fails closed (never self-reviews)
+  const { env: envOnlyDrafter } = fixture(t, preferenceObject('chatgpt', 'grok', 'chatgpt'));
+  const callsOnlyDrafter = [];
+  await expectFailure(runAgent(request(envOnlyDrafter, {
+    driver: 'grok-cli', role: 'review',
+    runGrokCli: async () => { callsOnlyDrafter.push('grok'); return unavailable('grok', true); },
+    runCodexCli: async () => { callsOnlyDrafter.push('chatgpt'); return success('chatgpt'); },
     onRoutingEvent: async () => {},
   })), 'verification_fail_closed', 1);
-  assert.deepEqual(calls, ['grok']);
+  assert.deepEqual(callsOnlyDrafter, ['grok']);
+
+  // (c) Quota failure when a healthy 3rd non-drafter family ('claude' !== coding_family 'chatgpt') is configured fails over cleanly
+  const { env: envThirdFamily } = fixture(t, preferenceObject('chatgpt', 'grok', 'claude'));
+  const callsThirdFamily = [];
+  const receipts = [];
+  await runAgent(request(envThirdFamily, {
+    driver: 'grok-cli', role: 'review',
+    runGrokCli: async () => { callsThirdFamily.push('grok'); return unavailable('grok', true); },
+    runCodexCli: async () => { callsThirdFamily.push('chatgpt'); return success('chatgpt'); },
+    runClaude: async () => { callsThirdFamily.push('claude'); return success('claude'); },
+    onRoutingEvent: async () => {},
+    onReceipt: async r => { receipts.push(r); },
+  }));
+  assert.deepEqual(callsThirdFamily, ['grok', 'claude']);
+  assert.equal(receipts[0].status, 'success_after_failover');
+  assert.equal(receipts[0].served.family, 'claude');
 });
 
 test('an exhausted configured ladder is bounded to one attempt per family', async t => {

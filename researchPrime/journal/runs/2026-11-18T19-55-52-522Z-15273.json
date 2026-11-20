@@ -1,0 +1,24 @@
+{
+  "skill": "researchPrime",
+  "tier": "live-cross-family",
+  "mode": "engine",
+  "verified": true,
+  "degraded_quorum": false,
+  "started": "2026-11-18T19:55:52.522Z",
+  "ended": "2026-11-18T20:01:55.273Z",
+  "input": "C:\\dev\\Mathematics Problems\\Poincare Deep Memory\\research\\rp-run",
+  "params": {
+    "maxRounds": 2,
+    "live": true,
+    "spawnPanel": true,
+    "stakesTier": "high"
+  },
+  "output": "C:\\dev\\Mathematics Problems\\Poincare Deep Memory\\research\\rp-run\\DELIVERABLE-ENGINE.json",
+  "result": "converged (dry)",
+  "cross_model": false,
+  "models": [
+    "chatgpt"
+  ],
+  "duration_s": 363,
+  "journal_ref": null
+}

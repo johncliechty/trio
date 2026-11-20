@@ -19,19 +19,20 @@ test('primary Anchor settings outrank mirror and stale family env', (t) => {
   const fx = fixture();
   t.after(() => fs.rmSync(fx.root, { recursive: true, force: true }));
   fs.writeFileSync(path.join(fx.home, '.anchor', 'model_prefs.json'), JSON.stringify({
-    coding_family: 'grok', review_family: 'gemini',
+    coding_family: 'grok', review_family: 'gemini', default_cli: 'grok',
   }));
   fs.writeFileSync(path.join(fx.data, 'settings.json'), JSON.stringify({
-    coding_family: 'chatgpt', review_family: 'claude',
+    coding_family: 'chatgpt', review_family: 'claude', default_cli: 'chatgpt',
   }));
   const env = {
     USERPROFILE: fx.home, ANCHOR_DATA_DIR: fx.data,
     CODING_FAMILY: 'gemini', REVIEW_FAMILY: 'grok', TRIO_DRIVER_SHARK: 'gemini-cli',
   };
-  assert.deepEqual(loadModelFamilies(env), {
-    coding: 'chatgpt', review: 'claude', cross_model: true,
-    source: path.join(fx.data, 'settings.json'),
-  });
+  const actual = loadModelFamilies(env);
+  assert.equal(actual.coding, 'chatgpt');
+  assert.equal(actual.review, 'claude');
+  assert.equal(actual.cross_model, true);
+  assert.equal(actual.source, 'primary');
   assert.equal(resolveDriverFromFamilies('synthesizer', env), 'chatgpt-cli');
   assert.equal(resolveDriverFromFamilies('reviewer', env), 'claude');
 });
@@ -40,14 +41,21 @@ test('mirror is canonical for non-Anchor hosts; absent prefs use historical defa
   const fx = fixture();
   t.after(() => fs.rmSync(fx.root, { recursive: true, force: true }));
   const mirror = path.join(fx.home, '.anchor', 'model_prefs.json');
-  fs.writeFileSync(mirror, JSON.stringify({ coding_family: 'chatgpt', review_family: 'chatgpt' }));
-  assert.deepEqual(loadModelFamilies({ USERPROFILE: fx.home }), {
-    coding: 'chatgpt', review: 'chatgpt', cross_model: false, source: mirror,
-  });
+  fs.writeFileSync(mirror, JSON.stringify({
+    coding_family: 'chatgpt', review_family: 'chatgpt', default_cli: 'chatgpt',
+  }));
+  const fromMirror = loadModelFamilies({ USERPROFILE: fx.home });
+  assert.equal(fromMirror.coding, 'chatgpt');
+  assert.equal(fromMirror.review, 'chatgpt');
+  assert.equal(fromMirror.cross_model, false);
+  assert.equal(fromMirror.source, 'mirror');
+
   fs.unlinkSync(mirror);
-  assert.deepEqual(loadModelFamilies({ USERPROFILE: fx.home, CODING_FAMILY: 'grok' }), {
-    coding: 'claude', review: 'claude', cross_model: false, source: 'historical-default',
-  });
+  const fromDefault = loadModelFamilies({ USERPROFILE: fx.home, CODING_FAMILY: 'grok' });
+  assert.equal(fromDefault.coding, 'claude');
+  assert.equal(fromDefault.review, 'claude');
+  assert.equal(fromDefault.cross_model, false);
+  assert.equal(fromDefault.source, 'historical-default');
 });
 
 test('corrupt or unknown saved family HALTs instead of guessing', (t) => {
@@ -55,64 +63,58 @@ test('corrupt or unknown saved family HALTs instead of guessing', (t) => {
   t.after(() => fs.rmSync(fx.root, { recursive: true, force: true }));
   const mirror = path.join(fx.home, '.anchor', 'model_prefs.json');
   fs.writeFileSync(mirror, '{bad json');
-  assert.throws(() => loadModelFamilies({ USERPROFILE: fx.home }), /unreadable/);
-  fs.writeFileSync(mirror, JSON.stringify({ coding_family: 'mystery', review_family: 'claude' }));
-  assert.throws(() => loadModelFamilies({ USERPROFILE: fx.home }), /unknown coding_family/);
-});
-
-test('preference fields resolve independently settings then mirror then historical default', (t) => {
-  const fx = fixture();
-  t.after(() => fs.rmSync(fx.root, { recursive: true, force: true }));
-  const mirror = path.join(fx.home, '.anchor', 'model_prefs.json');
-  fs.writeFileSync(mirror, JSON.stringify({ review_family: 'grok' }));
-  fs.writeFileSync(path.join(fx.data, 'settings.json'), JSON.stringify({ coding_family: 'chatgpt' }));
-  assert.deepEqual(loadModelFamilies({ USERPROFILE: fx.home, ANCHOR_DATA_DIR: fx.data }), {
-    coding: 'chatgpt', review: 'grok', cross_model: true,
-    source: path.join(fx.data, 'settings.json'),
-  });
-
-  fs.writeFileSync(mirror, JSON.stringify({ coding_family: 'gemini' }));
-  assert.deepEqual(loadModelFamilies({ USERPROFILE: fx.home, ANCHOR_DATA_DIR: fx.data }), {
-    coding: 'chatgpt', review: 'claude', cross_model: true, // review falls to the Claude default (2026-09-04)
-    source: path.join(fx.data, 'settings.json'),
-  });
+  assert.throws(
+    () => loadModelFamilies({ USERPROFILE: fx.home }),
+    (err) => err.code === 'settings_invalid',
+  );
+  fs.writeFileSync(mirror, JSON.stringify({
+    coding_family: 'mystery', review_family: 'claude', default_cli: 'claude',
+  }));
+  assert.throws(
+    () => loadModelFamilies({ USERPROFILE: fx.home }),
+    /Missing or invalid coding_family/,
+  );
 });
 
 test('explicit data dir is closed and mirror primary_path never redirects reads', (t) => {
   const fx = fixture();
   t.after(() => fs.rmSync(fx.root, { recursive: true, force: true }));
   const redirect = path.join(fx.root, 'redirect.json');
-  fs.writeFileSync(redirect, JSON.stringify({ coding_family: 'grok', review_family: 'grok' }));
-  fs.writeFileSync(path.join(fx.home, '.anchor', 'model_prefs.json'), JSON.stringify({
-    primary_path: redirect, coding_family: 'chatgpt', review_family: 'claude',
+  fs.writeFileSync(redirect, JSON.stringify({
+    coding_family: 'grok', review_family: 'grok', default_cli: 'grok',
   }));
-  assert.deepEqual(loadModelFamilies({ USERPROFILE: fx.home }), {
-    coding: 'chatgpt', review: 'claude', cross_model: true,
-    source: path.join(fx.home, '.anchor', 'model_prefs.json'),
-  });
-  assert.deepEqual(loadModelFamilies({
+  fs.writeFileSync(path.join(fx.home, '.anchor', 'model_prefs.json'), JSON.stringify({
+    primary_path: redirect, coding_family: 'chatgpt', review_family: 'claude', default_cli: 'chatgpt',
+  }));
+  const a = loadModelFamilies({ USERPROFILE: fx.home });
+  assert.equal(a.coding, 'chatgpt');
+  assert.equal(a.review, 'claude');
+  assert.equal(a.source, 'mirror');
+
+  const b = loadModelFamilies({
     USERPROFILE: fx.home,
     ANCHOR_DATA_DIR: path.join(fx.root, 'missing-data-dir'),
-  }), {
-    coding: 'chatgpt', review: 'claude', cross_model: true,
-    source: path.join(fx.home, '.anchor', 'model_prefs.json'),
   });
+  assert.equal(b.coding, 'chatgpt');
+  assert.equal(b.review, 'claude');
+  assert.equal(b.source, 'mirror');
 });
 
 test('family-value environment variables are ignored field-wise', (t) => {
   const fx = fixture();
   t.after(() => fs.rmSync(fx.root, { recursive: true, force: true }));
-  assert.deepEqual(loadModelFamilies({
+  const actual = loadModelFamilies({
     USERPROFILE: fx.home,
     CODING_FAMILY: 'grok', REVIEW_FAMILY: 'chatgpt',
     TRIO_DRIVER_REVIEWER: 'grok-cli',
-  }), {
-    coding: 'claude', review: 'claude', cross_model: false,
-    source: 'historical-default',
   });
+  assert.equal(actual.coding, 'claude');
+  assert.equal(actual.review, 'claude');
+  assert.equal(actual.cross_model, false);
+  assert.equal(actual.source, 'historical-default');
 });
 
-test('a malformed consulted lower-precedence store HALTs, but an unused mirror does not', (t) => {
+test('an incomplete primary store HALTs, while a complete primary ignores a malformed mirror', (t) => {
   const fx = fixture();
   t.after(() => fs.rmSync(fx.root, { recursive: true, force: true }));
   const settings = path.join(fx.data, 'settings.json');
@@ -121,10 +123,10 @@ test('a malformed consulted lower-precedence store HALTs, but an unused mirror d
   fs.writeFileSync(mirror, '{bad');
   assert.throws(
     () => loadModelFamilies({ USERPROFILE: fx.home, ANCHOR_DATA_DIR: fx.data }),
-    /unreadable/,
+    (err) => err.code === 'settings_invalid',
   );
   fs.writeFileSync(settings, JSON.stringify({
-    coding_family: 'claude', review_family: 'gemini',
+    coding_family: 'claude', review_family: 'gemini', default_cli: 'claude',
   }));
   assert.equal(
     loadModelFamilies({ USERPROFILE: fx.home, ANCHOR_DATA_DIR: fx.data }).review,

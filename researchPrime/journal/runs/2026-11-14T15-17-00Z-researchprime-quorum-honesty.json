@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "kind": "formal-improvement",
+  "journal_ref": "0133-quorum-honesty-replay-stamping-and-matrix-planner",
+  "date": "2026-11-14",
+  "authors": ["gemini"],
+  "reviewer": "gpt-6-luna",
+  "review_verdict": "PASS",
+  "tests": { "passed": 225, "failed": 0 },
+  "installed": true
+}

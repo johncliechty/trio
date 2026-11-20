@@ -1,0 +1,8 @@
+# 0143 - Runtime `.json.bak-*` Files in `DOC_DATA_RE` and `attestWaveProven` `changed`/`foremanDir` Parity
+id: 0143-proven-ledger-runtime-bak-and-attest-changed-field
+skill: foreman
+situation: Wave 3 of `C:\dev\Anchor` (`anchor-overhaul-2026-11-12`) re-entered at `gate` (`skipExecute = true`, `git: false`) with a valid `.foreman/wave-3-proven.json` ledger, passed `7/7` pytest tests, and passed `GPT-6-Luna` review (`0` agreed `BLOCKER`/`MAJOR`), while Anchor's live `:8777` NSSM service rotated `steward-cockpit-state.json.bak-1..5` during the 9-minute review.
+context: Foreman `wave-engine.mjs` (`checkVacuousGreen` `DOC_DATA_RE`) and `project-engine.mjs` (`attestWaveProven`).
+observation: `DOC_DATA_RE` matched `.json` at end-of-string (`/\.(md|json|...)$/i`) and therefore classified `steward-cockpit-state.json.bak-1..5` as executable code (`code.length = 5`), skipping the `if (code.length === 0) { creditPriorWaveAttempt(...) }` proven-ledger credit branch and triggering a false `vacuous-GREEN HALT`. Additionally, `writeWaveProvenLedger` writes `changed: [...]` into `<handoffDir>/.foreman/wave-N-proven.json`, whereas `attestWaveProven` only looked for `ledger.files` under `<projectDir>/.foreman`.
+outcome: worked - extended `DOC_DATA_RE` in `wave-engine.mjs` with `(?:\.bak[-.\w]*)?$` so rotated data backups never masquerade as unexercised source code, and updated `attestWaveProven` in `project-engine.mjs` to accept `foremanDir` (defaulting to `<dirname(checkpointPath)>/.foreman` when present) and read `ledger.files ?? ledger.changed`.
+provenance: genuine-execution - `C:\dev\Anchor\planning\anchor-overhaul-2026-11-12\handoff\foreman-live.log` (`2026-11-13T22:40:39Z`).

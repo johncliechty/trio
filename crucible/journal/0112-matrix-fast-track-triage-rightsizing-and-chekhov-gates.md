@@ -1,0 +1,8 @@
+# 0112 - Matrix-Fast-Track 2-Stage Loop, Brownfield Triage Right-Sizing & Chekhov Quality Gates
+id: 0112-matrix-fast-track-triage-rightsizing-and-chekhov-gates
+skill: crucible
+situation: Evaluated Crucible's 28–55 model-call ceremony, `foundry/triage` brownfield escalation, `stage2.mjs` prompt/wave-header loss, and Chekhov `PROCESS-REVIEW.md` laws under `NS-ANVIL-TRIO-2026-11`.
+context: `C:\dev\trio\crucible\bin\{matrix-fast-track.mjs,plan-quality-gates.mjs,stage0.mjs,stage1.mjs,stage2.mjs,elegance-hooks.mjs}` and `C:\dev\Skill Foundry\foundry\triage\{core.mjs,mapping.mjs}`.
+observation: Localized brownfield tasks were forced to `FULL` whenever `repoDir` existed; `stage2.mjs` `revisePrompt` labeled Stage-2 wave plans as `"STAGE-1 Master-Plan"` and dropped `## Wave N` headers; `elegance-hooks.mjs` clobbered DAG `dependsOn` IDs; and cross-family GPT-6-Luna review caught `mapping.mjs` falling back from `MATRIX-FAST-TRACK` to `SPIKE` on `researchPrime` plus `core.mjs` treating `targetFiles: []` as `0` instead of empty intake.
+outcome: worked - shipped first-class `LITE` (`<=4` calls) and `MATRIX-FAST-TRACK` (`6–9` calls, Anvil Stage-0 AST facts + `L0–L5` cross-family matrix + delta-only verify), preserved Stage-2 wave headers + `### Wave W.k` write-sets, added Chekhov Wave-1 pilot/`O(N)`/UI-mockup/domain-certifier lints, archived 12 `bin/_*` scratch scripts, and closed both GPT-6-Luna triage findings (`207/207` triage + `337/337` Crucible tests green).
+provenance: genuine-execution - `C:\dev\Skill Foundry\planning\anvil-trio-elegance-2026-11-14\EXECUTION-LOG.md` (`2026-11-14T15:17:00Z`).

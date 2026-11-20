@@ -1,0 +1,63 @@
+{
+  "schema": "foreman-run-record/v1",
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-11-18T02:18:47.284Z",
+  "ended": "2026-11-18T02:18:47.460Z",
+  "duration_s": 0,
+  "input": "C:\\dev\\Skill Foundry\\skills\\anvil",
+  "stage": "pre-flight",
+  "status": "HALT",
+  "exit_code": 3,
+  "halt_reason": "[taxonomy:dirty-sibling] HALT before start: plan-named repo(s) not clean — C:\\dev\\Anchor (15 uncommitted path(s)). Commit or stash them, or set FOREMAN_ALLOW_DIRTY_SIBLINGS=1 to proceed with the state recorded. Checked: C:\\dev\\Anchor",
+  "taxonomy": "dirty-sibling",
+  "recommend": null,
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 2,
+    "maxWaves": null,
+    "git": false,
+    "gitDiff": false,
+    "resume": false,
+    "clearHalt": false
+  },
+  "stoppedAt": null,
+  "totalWaves": null,
+  "waves": [],
+  "agent_calls": 0,
+  "calls": [],
+  "totals": {
+    "in": 0,
+    "out": 0,
+    "cost": 0,
+    "ms": 0,
+    "denials": 0
+  },
+  "phases": {
+    "ms": {
+      "execute": 0,
+      "gate": 0,
+      "review": 0,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    },
+    "total_ms": 0,
+    "share": {
+      "execute": 0,
+      "gate": 0,
+      "review": 0,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    }
+  },
+  "changed_files": null,
+  "attested_review": null,
+  "threw": null,
+  "output": "C:\\dev\\Skill Foundry\\skills\\anvil\\_foreman-status.log",
+  "result": "HALT: none — [taxonomy:dirty-sibling] HALT before start: plan-named repo(s) not clean — C:\\dev\\Anchor (15 uncommitted path(s)). Commit or stash them, or set FOREMAN_ALLOW_DIRTY_SIBLINGS=1 to proceed with the state",
+  "cross_model": true,
+  "models": [],
+  "journal_ref": null
+}

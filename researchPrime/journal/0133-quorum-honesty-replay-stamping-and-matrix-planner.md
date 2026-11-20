@@ -1,0 +1,8 @@
+# 0133 - Quorum-Gated Convergence, Honest Replay Stamping, Lineage Canonicalization & Matrix Planner v2
+id: 0133-quorum-honesty-replay-stamping-and-matrix-planner
+skill: researchPrime
+situation: Audited `researchPrime` round convergence, offline `run-rounds.mjs` verification stamps, `"chatgpt"` lineage accounting, non-TTY intake gates, and `matrix-planner.mjs` under `NS-ANVIL-TRIO-2026-11`.
+context: `C:\dev\trio\researchPrime\bin\{round.mjs,deliverable.mjs,run-rounds.mjs,live-round-agent.mjs,matrix-planner.mjs,intake.mjs,plan-gate.mjs,rho-ledger.mjs,stakes.mjs}`.
+observation: `round.mjs` could converge when `quorum.met === false` or `judgeVerdict.lockable === false`; offline `run-rounds.mjs` stamped `mode: 'engine', verified: true` with fabricated `models: ['claude']`; `"chatgpt"` was missing from `lineage-enum.json`; `rho-ledger.mjs:132` contained a literal `0x00` byte; `intake.mjs`/`plan-gate.mjs` hung or rejected `"yes"`/`"approve"` on non-TTY stdin; and `matrix-planner.mjs` was a generic 3-bullet stub.
+outcome: worked - gated convergence strictly on `quorum.met && judgeVerdict.lockable` (`cleanN = 1`), stamped offline runs `mode: 'replay', verified: false, models: []`, auto-escalated medical/legal/financial stakes to `'high'`, wired multi-family G3 panel routing + `"chatgpt"` lineage (`governance.mjs` untouched), replaced the `0x00` byte with `'\0'`, added `--auto-approve` + `AWAITING_APPROVAL_NON_TTY`, and shipped `matrix-planner.mjs` v2 with domain certifier hooks (`225/225` tests green).
+provenance: genuine-execution - `C:\dev\Skill Foundry\planning\anvil-trio-elegance-2026-11-14\EXECUTION-LOG.md` (`2026-11-14T15:17:00Z`).

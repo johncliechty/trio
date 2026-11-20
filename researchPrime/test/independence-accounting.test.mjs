@@ -16,10 +16,13 @@ import {
 } from '../bin/trio-core/independence-accounting.mjs';
 
 // ── lineageOf: explicit lineage, stampRole `family` fallback, blank ⇒ unattested ─────────────
-test('lineageOf reads `lineage`, falls back to stampRole `family`, treats blank/missing as null', () => {
+test('lineageOf reads `lineage`, falls back to stampRole `family`, canonicalizes gpt/openai→chatgpt, treats blank/missing as null', () => {
   assert.equal(lineageOf({ lineage: 'claude' }), 'claude');
   assert.equal(lineageOf({ family: 'gemini' }), 'gemini'); // stampRole-shaped reviewer
-  assert.equal(lineageOf({ lineage: 'openai', family: 'claude' }), 'openai'); // explicit wins
+  assert.equal(lineageOf({ lineage: 'openai', family: 'claude' }), 'chatgpt'); // explicit wins + canonicalizes to chatgpt
+  assert.equal(lineageOf({ lineage: 'gpt' }), 'chatgpt');
+  assert.equal(lineageOf({ lineage: 'chatgpt' }), 'chatgpt');
+  assert.equal(countIndependentOrigins([{ lineage: 'gpt' }, { lineage: 'chatgpt' }]), 1, 'gpt and chatgpt share one OpenAI/ChatGPT lineage');
   assert.equal(lineageOf({ lineage: '   ' }), null); // blank is not a distinct lineage named " "
   assert.equal(lineageOf({}), null);
   assert.equal(lineageOf(null), null);

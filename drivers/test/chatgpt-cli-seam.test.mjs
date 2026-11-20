@@ -153,7 +153,11 @@ test('explicit authoring YOLO reaches production argv and receipt without wideni
     assert.ok(launched.args.includes('approval_policy="never"'));
     assert.ok(launched.args.includes('model_reasoning_effort="ultra"'));
     assert.equal(launched.args[launched.args.indexOf('--model')+1], 'gpt-6-astra');
-    assert.ok(!launched.args.includes('windows.sandbox="unelevated"'));
+    if (expected === 'danger-full-access') {
+      assert.ok(!launched.args.includes('windows.sandbox="unelevated"'));
+    } else {
+      assert.ok(launched.args.includes('windows.sandbox="unelevated"'));
+    }
     assert.equal(launched.options.env.OPENAI_API_KEY, undefined);
     assert.equal(result.rec.model_attested, false, 'request is never relabelled served');
   }

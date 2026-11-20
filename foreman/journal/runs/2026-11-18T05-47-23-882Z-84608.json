@@ -1,0 +1,104 @@
+{
+  "schema": "foreman-run-record/v1",
+  "skill": "foreman",
+  "tier": "heavy",
+  "started": "2026-11-18T05:47:23.882Z",
+  "ended": "2026-11-18T05:48:04.607Z",
+  "duration_s": 41,
+  "input": "C:\\dev\\Skill Foundry\\skills\\anvil",
+  "stage": "run",
+  "status": "HALT",
+  "exit_code": 0,
+  "halt_reason": "[taxonomy:ambiguity] HALT: a reviewer could not answer from the frozen docs",
+  "taxonomy": "ambiguity",
+  "recommend": "The supplied acceptance contract is specific enough to judge implementation, but no frozen plan text or line reference was supplied, and the instruction limits inspection to the gate artifact.",
+  "params": {
+    "reviewers": 1,
+    "fixIterCap": 8,
+    "maxWaves": null,
+    "git": false,
+    "gitDiff": false,
+    "resume": true,
+    "clearHalt": true
+  },
+  "stoppedAt": 2,
+  "totalWaves": 3,
+  "waves": [
+    {
+      "wave": 2,
+      "title": "Wave 2 — Pure-Core Refactoring Crosswalk, 3-Tier Null Set, Dual-Target Paper Crosswalk, Untraced Profiler/Literature & 2-Seat Cross-Validator",
+      "status": "HALT",
+      "green": true,
+      "tap": {
+        "tests": 27,
+        "pass": 27,
+        "fail": 0,
+        "skipped": 0,
+        "todo": null
+      },
+      "iterations": 2,
+      "halt": "[taxonomy:ambiguity] HALT: a reviewer could not answer from the frozen docs"
+    }
+  ],
+  "agent_calls": 1,
+  "calls": [
+    {
+      "schema": "foreman-call-telemetry/v1",
+      "label": "review:w2#0",
+      "role": "review",
+      "driver": "chatgpt-cli",
+      "family": "chatgpt",
+      "family_attested": true,
+      "served_model": null,
+      "model_attested": false,
+      "cross_model": true,
+      "failover_used": false,
+      "ok": true,
+      "exit_class": "OK",
+      "cli_status": 0,
+      "signal": null,
+      "duration_ms": 21454,
+      "tools": 0,
+      "input_tokens": 42612,
+      "output_tokens": 946,
+      "total_tokens": 43558,
+      "cost_usd": 0.142026,
+      "cost_estimated": true,
+      "permission_denials": 0
+    }
+  ],
+  "totals": {
+    "in": 42612,
+    "out": 946,
+    "cost": 0.142026,
+    "ms": 21454,
+    "denials": 0
+  },
+  "phases": {
+    "ms": {
+      "execute": 0,
+      "gate": 18525,
+      "review": 21460,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    },
+    "total_ms": 39985,
+    "share": {
+      "execute": 0,
+      "gate": 0.463,
+      "review": 0.537,
+      "fix": 0,
+      "elegance": 0,
+      "land": 0
+    }
+  },
+  "changed_files": null,
+  "attested_review": null,
+  "threw": null,
+  "output": "C:\\dev\\Skill Foundry\\skills\\anvil\\_foreman-status.log",
+  "result": "HALT: 2:HALT — [taxonomy:ambiguity] HALT: a reviewer could not answer from the frozen docs",
+  "cross_model": true,
+  "models": [],
+  "journal_ref": null
+}

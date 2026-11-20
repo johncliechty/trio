@@ -44,12 +44,12 @@ describe('run-rounds governed path (T9 closure)', () => {
     skill: 'researchPrime',
   });
 
-  // A non-empty DRY round: findings raised, none a new >=2-agree blocker, all AXIS-serving.
+  // A non-empty DRY round: findings raised across 2 distinct origins, none a new >=2-agree blocker, all AXIS-serving.
   const dryReviews = [
     { reviewer: 'r1', angle: 'a1', lineage: 'claude', findings: [
       { claim_id: 'c1', topic: 'minor style', severity: 'minor', traces_to_north_star: 'yes', message: 'nit' },
     ] },
-    { reviewer: 'r2', angle: 'a2', lineage: 'claude', findings: [
+    { reviewer: 'r2', angle: 'a2', lineage: 'gemini', findings: [
       { claim_id: 'c2', topic: 'small gap', severity: 'minor', traces_to_north_star: 'yes', message: 'gap' },
     ] },
   ];

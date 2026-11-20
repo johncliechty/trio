@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "kind": "formal-improvement",
+  "journal_ref": "0144-wave3-resilience-fastgates-subwave-dag-and-attested-fastpath",
+  "date": "2026-11-14",
+  "authors": ["gemini"],
+  "reviewer": "gpt-6-luna",
+  "review_verdict": "ACCEPT after fixing ANCHOR_SETTINGS_DIR lookup, strict family_attested===True, disk_path.is_file(), and job_go-gated wave reconciliation",
+  "tests": {
+    "drivers_passed": 428,
+    "foreman_passed": 277,
+    "anchor_fastpath_passed": 10,
+    "failed": 0
+  },
+  "installed": true
+}

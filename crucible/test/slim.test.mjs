@@ -57,7 +57,7 @@ function receipt(label, role, family, { model = null, attested = true, failoverT
   };
 }
 const CROSS = {
-  [SLIM_LABELS.draft]: receipt(SLIM_LABELS.draft, 'synthesizer', 'claude', { model: 'claude-fable-5-1' }),
+  [SLIM_LABELS.draft]: receipt(SLIM_LABELS.draft, 'synthesizer', 'claude', { model: 'claude-opus-4-6' }),
   [SLIM_LABELS.review]: receipt(SLIM_LABELS.review, 'shark', 'grok', { model: 'grok-4.6-build' }),
 };
 const SAME = {
@@ -239,7 +239,7 @@ test('the run record (Skill Foundry run capture) carries what the seats said and
   assert.equal(rec.skill, 'crucible');
   assert.equal(rec.tier, 'slim');
   assert.equal(rec.cross_model, true);
-  assert.deepEqual(rec.models.map((m) => [m.role, m.family, m.model_served, m.model_attested]), [['draft', 'claude', 'claude-fable-5-1', true], ['review', 'grok', 'grok-4.6-build', true]]);
+  assert.deepEqual(rec.models.map((m) => [m.role, m.family, m.model_served, m.model_attested]), [['draft', 'claude', 'claude-opus-4-6', true], ['review', 'grok', 'grok-4.6-build', true]]);
   assert.match(rec.result, /review APPROVE/);
   assert.equal(rec.journal_ref, '0106-cockpit-slim-formal-improvement.md');
   assert.equal(rec.params.calls, 2);

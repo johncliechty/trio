@@ -1,0 +1,8 @@
+# 0117 - Matrix-Fast-Track Immutable `test-command:` Header Trap During Targeted Revision
+id: 0117-matrix-fast-track-immutable-test-command-header-trap
+skill: crucible
+situation: Running `runMatrixFastTrack` on Anchor (`anchor-steward-cockpit-cave-elegance-2026-11-17`) where `L3/L4` Matrix Shark (`Claude Opus 5.5 (High)`) flagged that the top-level `test-command:` listed only pre-existing baseline suites and omitted the new wave test files.
+context: `C:\dev\trio\crucible\bin\matrix-fast-track.mjs` (`MATRIX_DRAFT_SCHEMA` + `matrix:revise` + `matrix:delta-verify`).
+observation: `MATRIX_DRAFT_SCHEMA` omitted `testCommand` and `renderImplementationPlan` re-stamped the caller's original `preflight.command` after `matrix:revise`. Consequently, `matrix:revise` updated wave prose (`doneWhen`) with new test suites, while the machine-read `test-command:` header remained frozen — causing `matrix:delta-verify` to halt with `matrix-delta-unresolved-blockers` (and also catching shorthand `tests/test_w1.py` prose mismatching real `test_w1_scribe_gmail_overhaul_2026_11_13.py` filenames).
+outcome: worked - added optional `testCommand` to `MATRIX_DRAFT_SCHEMA` (validated through `validateTestCommandPreflight` before updating `preflight.command`) and used pytest `-o "python_files=test_*overhaul_2026_11_13.py test_*elegance_2026_11_17.py test_distro_scan_v12.py" tests` so new per-wave `test_w{1,2,3}_*elegance_2026_11_17.py` files are automatically discovered and monotonically counted as each wave lands without failing earlier waves on not-yet-created test files.
+provenance: genuine-execution - `task-4240` (`2026-11-17T19:51:53-07:00`).

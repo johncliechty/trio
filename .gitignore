@@ -38,3 +38,8 @@ _b[0-9]-*.json
 _b[0-9]_*.py
 .crucible-revise/
 _stash-untracked-journals/
+/_archive/
+.anvil/
+**/.anvil/
+researchPrime/journal/0132-atorvastatin-10mg-and-pain-medicine-exercise-hip-review.md
+researchPrime/journal/runs/2026-11-12T02-11-52-097Z-12103.json

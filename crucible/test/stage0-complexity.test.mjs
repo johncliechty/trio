@@ -25,9 +25,9 @@ test('LITE: a small, clear, low-stakes intake recommends a single-pass plan', ()
   assert.equal(r.defaultedToFull, false);
 });
 
-test('FULL: complicated/novel work (but bounded unknowns) keeps the full pipeline', () => {
+test('SPIKE-FIRST: novel architectural work probes options before locking the plan', () => {
   const r = assessComplexity({ scope: 'large', novel: true, unknowns: 1 });
-  assert.equal(r.band, COMPLEXITY_BANDS.FULL);
+  assert.equal(r.band, COMPLEXITY_BANDS.SPIKE_FIRST);
   assert.ok(r.rationale.length > 0, 'returns a rationale');
 });
 
@@ -48,10 +48,10 @@ test('irreversibility ⇒ FULL even when novel + many unknowns would otherwise s
   assert.equal(r.band, COMPLEXITY_BANDS.FULL, 'irreversible work keeps full rigor, not a spike');
 });
 
-test('FULL by default when the band is uncertain (no clear lighter case)', () => {
+test('MATRIX-FAST-TRACK by default on medium multi-file work without irreversible triggers', () => {
   const r = assessComplexity({ scope: 'medium', unknowns: 2 });
-  assert.equal(r.band, COMPLEXITY_BANDS.FULL);
-  assert.equal(r.defaultedToFull, true, 'flags that it defaulted to FULL when uncertain');
+  assert.equal(r.band, COMPLEXITY_BANDS.MATRIX_FAST_TRACK);
+  assert.equal(r.defaultedToFull, false);
 });
 
 test('an empty intake is safe: defaults to FULL with a rationale', () => {
@@ -67,7 +67,22 @@ test('right-sizing is a USER judgment: the result carries a confirm-band HALT', 
   assert.ok(r.halt.halt_for_human, 'it is a halt-for-human signal');
 });
 
-test('a brownfield intake never collapses to LITE on its own (raises the floor)', () => {
-  const r = assessComplexity({ scope: 'small', unknowns: 0, brownfield: true });
-  assert.notEqual(r.band, COMPLEXITY_BANDS.LITE, 'an existing project is not auto-LITE');
+test('localized brownfield intake (1-3 files, clear intent, low risk) stays LITE; multi-file brownfield routes to MATRIX-FAST-TRACK', () => {
+  const localized = assessComplexity({
+    intent: 'Fix stage2 wave-header preservation in bin/stage2.mjs',
+    scope: 'small',
+    unknowns: 0,
+    brownfield: true,
+    targetFiles: ['bin/stage2.mjs'],
+  });
+  assert.equal(localized.band, COMPLEXITY_BANDS.LITE, 'localized 1-file brownfield fix is not forced to FULL');
+
+  const multiFile = assessComplexity({
+    intent: 'Refactor multi-module planner and add cross-module validation across 6 files',
+    scope: 'medium',
+    unknowns: 1,
+    brownfield: true,
+    fileCount: 6,
+  });
+  assert.equal(multiFile.band, COMPLEXITY_BANDS.MATRIX_FAST_TRACK, 'medium multi-file brownfield routes to MATRIX-FAST-TRACK');
 });
